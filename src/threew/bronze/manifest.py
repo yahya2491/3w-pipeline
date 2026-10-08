@@ -38,6 +38,7 @@ MANIFEST_SCHEMA = pa.schema(
         pa.field("num_rows", pa.int64()),  # from the Parquet footer
         pa.field("schema_fingerprint", pa.string()),  # hash of column names and types
         pa.field("schema_ok", pa.bool_()),  # matches the contract
+        pa.field("codec", pa.string()),  # compression of the first column chunk, e.g. BROTLI
         pa.field("recorded_at", pa.timestamp("us", tz="UTC"), nullable=False),  # when this attempt finished
     ]
 )

@@ -39,6 +39,7 @@ def manifest_row(file: RemoteFile, status="LANDED", **overrides):
         "num_rows": None,
         "schema_fingerprint": None,
         "schema_ok": None,
+        "codec": None,
         "recorded_at": datetime(2026, 10, 9, tzinfo=UTC),
     }
     return values | overrides

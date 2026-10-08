@@ -62,6 +62,7 @@ class IngestConfig:
 @dataclass(frozen=True)
 class SchemaConfig:
     fail_on_drift: bool
+    contract: Path  # expected columns and types; a relative path is resolved against the conf dir
 
 
 @dataclass(frozen=True)
@@ -114,7 +115,7 @@ def load_config(env: str, conf_dir: Path = CONF_DIR) -> Config:
         raw = _read_yaml(path)
         _check_keys(raw, path)
         merged = _deep_merge(merged, raw)
-    return _build(env, merged, base_dir=conf_dir.parent)
+    return _build(env, merged, conf_dir=conf_dir)
 
 
 def _read_yaml(path: Path) -> dict[str, Any]:
@@ -147,7 +148,7 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
     return merged
 
 
-def _build(env: str, merged: dict[str, Any], base_dir: Path) -> Config:
+def _build(env: str, merged: dict[str, Any], conf_dir: Path) -> Config:
     for section, cls in SECTIONS.items():
         missing = _settable_fields(cls) - merged.get(section, {}).keys()
         if missing:
@@ -164,14 +165,22 @@ def _build(env: str, merged: dict[str, Any], base_dir: Path) -> Config:
         raise ConfigError(f"storage.root must be set (in {env}.yaml)")
     root = Path(root).expanduser()
     if not root.is_absolute():
-        root = base_dir / root
+        root = conf_dir.parent / root
+
+    schema = dict(merged["schema"])
+    contract = Path(schema["contract"]).expanduser()
+    if not contract.is_absolute():
+        contract = conf_dir / contract
+    if not contract.is_file():
+        raise ConfigError(f"schema.contract not found: {contract}")
+    schema["contract"] = contract.resolve()
 
     return Config(
         env=env,
         source=SourceConfig(**source),
         storage=StorageConfig(root=root.resolve()),
         ingest=IngestConfig(**merged["ingest"]),
-        schema=SchemaConfig(**merged["schema"]),
+        schema=SchemaConfig(**schema),
         spark=SparkConfig(**merged["spark"]),
     )
 

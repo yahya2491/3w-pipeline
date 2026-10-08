@@ -6,6 +6,8 @@ The raw data is read from a Hugging Face mirror, [`Yahya2491/3w-pipeline`](https
 pinned to one commit. See [`docs/source.md`](docs/source.md) for the pinned revision and how its integrity was checked,
 and [`docs/dataset_notes.md`](docs/dataset_notes.md) for measured facts about the data that later layers depend on.
 
+All pipeline dates and times are UTC.
+
 ## Layout
 
 ```

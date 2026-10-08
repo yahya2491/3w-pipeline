@@ -60,6 +60,7 @@ def test_to_dict_is_json_serializable():
 def conf_dir(tmp_path):
     """A conf dir with the real base.yaml; each test writes its own test.yaml."""
     shutil.copy(CONF_DIR / "base.yaml", tmp_path / "base.yaml")
+    shutil.copytree(CONF_DIR / "contracts", tmp_path / "contracts")
     return tmp_path
 
 
@@ -99,4 +100,16 @@ def test_invalid_revision_raises(conf_dir, revision):
 def test_missing_root_raises(conf_dir):
     (conf_dir / "test.yaml").write_text("ingest: {workers: 2}\n")
     with pytest.raises(ConfigError, match="storage.root"):
+        load_config("test", conf_dir)
+
+
+def test_contract_path_is_resolved_against_the_conf_dir():
+    contract = load_config("prod").schema.contract
+    assert contract == CONF_DIR / "contracts" / "3w_v2.yaml"
+    assert contract.is_file()
+
+
+def test_missing_contract_raises(conf_dir):
+    (conf_dir / "test.yaml").write_text("storage: {root: /tmp/x}\nschema: {contract: contracts/nope.yaml}\n")
+    with pytest.raises(ConfigError, match="schema.contract not found"):
         load_config("test", conf_dir)

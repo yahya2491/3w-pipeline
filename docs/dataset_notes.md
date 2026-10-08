@@ -55,3 +55,6 @@ Measured on all 2,228 files of the upstream checkout with pyarrow (Parquet foote
 - **Label values per folder:** the per-row `class` is 0 (normal), the folder's label (steady state) or label + 100
   (transient). Classes 1, 2 and 5 to 9 have transients; classes 3 and 4 have none and contain only their own label,
   never 0.
+- **Never partition by `class=`.** Spark replaces a data column's values with a partition column of the same name:
+  reading a `class=2/` folder whose file has per-row `class` values [0, 102, 2] returned [2, 2, 2], with no error
+  (tested with Spark 3.5.0). That's why landing uses `label=<label>` for the folder label.

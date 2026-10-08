@@ -20,6 +20,7 @@ ingest:
 
 schema:
   fail_on_drift: false
+  contract: contracts/3w_v2.yaml   # relative to conf/
 
 spark:
   app_name: 3w-bronze

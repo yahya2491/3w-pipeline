@@ -33,6 +33,7 @@ def row(path="data/2/WELL-00002_20131104004101.parquet", status="LANDED", sha256
         "num_rows": None,  # step-14 columns: null until then
         "schema_fingerprint": None,
         "schema_ok": None,
+        "codec": None,
         "recorded_at": recorded_at,
     }
     return values | overrides
@@ -127,7 +128,9 @@ def test_landing_path_is_stored_relative(manifest):
 
 def test_step14_columns_are_nullable_and_round_trip(manifest):
     before = row()  # written before step 14: nulls
-    after = row("data/5/SIMULATED_00042.parquet", num_rows=61000, schema_fingerprint="f" * 64, schema_ok=True)
+    after = row(
+        "data/5/SIMULATED_00042.parquet", num_rows=61000, schema_fingerprint="f" * 16, schema_ok=True, codec="BROTLI"
+    )
     manifest.append([before, after])
     assert manifest.read().to_pylist() == [before, after]
 

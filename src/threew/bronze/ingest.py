@@ -1,4 +1,4 @@
-"""Bronze ingestion run: pin check, listing, plan, download and verify, land, manifest.
+"""Bronze ingestion run: pin check, listing, plan, download and verify, land and inspect, manifest.
 
 Usage:
     python -m threew.bronze.ingest --env dev
@@ -13,6 +13,7 @@ from collections.abc import Callable
 from typing import Any
 
 from threew.bronze.fetch import fetch_all, fetch_stats
+from threew.bronze.inspect import Inspection, load_contract
 from threew.bronze.land import land_results
 from threew.bronze.manifest import Manifest
 from threew.bronze.plan import build_plan
@@ -51,7 +52,8 @@ def run_ingest(cfg: Config, client: HubClient, *, sleep: Callable[[float], None]
         sleep=sleep,
     )
     fetch_seconds = time.monotonic() - start
-    rows = land_results(results, run_id, started_at.date(), source.revision, cfg.storage, manifest)
+    contract = load_contract(cfg.schema.contract)
+    landing = land_results(results, run_id, started_at.date(), source.revision, cfg.storage, manifest, contract)
 
     return {
         "run_id": run_id,
@@ -61,8 +63,33 @@ def run_ingest(cfg: Config, client: HubClient, *, sleep: Callable[[float], None]
         "tag_moved": pin.tag_moved,
         "plan": plan.summary(),
         "fetch": fetch_stats(results, fetch_seconds),
-        "landed": dict(Counter(row["status"] for row in rows)),
+        "landed": dict(Counter(row["status"] for row in landing.rows)),
+        "schema": schema_summary(landing.inspections),
         "manifest_rows": manifest.read().num_rows,
+    }
+
+
+def schema_summary(inspections: dict[str, Inspection]) -> dict[str, Any]:
+    """What this run's landed files look like: fingerprints, codecs and every file that drifted from the contract."""
+    drifted = [
+        {
+            "path": path,
+            "readable": i.readable,
+            "missing": list(i.missing),
+            "extra": list(i.extra),
+            "type_changes": [list(change) for change in i.type_changes],
+            "error": i.error,
+        }
+        for path, i in sorted(inspections.items())
+        if not i.schema_ok
+    ]
+    return {
+        "files": len(inspections),
+        "schema_ok": sum(i.schema_ok for i in inspections.values()),
+        "fingerprints": dict(Counter(i.fingerprint for i in inspections.values())),
+        "codecs": dict(Counter(i.codec for i in inspections.values())),
+        "num_rows": sum(i.num_rows or 0 for i in inspections.values()),
+        "drifted": drifted,
     }
 
 
@@ -87,6 +114,14 @@ def main(argv: list[str] | None = None) -> int:
         f"in {fetch['seconds']:.1f} s ({fetch['mb_per_s']} MB/s)"
     )
     print(f"Landed: {s['landed'].get('LANDED', 0)}, failed: {s['landed'].get('FAILED', 0)}")
+    schema = s["schema"]
+    if schema["files"]:
+        print(
+            f"Schema: {schema['schema_ok']}/{schema['files']} match the contract, {schema['num_rows']:,} rows | "
+            f"fingerprints {schema['fingerprints']} | codecs {schema['codecs']}"
+        )
+        for d in schema["drifted"]:
+            print(f"  DRIFT {d['path']}: missing {d['missing']}, extra {d['extra']}, types {d['type_changes']}")
     print(f"Manifest: {s['manifest_rows']} rows in {cfg.storage.state / 'manifest'}")
     return 1 if s["landed"].get("FAILED") else 0
 
