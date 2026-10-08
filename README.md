@@ -52,6 +52,28 @@ python -c "from threew.config import load_config; print(load_config('prod'))"
 
 `HF_TOKEN` is never in a config file; it comes from the environment.
 
+## Running ingestion
+
+```bash
+python -m threew.bronze.ingest --env dev     # laptop: 3 files per class into ./data/dev
+python -m threew.bronze.ingest --env prod    # VM: all 2,228 files into /home/ubuntu/3w-data
+```
+
+A run downloads only files that are new or changed since the last run, verifies each one (sha256, then the schema
+contract), lands it under `landing/3w/ingest_date=<date>/run_id=<run_id>/label=<label>/` and records it in the
+manifest. Only one run at a time per storage root: a second run is SKIPPED.
+
+| Status | Exit code | Meaning |
+|---|---|---|
+| SUCCESS | 0 | everything planned landed (schema drift is listed; it fails the run only with `schema.fail_on_drift`) |
+| SKIPPED | 0 | another run held the lock |
+| PARTIAL | 1 | the run finished, but some files FAILED |
+| FAILED | 2 | the run stopped on an error, or files drifted with `schema.fail_on_drift` on |
+
+Every run writes a report, whatever happens, to `<storage root>/bronze/_runs/<run_id>.json`: config, code version,
+plan, download speed, schema checks, failures, orphaned files in landing and leftover staging folders.
+`scripts/plan_preview.py` and `scripts/inspect_landing.py` show the plan and the landed files without changing anything.
+
 ## Publishing the mirror
 
 `scripts/publish_to_hf.py` uploads the upstream Parquet files to the Hugging Face repo, uploads the dataset card and creates the
