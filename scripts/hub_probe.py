@@ -6,7 +6,7 @@ Usage:
 
 import argparse
 import logging
-from collections import Counter
+from collections import Counter, defaultdict
 
 from threew.bronze.naming import SourceType, parse_all
 from threew.config import load_config
@@ -65,8 +65,20 @@ def main() -> None:
         starts = [p.instance_start for p in real]
         print(f"Real instance_start: earliest {min(starts)}, latest {max(starts)} (no timezone)")
 
-    shared = sum(n > 1 for n in Counter(p.instance_id for p in parsed).values())
-    print(f"Instance IDs found in more than one label folder: {shared} (so the path, not the ID, is the key)")
+    folders_per_id: dict[str, list[int]] = defaultdict(list)
+    for p in parsed:
+        folders_per_id[p.instance_id].append(p.label)
+    shared = {i: labels for i, labels in folders_per_id.items() if len(labels) > 1}
+    print(f"Instance IDs found in more than one label folder: {len(shared)} (so the path, not the ID, is the key)")
+    type_of = {p.instance_id: p.source_type for p in parsed}
+    for t in SourceType:
+        ids = [i for i in shared if type_of[i] is t]
+        n_files = sum(len(shared[i]) for i in ids)
+        spread = Counter(len(shared[i]) for i in ids)
+        spread_text = ", ".join(f"{n} IDs in {k} folders" for k, n in sorted(spread.items())) or "none"
+        print(f"  {t}: {len(ids)} IDs covering {n_files} files ({spread_text})")
+    same_content = sum(n > 1 for n in Counter(f.sha256 for f in files if f.sha256).values())
+    print(f"Groups of byte-identical files (same sha256, different path): {same_content}")
 
 
 if __name__ == "__main__":
