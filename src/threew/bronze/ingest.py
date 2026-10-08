@@ -25,8 +25,21 @@ from threew.source.retry import with_retry
 log = logging.getLogger(__name__)
 
 
+class SchemaDriftError(RuntimeError):
+    """schema.fail_on_drift is on and files didn't match the contract. They were recorded as FAILED, not landed."""
+
+    def __init__(self, summary: dict[str, Any]) -> None:
+        paths = [d["path"] for d in summary["schema"]["drifted"]]
+        listed = ", ".join(paths[:5]) + (f" and {len(paths) - 5} more" if len(paths) > 5 else "")
+        super().__init__(f"{len(paths)} file(s) don't match the schema contract and were not landed: {listed}")
+        self.summary = summary
+
+
 def run_ingest(cfg: Config, client: HubClient, *, sleep: Callable[[float], None] = time.sleep) -> dict[str, Any]:
-    """One ingestion run. Returns a summary of what happened."""
+    """One ingestion run. Returns a summary of what happened.
+
+    Raises SchemaDriftError, after every manifest row is written, if schema.fail_on_drift is on and a file drifted.
+    """
     run_id, started_at = new_run_id()
     source, ingest = cfg.source, cfg.ingest
 
@@ -53,9 +66,18 @@ def run_ingest(cfg: Config, client: HubClient, *, sleep: Callable[[float], None]
     )
     fetch_seconds = time.monotonic() - start
     contract = load_contract(cfg.schema.contract)
-    landing = land_results(results, run_id, started_at.date(), source.revision, cfg.storage, manifest, contract)
+    landing = land_results(
+        results,
+        run_id,
+        started_at.date(),
+        source.revision,
+        cfg.storage,
+        manifest,
+        contract,
+        fail_on_drift=cfg.schema.fail_on_drift,
+    )
 
-    return {
+    summary = {
         "run_id": run_id,
         "env": cfg.env,
         "started_at": started_at.isoformat(),
@@ -67,6 +89,9 @@ def run_ingest(cfg: Config, client: HubClient, *, sleep: Callable[[float], None]
         "schema": schema_summary(landing.inspections),
         "manifest_rows": manifest.read().num_rows,
     }
+    if cfg.schema.fail_on_drift and summary["schema"]["drifted"]:
+        raise SchemaDriftError(summary)
+    return summary
 
 
 def schema_summary(inspections: dict[str, Inspection]) -> dict[str, Any]:
@@ -101,8 +126,17 @@ def main(argv: list[str] | None = None) -> int:
     logging.getLogger("httpx2").setLevel(logging.WARNING)  # one INFO line per HTTP request otherwise
 
     cfg = load_config(args.env)
-    s = run_ingest(cfg, HfHubClient(cfg.source.repo_id, cfg.source.repo_type))
+    try:
+        s = run_ingest(cfg, HfHubClient(cfg.source.repo_id, cfg.source.repo_type))
+    except SchemaDriftError as e:
+        print_summary(e.summary, cfg)
+        print(f"FAILED (schema.fail_on_drift): {e}", file=sys.stderr)
+        return 2
+    print_summary(s, cfg)
+    return 1 if s["landed"].get("FAILED") else 0
 
+
+def print_summary(s: dict[str, Any], cfg: Config) -> None:
     plan, fetch = s["plan"], s["fetch"]
     print(f"Run {s['run_id']} ({s['env']}) at {s['revision']}{' (TAG MOVED)' if s['tag_moved'] else ''}")
     print(
@@ -123,7 +157,6 @@ def main(argv: list[str] | None = None) -> int:
         for d in schema["drifted"]:
             print(f"  DRIFT {d['path']}: missing {d['missing']}, extra {d['extra']}, types {d['type_changes']}")
     print(f"Manifest: {s['manifest_rows']} rows in {cfg.storage.state / 'manifest'}")
-    return 1 if s["landed"].get("FAILED") else 0
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from threew.bronze.ingest import run_ingest
+from threew.bronze.ingest import SchemaDriftError, run_ingest
 from threew.bronze.inspect import fingerprint
 from threew.bronze.manifest import Manifest
 from threew.config import StorageConfig, load_config
@@ -92,3 +92,26 @@ def test_two_runs(cfg, files, contract):
     assert Manifest(cfg.storage.state).read().num_rows == 7
     assert second["schema"]["files"] == 0
     assert list(cfg.storage.staging.iterdir()) == []  # both runs cleaned up their staging folders
+
+
+def test_fail_on_drift_fails_every_run_until_fixed(cfg, files):
+    strict = dataclasses.replace(cfg, schema=dataclasses.replace(cfg.schema, fail_on_drift=True))
+    hub = FakeHub(files)
+
+    with pytest.raises(SchemaDriftError, match=f"1 file\\(s\\) don't match the schema contract.*{DRIFTED}") as first:
+        run_ingest(strict, hub, sleep=lambda _: None)
+    assert first.value.summary["landed"] == {"LANDED": 6, "FAILED": 1}
+    assert len(landed(strict)) == 6  # the matching files still landed
+    assert DRIFTED not in {p.name for p in landed(strict)}
+    assert Manifest(strict.storage.state).read().num_rows == 7  # every row written before the error
+
+    # The drifted file is planned again, and the run fails again: the drift can't slip through
+    with pytest.raises(SchemaDriftError) as second:
+        run_ingest(strict, hub, sleep=lambda _: None)
+    assert (second.value.summary["plan"]["new"], second.value.summary["plan"]["unchanged"]) == (1, 6)
+    assert hub.downloads[DRIFTED] == 2
+
+    # With the flag off, the same file lands, flagged schema_ok=False
+    relaxed = run_ingest(cfg, hub, sleep=lambda _: None)
+    assert relaxed["landed"] == {"LANDED": 1}
+    assert [d["path"] for d in relaxed["schema"]["drifted"]] == [DRIFTED]

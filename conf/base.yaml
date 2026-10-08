@@ -19,6 +19,8 @@ ingest:
   sample_per_class: null   # null = all files
 
 schema:
+  # true: a file that doesn't match the contract is FAILED, not landed, and the run fails.
+  # prod switches it on once the first full run shows no drift in all 2,228 files.
   fail_on_drift: false
   contract: contracts/3w_v2.yaml   # relative to conf/
 

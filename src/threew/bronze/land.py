@@ -8,6 +8,10 @@ Hive-style key=value folders, which Spark reads as partition columns. The label 
 the files have their own per-row `class` column, and Spark replaces a data column's values with a partition column
 of the same name. run_id gives every run its own folder, so a run never writes where an earlier run wrote.
 
+Each file's footer is inspected against the schema contract before it is moved. With fail_on_drift, a file that
+doesn't match is not landed: it gets a FAILED row, so every later run plans it again and fails again until the
+contract or the flag changes. Without it, the file lands with schema_ok=False.
+
 Order matters for crash safety: a file is moved first and its row written after. A crash in between leaves a file
 in landing with no row; the next plan sees it as NEW and lands it again in its own run folder.
 """
@@ -35,7 +39,7 @@ READ_ONLY = 0o444
 @dataclass(frozen=True)
 class Landing:
     rows: list[dict[str, Any]]  # one manifest row per result, in result order
-    inspections: dict[str, Inspection]  # by repo path, for every landed file: drift details for the run report
+    inspections: dict[str, Inspection]  # by repo path, for every inspected file: drift details for the run report
 
 
 def landing_relpath(info: InstanceInfo, ingest_date: date, run_id: str) -> PurePosixPath:
@@ -59,8 +63,9 @@ def land_results(
     manifest: Manifest,
     contract: dict[str, str],
     chunk_size: int = 100,
+    fail_on_drift: bool = False,
 ) -> Landing:
-    """Land and inspect OK results, record a manifest row for every result, then delete <staging>/<run_id>/.
+    """Inspect and land OK results, record a manifest row for every result, then delete <staging>/<run_id>/.
 
     Rows are written every chunk_size files, so a crash late in a big run loses at most chunk_size rows.
     """
@@ -68,7 +73,7 @@ def land_results(
     inspections: dict[str, Inspection] = {}
     pending: list[dict[str, Any]] = []
     for result in results:
-        row, inspection = _land_one(result, run_id, ingest_date, revision, storage_cfg, contract)
+        row, inspection = _land_one(result, run_id, ingest_date, revision, storage_cfg, contract, fail_on_drift)
         rows.append(row)
         if inspection is not None:
             inspections[result.candidate.path] = inspection
@@ -90,6 +95,7 @@ def _land_one(
     revision: str,
     storage_cfg: StorageConfig,
     contract: dict[str, str],
+    fail_on_drift: bool,
 ) -> tuple[dict[str, Any], Inspection | None]:
     if result.status is not FetchStatus.OK:
         return _row(result, run_id, revision, Status.FAILED, None, result.error), None
@@ -97,6 +103,14 @@ def _land_one(
     relpath = landing_relpath(result.candidate.info, ingest_date, run_id)
     target = storage_cfg.root / relpath
     staged = result.staged_path
+
+    inspection = inspect_file(staged, contract)  # footer only; the staged bytes are the verified ones
+    if not inspection.schema_ok:
+        log.warning("schema drift in %s: %s", result.candidate.path, drift_text(inspection))
+        if fail_on_drift:
+            error = f"schema drift: {drift_text(inspection)}"
+            return _row(result, run_id, revision, Status.FAILED, None, error, inspection), inspection
+
     try:
         if target.exists():
             # With run_id in the path this practically never happens, but a file is never overwritten
@@ -113,9 +127,6 @@ def _land_one(
         error = f"landing failed: {type(exc).__name__}: {exc}"
         return _row(result, run_id, revision, Status.FAILED, None, error), None
 
-    inspection = inspect_file(target, contract)  # footer only
-    if not inspection.schema_ok:
-        log.warning("schema drift in %s: %s", relpath, _drift_text(inspection))
     return _row(result, run_id, revision, Status.LANDED, relpath.as_posix(), None, inspection), inspection
 
 
@@ -152,7 +163,8 @@ def _row(
     }
 
 
-def _drift_text(inspection: Inspection) -> str:
+def drift_text(inspection: Inspection) -> str:
+    """What's wrong with a file's structure, in one line."""
     if not inspection.readable:
         return f"unreadable ({inspection.error})"
     parts = []

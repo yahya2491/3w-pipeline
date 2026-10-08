@@ -194,3 +194,33 @@ def test_crash_after_the_move_is_recovered_by_the_next_run(storage, manifest, co
     recovered = target_of(storage, run_id="run-2")
     assert manifest.current()["landing_path"].to_pylist() == [recovered.relative_to(storage.root).as_posix()]
     assert landed_files(storage) == sorted([orphan, recovered])
+
+
+def test_fail_on_drift_refuses_a_drifted_file(storage, manifest, contract, parquet_bytes, data):
+    drifted = parquet_bytes(num_rows=2, columns={**contract, "NEW-SENSOR": "double"})
+    other = "data/5/SIMULATED_00001.parquet"
+    results = [staged_ok(storage, PATH, drifted), staged_ok(storage, other, data)]
+    landing = land(results, storage, manifest, contract, fail_on_drift=True)
+
+    rows = {r["path"]: r for r in manifest.read().to_pylist()}
+    assert rows[PATH]["status"] == "FAILED"
+    assert rows[PATH]["error"] == "schema drift: extra ['NEW-SENSOR']"
+    assert rows[PATH]["landing_path"] is None
+    # What the inspection found is still recorded
+    assert (rows[PATH]["num_rows"], rows[PATH]["schema_ok"], rows[PATH]["codec"]) == (2, False, "BROTLI")
+    assert landing.inspections[PATH].extra == ("NEW-SENSOR",)
+    # The matching file lands as usual; the drifted one doesn't
+    assert rows[other]["status"] == "LANDED"
+    assert landed_files(storage) == [target_of(storage, other)]
+    assert not (storage.staging / RUN_ID).exists()
+    # FAILED rows don't count as landed, so the next run plans it again (and fails again)
+    plan = build_plan([remote_for(PATH, drifted), remote_for(other, data)], manifest.current(), None)
+    assert [(c.path, reason) for c, reason in plan.to_download] == [(PATH, Reason.NEW)]
+
+
+def test_fail_on_drift_refuses_an_unreadable_file(storage, manifest, contract):
+    land([staged_ok(storage, PATH, b"not parquet")], storage, manifest, contract, fail_on_drift=True)
+    [row] = manifest.read().to_pylist()
+    assert row["status"] == "FAILED"
+    assert row["error"].startswith("schema drift: unreadable")
+    assert landed_files(storage) == []
