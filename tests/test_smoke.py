@@ -1,11 +1,8 @@
 """Smoke test: the environment is the pinned one and Spark can run a job."""
 
-import os
 import sys
 
 import pyspark
-import pytest
-from pyspark.sql import SparkSession
 
 
 def test_python_version():
@@ -24,17 +21,6 @@ def test_imports():
     import threew  # noqa: F401  (src/ layout: only importable once the package is installed)
 
 
-@pytest.fixture(scope="module")
-def spark():
-    # Spark starts Python workers with `python3` from PATH unless told otherwise. Outside an activated
-    # venv that is the system Python: on the laptop it's 3.12 (PYTHON_VERSION_MISMATCH), and on any
-    # machine it lacks the venv's packages.
-    os.environ.setdefault("PYSPARK_PYTHON", sys.executable)
-    session = SparkSession.builder.master("local[1]").appName("smoke").getOrCreate()
-    yield session
-    session.stop()
-
-
-def test_spark_job(spark):
+def test_spark_job(spark):  # session from conftest.py, built by threew.spark.get_spark
     df = spark.createDataFrame([(0, "normal"), (1, "event"), (101, "transient")], ["class", "name"])
     assert df.filter(df["class"] > 0).count() == 2
