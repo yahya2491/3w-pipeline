@@ -6,8 +6,10 @@ Usage:
 
 import argparse
 import logging
+from collections import Counter
 
 from threew.bronze.manifest import Manifest
+from threew.bronze.naming import SourceType
 from threew.bronze.plan import build_plan
 from threew.config import load_config
 from threew.source.hub import HfHubClient, verify_pin
@@ -44,6 +46,12 @@ def main() -> None:
     )
     print(f"To download: {s['files_to_download']:,} files, {s['bytes_to_download']:,} bytes")
     print("Per class: " + ", ".join(f"{label}: {n}" for label, n in s["files_per_class"].items()))
+    types = Counter((c.info.label, c.info.source_type) for c, _ in plan.to_download)
+    per_class_types = (
+        f"{label}: " + " ".join(f"{t.value[0]}{types[label, t]}" for t in SourceType if types[label, t])
+        for label in s["files_per_class"]
+    )
+    print("Per class by type (R/S/D): " + ", ".join(per_class_types))
     for candidate, reason in plan.to_download[:5]:
         print(f"  {reason:<7} {candidate.path} ({candidate.remote.size:,} bytes)")
     if len(plan.to_download) > 5:

@@ -7,6 +7,7 @@ from collections import Counter, defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
+from itertools import zip_longest
 from typing import Any
 
 import pyarrow as pa
@@ -16,8 +17,8 @@ from threew.bronze.manifest import Status
 from threew.bronze.naming import InstanceInfo, SourceType, parse_all
 from threew.source.hub import RemoteFile
 
-# Sampling takes real files first: they are the scarce ones, and the ones with well IDs and start times
-SAMPLE_PRIORITY = {SourceType.REAL: 0, SourceType.SIMULATED: 1, SourceType.DRAWN: 2}
+# Sampling cycles through the source types in this order, so a sample covers every type a class has
+SAMPLE_ORDER = (SourceType.REAL, SourceType.SIMULATED, SourceType.DRAWN)
 
 
 class Reason(StrEnum):
@@ -102,18 +103,24 @@ def build_plan(listing: Sequence[RemoteFile], current_manifest: pa.Table, sample
 
 
 def _sample(candidates: list[Candidate], per_class: int | None) -> list[Candidate]:
-    """The first per_class files of each class, REAL first, then by path. Deterministic: same input, same pick."""
+    """Up to per_class files of each class, taken in rounds: the next REAL, SIMULATED and DRAWN file each round.
+
+    So a class gets one file of each type it has before any type gets a second. Within a type, files go by path,
+    which makes the sample deterministic: same listing, same pick.
+    """
     if per_class is None:
         return sorted(candidates, key=lambda c: c.path)
     if per_class < 1:
         raise ValueError(f"sample_per_class must be at least 1 or None, got {per_class}")
-    by_label: dict[int, list[Candidate]] = defaultdict(list)
+    by_label_and_type: dict[int, dict[SourceType, list[Candidate]]] = defaultdict(lambda: defaultdict(list))
     for candidate in candidates:
-        by_label[candidate.info.label].append(candidate)
+        by_label_and_type[candidate.info.label][candidate.info.source_type].append(candidate)
     picked = []
-    for label in sorted(by_label):
-        ranked = sorted(by_label[label], key=lambda c: (SAMPLE_PRIORITY[c.info.source_type], c.path))
-        picked.extend(ranked[:per_class])
+    for label in sorted(by_label_and_type):
+        by_type = by_label_and_type[label]
+        queues = [sorted(by_type[t], key=lambda c: c.path) for t in SAMPLE_ORDER if by_type[t]]
+        in_rounds = [c for round_ in zip_longest(*queues) for c in round_ if c is not None]
+        picked.extend(in_rounds[:per_class])
     return sorted(picked, key=lambda c: c.path)
 
 

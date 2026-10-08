@@ -1,5 +1,7 @@
 """Plan tests: pure inputs, no network, no Spark."""
 
+import random
+from collections import Counter, defaultdict
 from datetime import UTC, datetime
 
 import pyarrow as pa
@@ -122,11 +124,13 @@ def test_read_instead_of_current_is_refused():
         build_plan(LISTING, twice, sample_per_class=None)
 
 
-# Sampling. Class 0: 2 REAL + 3 SIMULATED; class 1: 1 DRAWN + 4 SIMULATED; class 2: only 2 files
+# Sampling. Class 0: 3 REAL + 3 SIMULATED; class 1: 4 SIMULATED + 1 DRAWN; class 2: only 2 files;
+# class 3: 2 of each type
 SAMPLING_LISTING = [
     remote("data/0/SIMULATED_00001.parquet"),
     remote("data/0/SIMULATED_00002.parquet"),
     remote("data/0/SIMULATED_00003.parquet"),
+    remote("data/0/WELL-00009_20180101000000.parquet"),
     remote("data/0/WELL-00007_20170201010207.parquet"),
     remote("data/0/WELL-00001_20140101000000.parquet"),
     remote("data/1/DRAWN_00001.parquet"),
@@ -136,29 +140,80 @@ SAMPLING_LISTING = [
     remote("data/1/SIMULATED_00001.parquet"),
     remote("data/2/SIMULATED_00001.parquet"),
     remote("data/2/DRAWN_00001.parquet"),
+    remote("data/3/DRAWN_00002.parquet"),
+    remote("data/3/DRAWN_00001.parquet"),
+    remote("data/3/SIMULATED_00002.parquet"),
+    remote("data/3/SIMULATED_00001.parquet"),
+    remote("data/3/WELL-00004_20160101000000.parquet"),
+    remote("data/3/WELL-00003_20150101000000.parquet"),
 ]
 
 
+def full_listing():
+    """10 classes like the real data: REAL and SIMULATED everywhere, DRAWN in the even classes only."""
+    files = []
+    for label in range(10):
+        files += [remote(f"data/{label}/WELL-{label + 1:05d}_201702{day:02d}010207.parquet") for day in range(1, 5)]
+        files += [remote(f"data/{label}/SIMULATED_{n:05d}.parquet") for n in range(1, 5)]
+        if label % 2 == 0:
+            files += [remote(f"data/{label}/DRAWN_{n:05d}.parquet") for n in range(1, 3)]
+    return files
+
+
+def sample(listing, per_class=3):
+    return [candidate for candidate, _ in build_plan(listing, EMPTY, per_class).to_download]
+
+
 def sampled_paths(listing, per_class=3):
-    return [candidate.path for candidate, _ in build_plan(listing, EMPTY, per_class).to_download]
+    return [candidate.path for candidate in sample(listing, per_class)]
+
+
+def types_per_class(candidates):
+    types = defaultdict(set)
+    for c in candidates:
+        types[c.info.label].add(c.info.source_type)
+    return types
 
 
 def test_sampling_is_deterministic():
-    assert sampled_paths(SAMPLING_LISTING) == sampled_paths(list(reversed(SAMPLING_LISTING)))
+    for listing in (SAMPLING_LISTING, full_listing()):
+        expected = sampled_paths(listing)
+        for seed in range(5):
+            shuffled = list(listing)
+            random.Random(seed).shuffle(shuffled)
+            assert sampled_paths(shuffled) == expected
 
 
-def test_sampling_takes_3_per_class_real_first_and_all_of_a_small_class():
-    assert build_plan(SAMPLING_LISTING, EMPTY, 3).summary()["files_per_class"] == {0: 3, 1: 3, 2: 2}
+def test_sampling_cycles_through_the_types():
+    assert build_plan(SAMPLING_LISTING, EMPTY, 3).summary()["files_per_class"] == {0: 3, 1: 3, 2: 2, 3: 3}
     assert sampled_paths(SAMPLING_LISTING) == [
-        "data/0/SIMULATED_00001.parquet",  # third pick: both REAL files come first
+        # Class 0, rounds: REAL, SIMULATED | REAL. The old "REAL first" rule would have taken all 3 REAL files
+        "data/0/SIMULATED_00001.parquet",
         "data/0/WELL-00001_20140101000000.parquet",
         "data/0/WELL-00007_20170201010207.parquet",
-        "data/1/SIMULATED_00001.parquet",  # no REAL in class 1: SIMULATED before DRAWN, then by path
+        # Class 1, no REAL: SIMULATED, DRAWN | SIMULATED
+        "data/1/DRAWN_00001.parquet",
+        "data/1/SIMULATED_00001.parquet",
         "data/1/SIMULATED_00002.parquet",
-        "data/1/SIMULATED_00003.parquet",
-        "data/2/DRAWN_00001.parquet",  # class 2 only has 2 files: both
+        # Class 2 only has 2 files: both
+        "data/2/DRAWN_00001.parquet",
         "data/2/SIMULATED_00001.parquet",
+        # Class 3: one of each type, the first by path
+        "data/3/DRAWN_00001.parquet",
+        "data/3/SIMULATED_00001.parquet",
+        "data/3/WELL-00003_20150101000000.parquet",
     ]
+
+
+def test_sample_covers_every_type_a_class_has():
+    for listing in (SAMPLING_LISTING, full_listing()):
+        assert types_per_class(sample(listing)) == types_per_class(sample(listing, per_class=None))
+
+
+def test_full_listing_samples_30_files():
+    picked = sample(full_listing())
+    assert len(picked) == 30
+    assert Counter(c.info.label for c in picked) == {label: 3 for label in range(10)}
 
 
 def test_sampled_out_files_are_not_removed_upstream():
@@ -166,7 +221,7 @@ def test_sampled_out_files_are_not_removed_upstream():
     landed = manifest_of(*(manifest_row(f) for f in SAMPLING_LISTING))
     plan = build_plan(SAMPLING_LISTING, landed, 1)
     assert plan.removed_upstream == ()
-    assert plan.unchanged == 3
+    assert plan.unchanged == 4  # one per class
 
 
 def test_summary():
