@@ -11,7 +11,14 @@ from threew.config import CONF_DIR, ConfigError, load_config
 def test_env_loads_with_absolute_paths(env):
     cfg = load_config(env)
     assert cfg.env == env
-    for path in (cfg.storage.root, cfg.storage.landing, cfg.storage.bronze, cfg.storage.state, cfg.storage.runs):
+    for path in (
+        cfg.storage.root,
+        cfg.storage.landing,
+        cfg.storage.bronze,
+        cfg.storage.state,
+        cfg.storage.runs,
+        cfg.storage.staging,
+    ):
         assert path.is_absolute()
 
 
@@ -34,6 +41,7 @@ def test_derived_paths():
     assert storage.bronze == storage.root / "bronze" / "3w_observations"
     assert storage.state == storage.root / "bronze" / "_state"
     assert storage.runs == storage.root / "bronze" / "_runs"
+    assert storage.staging == storage.root / "_staging"  # inside the root, never /tmp
 
 
 def test_dev_root_is_resolved_against_repo_root():
