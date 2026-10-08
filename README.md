@@ -3,7 +3,8 @@
 Data pipeline for the Petrobras [3W dataset](https://github.com/petrobras/3W) (DAT535 Data Engineering project).
 
 The raw data is read from a Hugging Face mirror, [`Yahya2491/3w-pipeline`](https://huggingface.co/datasets/Yahya2491/3w-pipeline),
-pinned to one commit. See [`docs/source.md`](docs/source.md) for the pinned revision and how its integrity was checked.
+pinned to one commit. See [`docs/source.md`](docs/source.md) for the pinned revision and how its integrity was checked,
+and [`docs/dataset_notes.md`](docs/dataset_notes.md) for measured facts about the data that later layers depend on.
 
 ## Layout
 
