@@ -1,0 +1,95 @@
+"""Bronze ingestion run: pin check, listing, plan, download and verify, land, manifest.
+
+Usage:
+    python -m threew.bronze.ingest --env dev
+"""
+
+import argparse
+import logging
+import sys
+import time
+from collections import Counter
+from collections.abc import Callable
+from typing import Any
+
+from threew.bronze.fetch import fetch_all, fetch_stats
+from threew.bronze.land import land_results
+from threew.bronze.manifest import Manifest
+from threew.bronze.plan import build_plan
+from threew.config import Config, load_config
+from threew.runs import new_run_id
+from threew.source.hub import HfHubClient, HubClient, verify_pin
+from threew.source.retry import with_retry
+
+log = logging.getLogger(__name__)
+
+
+def run_ingest(cfg: Config, client: HubClient, *, sleep: Callable[[float], None] = time.sleep) -> dict[str, Any]:
+    """One ingestion run. Returns a summary of what happened."""
+    run_id, started_at = new_run_id()
+    source, ingest = cfg.source, cfg.ingest
+
+    def retry(fn):
+        return with_retry(fn, ingest.max_retries, ingest.retry_backoff_seconds, sleep=sleep)
+
+    log.info("run %s (%s): %s @ %s", run_id, cfg.env, source.repo_id, source.revision)
+    pin = retry(lambda: verify_pin(client, source))
+    listing = retry(lambda: client.list_files(source.revision, source.include))
+    manifest = Manifest(cfg.storage.state)
+    plan = build_plan(listing, manifest.current(), ingest.sample_per_class)
+    log.info("plan: %s", plan.summary())
+
+    start = time.monotonic()
+    results = fetch_all(
+        client,
+        plan.to_download,
+        source.revision,
+        cfg.storage.staging / run_id,
+        ingest.workers,
+        ingest.max_retries,
+        ingest.retry_backoff_seconds,
+        sleep=sleep,
+    )
+    fetch_seconds = time.monotonic() - start
+    rows = land_results(results, run_id, started_at.date(), source.revision, cfg.storage, manifest)
+
+    return {
+        "run_id": run_id,
+        "env": cfg.env,
+        "started_at": started_at.isoformat(),
+        "revision": source.revision,
+        "tag_moved": pin.tag_moved,
+        "plan": plan.summary(),
+        "fetch": fetch_stats(results, fetch_seconds),
+        "landed": dict(Counter(row["status"] for row in rows)),
+        "manifest_rows": manifest.read().num_rows,
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--env", choices=["dev", "prod"], required=True)
+    args = parser.parse_args(argv)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logging.getLogger("httpx2").setLevel(logging.WARNING)  # one INFO line per HTTP request otherwise
+
+    cfg = load_config(args.env)
+    s = run_ingest(cfg, HfHubClient(cfg.source.repo_id, cfg.source.repo_type))
+
+    plan, fetch = s["plan"], s["fetch"]
+    print(f"Run {s['run_id']} ({s['env']}) at {s['revision']}{' (TAG MOVED)' if s['tag_moved'] else ''}")
+    print(
+        f"Plan: NEW {plan['new']}, CHANGED {plan['changed']}, unchanged {plan['unchanged']}, "
+        f"removed upstream {plan['removed_upstream']}, rejected {plan['rejected']}"
+    )
+    print(
+        f"Fetch: {fetch['ok']} OK, {fetch['failed']} FAILED, {fetch['bytes']:,} bytes "
+        f"in {fetch['seconds']:.1f} s ({fetch['mb_per_s']} MB/s)"
+    )
+    print(f"Landed: {s['landed'].get('LANDED', 0)}, failed: {s['landed'].get('FAILED', 0)}")
+    print(f"Manifest: {s['manifest_rows']} rows in {cfg.storage.state / 'manifest'}")
+    return 1 if s["landed"].get("FAILED") else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
