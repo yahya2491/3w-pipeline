@@ -1,0 +1,19 @@
+# Environment
+.venv/
+__pycache__/
+.pytest_cache/
+
+# Secrets
+token.txt
+token*.txt
+.env
+*.env
+
+# Data never goes into git
+data/
+*.parquet
+
+# Created by Spark when running locally
+spark-warehouse/
+metastore_db/
+derby.log
