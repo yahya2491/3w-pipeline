@@ -8,6 +8,7 @@ import argparse
 import logging
 from collections import Counter
 
+from threew.bronze.naming import SourceType, parse_all
 from threew.config import load_config
 from threew.source.hub import HfHubClient, verify_pin
 from threew.source.retry import with_retry
@@ -47,6 +48,25 @@ def main() -> None:
     print("First 3:")
     for f in files[:3]:
         print(f"  {f}")
+
+    parsed, rejected = parse_all(f.path for f in files)
+    print(f"Name parsing: parsed {len(parsed):,}, rejected: {len(rejected)}")
+    for path, reason in rejected:
+        print(f"  rejected {path}: {reason}")
+
+    by_type = Counter(p.source_type for p in parsed)
+    print("By source type: " + ", ".join(f"{t}: {by_type[t]:,}" for t in SourceType))
+
+    real = [p for p in parsed if p.source_type is SourceType.REAL]
+    if real:
+        wells = sorted({p.well_id for p in real})
+        missing = sorted(set(range(wells[0], wells[-1] + 1)) - set(wells))
+        print(f"Distinct wells: {len(wells)} (wells {wells[0]} to {wells[-1]}, missing: {missing})")
+        starts = [p.instance_start for p in real]
+        print(f"Real instance_start: earliest {min(starts)}, latest {max(starts)} (no timezone)")
+
+    shared = sum(n > 1 for n in Counter(p.instance_id for p in parsed).values())
+    print(f"Instance IDs found in more than one label folder: {shared} (so the path, not the ID, is the key)")
 
 
 if __name__ == "__main__":
