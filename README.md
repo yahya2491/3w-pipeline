@@ -19,6 +19,25 @@ docs/                project documentation
 .github/workflows/   CI
 ```
 
+## Setup
+
+Needs Python 3.11 and Java 8, 11 or 17 (for Spark 3.5). `requirements.lock` pins every runtime dependency and was resolved
+with Python 3.11.
+
+```bash
+python3.11 -m venv .venv            # or: uv venv --python 3.11 --seed .venv
+source .venv/bin/activate
+pip install -r requirements.lock && pip install pytest && pip install -e . --no-deps
+pytest -q
+```
+
+To change dependencies, edit `pyproject.toml` and regenerate the lock inside the Python 3.11 venv:
+
+```bash
+pip install pip-tools
+pip-compile --strip-extras --output-file=requirements.lock pyproject.toml
+```
+
 ## Publishing the mirror
 
 `scripts/publish_to_hf.py` uploads the upstream Parquet files to the Hugging Face repo, uploads the dataset card and creates the

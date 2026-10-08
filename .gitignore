@@ -1,6 +1,8 @@
 # Environment
 .venv/
 __pycache__/
+*.egg-info/
+build/
 .pytest_cache/
 
 # Secrets

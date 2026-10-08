@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "threew"
+version = "0.1.0"
+description = "Data pipeline for the Petrobras 3W dataset (DAT535)"
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+# No pandas here: pyspark 3.5 breaks with pandas 3. If a dependency ever pulls pandas in, pin "pandas<3".
+dependencies = [
+    "pyspark==3.5.0",
+    "pyarrow",
+    "huggingface_hub",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
