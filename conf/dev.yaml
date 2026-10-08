@@ -1,0 +1,9 @@
+# Laptop: small sample, whole flow in about a minute.
+
+storage:
+  root: ./data/dev         # relative paths are resolved against the repo root
+ingest:
+  sample_per_class: 3      # 30 files
+spark:
+  master: "local[2]"
+  driver_memory: 2g

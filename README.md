@@ -38,6 +38,17 @@ pip install pip-tools
 pip-compile --strip-extras --output-file=requirements.lock pyproject.toml
 ```
 
+## Configuration
+
+`conf/base.yaml` holds the shared settings; `conf/dev.yaml` (laptop, 3 files per class) and `conf/prod.yaml` (VM, all files)
+override them key by key. Code reads settings only through `threew.config.load_config(env)`. Unknown keys are errors.
+
+```bash
+python -c "from threew.config import load_config; print(load_config('prod'))"
+```
+
+`HF_TOKEN` is never in a config file; it comes from the environment.
+
 ## Publishing the mirror
 
 `scripts/publish_to_hf.py` uploads the upstream Parquet files to the Hugging Face repo, uploads the dataset card and creates the

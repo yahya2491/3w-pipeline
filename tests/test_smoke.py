@@ -1,5 +1,6 @@
 """Smoke test: the environment is the pinned one and Spark can run a job."""
 
+import os
 import sys
 
 import pyspark
@@ -25,6 +26,9 @@ def test_imports():
 
 @pytest.fixture(scope="module")
 def spark():
+    # Spark starts Python workers with `python3` from PATH unless told otherwise; outside an activated
+    # venv that is the system Python (3.12), which fails with PYTHON_VERSION_MISMATCH.
+    os.environ.setdefault("PYSPARK_PYTHON", sys.executable)
     session = SparkSession.builder.master("local[1]").appName("smoke").getOrCreate()
     yield session
     session.stop()

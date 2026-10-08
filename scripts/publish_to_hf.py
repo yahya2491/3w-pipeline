@@ -24,9 +24,7 @@ def fail(msg: str) -> None:
 
 
 def git(source_dir: Path, *args: str) -> str:
-    return subprocess.run(
-        ["git", *args], cwd=source_dir, check=True, capture_output=True, text=True
-    ).stdout.strip()
+    return subprocess.run(["git", *args], cwd=source_dir, check=True, capture_output=True, text=True).stdout.strip()
 
 
 def main() -> None:

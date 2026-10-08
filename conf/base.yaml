@@ -1,0 +1,29 @@
+# Settings shared by all environments. <env>.yaml is deep-merged on top.
+# No secrets here: HF_TOKEN only ever comes from an environment variable.
+
+source:
+  repo_id: Yahya2491/3w-pipeline
+  repo_type: dataset
+  # Pin the commit, not the tag: a tag can be moved, a commit SHA can't change.
+  revision: c1a7e8d0cfefc0875974ea079d11349a37fa0c56
+  revision_label: v2.0.0   # for readability; checked at runtime to still resolve to `revision`
+  include: ["data/[0-9]/*.parquet"]
+
+storage:
+  root: null            # set per environment
+
+ingest:
+  workers: 4
+  max_retries: 3
+  retry_backoff_seconds: 5
+  sample_per_class: null   # null = all files
+
+schema:
+  fail_on_drift: false
+
+spark:
+  app_name: 3w-bronze
+  master: "local[4]"
+  driver_memory: 4g
+  # Spark's default of 200 makes hundreds of tiny tasks on 4 cores; start at 2 per core.
+  shuffle_partitions: 8
