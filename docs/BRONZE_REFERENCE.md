@@ -1,4 +1,4 @@
-# Bronze layer reference (for agents and lookup)
+# Bronze layer reference
 
 Detailed reference for the 3W data engineering pipeline as of the end of the Bronze layer (October 2026). It's written for AI agents and for looking things up. For a readable overview, see `docs/SILVER_HANDOVER.md`.
 
