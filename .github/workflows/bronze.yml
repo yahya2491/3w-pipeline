@@ -2,7 +2,7 @@ name: Bronze
 
 on:
   schedule:
-    - cron: "22 11 * * *" # TEMPORARY schedule check (step 24.3): 11:22 UTC today; reverted to "17 3 * * 1" next
+    - cron: "*/15 * * * *" # TEMPORARY schedule check (step 24.3): every 15 minutes until one fires; then back to "17 3 * * 1"
   workflow_dispatch:
     inputs:
       env:
