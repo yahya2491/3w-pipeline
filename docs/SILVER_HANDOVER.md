@@ -61,18 +61,18 @@ from threew.spark import get_spark   # sets the venv Python, UTC session time zo
 cfg = load_config("prod")            # "dev" on your laptop
 spark = get_spark(cfg)
 
-# 1. Refuse to run if Bronze isn't ready
-marker = json.loads(open("/home/ubuntu/3w-data/bronze/bronze_ready.json").read())
+# 1. Refuse to run if Bronze isn't ready (raises FileNotFoundError while the marker is absent)
+marker = json.loads(cfg.storage.bronze_ready.read_text())   # <root>/bronze/bronze_ready.json
 print(marker["run_id"], marker["source"]["revision"])
 
 # 2. Read the table (partition pruning works on source_type and label)
-bronze = spark.read.parquet("/home/ubuntu/3w-data/bronze/3w_observations")
+bronze = spark.read.parquet(str(cfg.storage.bronze))         # <root>/bronze/3w_observations
 real = bronze.where(F.col("source_type") == "REAL")
 
 # 3. Hyphenated names: F.col("P-PDG") works; in Spark SQL use backticks: `P-PDG`
 ```
 
-Use paths from `cfg` rather than hard-coding them. The exact attribute names are in `src/threew/config.py`.
+Take paths from `cfg.storage` (`bronze`, `bronze_ready`, `state`, `runs`, …; see `src/threew/config.py`) rather than hard-coding them, so the same code runs in dev and prod.
 
 ## Data facts that matter for Silver
 
@@ -91,18 +91,19 @@ These are measured, not guessed.
 
    So a real-versus-simulated comparison can't include classes 0, 4 and 7.
 3. **Empty labels in real data.** `class` and `state` are null in 12.25% of real rows, and never in simulated or drawn rows. You need a rule for these: reject, flag, or fill.
-4. **Many sensors are entirely null within a file,** and which ones varies by file and by source type. Simulated and drawn files typically have only a handful of sensors filled in. So "which sensors does this instance have" is a real modelling question.
-5. **Timestamps have no time zone.** 3W doesn't say which zone they're in. Bronze keeps them as written (`timestamp_ntz`), and nothing is shifted. Real data spans 2011-08-30 to 2023-09-18.
+4. **Many sensors are entirely null within a file,** and which ones varies by file and by source type. On the 30-file dev sample, real files had 7 to 23 of the 27 sensors entirely null (typically 9), simulated files 20 to 22 and drawn files 22: they have only a handful of sensors filled in. So "which sensors does this instance have" is a real modelling question.
+5. **Timestamps have no time zone.** 3W doesn't say which zone they're in. Bronze keeps them as written (`timestamp_ntz`), and nothing is shifted. Real instances start between 2011-08-30 and 2023-09-18 (the start time in each file name, which equals the file's first `timestamp`).
 6. **Column names have hyphens and Portuguese abbreviations.** Renaming them to snake_case English is a natural Silver standardisation step.
 7. **Schema is identical across all 2,228 files.** That's 30 columns with one fingerprint, checked on every Bronze run against `conf/contracts/3w_v2.yaml`.
 8. **No byte-identical duplicate files exist.** There's nothing to deduplicate at the file level.
+9. **Row labels match the folder.** Every row's `class` is 0, the folder `label`, `100 + label`, or null, checked on all 2,228 files. Folders 3 and 4 hold only their own label, never 0.
 
 **Not measured yet,** and good first profiling tasks for Silver:
 - duplicate or missing timestamps within an instance
 - frozen (stuck) sensor values
 - out-of-range or negative values
-- whether every row's `class` is consistent with its folder `label` (0, N or 100+N)
 - the full range of `state` values
+- all-null sensors across the full dataset, not just the dev sample
 
 ## What Bronze guarantees you
 

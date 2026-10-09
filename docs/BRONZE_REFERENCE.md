@@ -16,7 +16,7 @@ Detailed reference for the 3W data engineering pipeline as of the end of the Bro
 | Our source system | Hugging Face dataset `Yahya2491/3w-pipeline` |
 | Pinned HF revision | `c1a7e8d0cfefc0875974ea079d11349a37fa0c56` (tag `v2.0.0`; the tag *object* is `23b9c64…`, never pin that) |
 | Code repo | `github.com/yahya2491/3w-pipeline` (private), branch `main` protected |
-| Prod host | OpenStack VM `group20`, Ubuntu 24.04, 4 vCPU, 7.8 GB RAM, no swap |
+| Prod host | OpenStack VM `group20`, Ubuntu 24.04, 4 vCPU, 7.8 GiB RAM (8.3 GB), no swap |
 | Prod storage root | `/home/ubuntu/3w-data` (local disk; no HDFS installed) |
 | Files / rows | 2,228 files / 76,587,318 rows **[measured]** |
 | Raw size | 1,873,131,359 bytes (Brotli Parquet) **[measured]** |
@@ -54,7 +54,11 @@ Silver (to be built) → Gold (to be built)
 | Read by | only the converter | Silver |
 | Deleted? | never | derived; outputs not in `manifest.current()` are pruned |
 
-**Why convert at all [measured]:** Spark 3.5 fails on the raw files with `ClassNotFoundException: org.apache.hadoop.io.compress.BrotliCodec` and with `Illegal Parquet type: INT64 (TIMESTAMP(NANOS,false))`. pyarrow reads them fine, so pyarrow is used as a format adapter. Everything from the Bronze table onward is Spark.
+**Why convert at all [measured]:** Spark 3.5 can't read the raw files, for two separate reasons:
+- the nanosecond timestamps fail as soon as Spark reads the schema: `AnalysisException: Illegal Parquet type: INT64 (TIMESTAMP(NANOS,false))`
+- Brotli-compressed values fail when they're decoded: `BadConfigurationException: Class org.apache.hadoop.io.compress.BrotliCodec was not found`. Footer-only operations such as `count()` still work on Brotli files, which can hide this.
+
+pyarrow reads them fine, so pyarrow is used as a format adapter. Everything from the Bronze table onward is Spark.
 
 ---
 
@@ -66,14 +70,14 @@ All paths are relative to `storage.root` = `/home/ubuntu/3w-data`. In dev, it's 
 |---|---|
 | `landing/3w/ingest_date=<YYYY-MM-DD>/run_id=<run_id>/label=<0-9>/<original filename>` | raw files, chmod 444 |
 | `_staging/<run_id>/` | download area. Same filesystem as landing, so `os.replace` is atomic. Deleted after a successful landing. |
-| `bronze/_state/manifest/<run_id>_<seq>.parquet` | manifest chunks, append-only, written via temp name + rename |
+| `bronze/_state/manifest/part-<UTC timestamp>-<8 hex>.parquet` | manifest chunks, append-only: one per append (normally every 100 files), written under a dot-file temp name, then renamed |
 | `bronze/_state/ingest.lock` | `fcntl.flock` lock file. Contents (pid, run_id) are informational only. |
 | `bronze/3w_observations/source_type=<REAL\|SIMULATED\|DRAWN>/label=<0-9>/<sha256[:16]>.parquet` | Bronze table, one output file per landed file |
 | `bronze/bronze_ready.json` | ready marker |
-| `bronze/_runs/<run_id>.json`, `<run_id>.log` | run report and log; the reconcile plan sits alongside |
+| `bronze/_runs/<run_id>.json`, `<run_id>.log`, `<run_id>_reconcile_plan.txt` | run report, log and reconcile plan, per run. `scripts/reconcile_bronze.py` adds `reconcile_<UTC timestamp>.json` and its `_plan.txt`. |
 
 Notes:
-- **The partition folder is `label=`, not `class=` [design].** `class=` would collide with the data column `class`, and Spark fails with a duplicate column.
+- **The partition folder is `label=`, not `class=` [design, measured].** The files have their own per-row `class` column, and Spark doesn't fail on the clash: it silently replaces every row's `class` with the folder's value. Tested with Spark 3.5.0: per-row values [0, 102, 2] came back as [2, 2, 2], with no error.
 - **Bronze table file names are content-addressed** (first 16 hex characters of the source file's sha256). Re-converting produces a byte-identical file at the same path **[measured: a full prod rebuild gave 2,228 identical sha256]**.
 - **The table has 19 partitions [measured]:**
   - REAL in labels 0 to 9
@@ -143,7 +147,7 @@ Location: `bronze/_state/manifest/`. One row per file per run that touched it. *
 
 ## 5. File naming and instance identity
 
-Parser: `src/threew/bronze/naming.py`. Outer pattern `^data/(\d)/([^/]+)\.parquet$`, then `fullmatch` against one of:
+Parser: `src/threew/bronze/naming.py`. The outer pattern `data/(\d)/([^/]+)\.parquet` is applied with `fullmatch` (not `^…$`, whose `$` would also accept a trailing newline) and `re.ASCII` (so only 0-9 count as digits). Then the file name is `fullmatch`ed against one of:
 
 | Pattern | source_type | well_id | instance_start |
 |---|---|---|---|
@@ -220,8 +224,8 @@ Parser: `src/threew/bronze/naming.py`. Outer pattern `^data/(\d)/([^/]+)\.parque
 | 9 | Hydrate in Service Line | yes |
 
 - **Folder `label`** = the event type of the whole instance.
-- **Row `class`** = the per-observation label: 0 (normal period), `label` (steady state of the event), or `100 + label` (transient). Sample files showed `{0, 1, 101}` and `{0, 2, 102}`.
-- **[unverified at scale]:** that every row's `class` is in `{0, label, 100 + label}` for its folder. This is a good Silver validation rule.
+- **Row `class`** = the per-observation label: 0 (normal period), `label` (steady state of the event), `100 + label` (transient), or null (unlabeled; real files only).
+- **[measured on all 2,228 files]:** every row's `class` is in `{0, label, 100 + label}` or null for its folder. Folder 0 holds only 0; folders 3 and 4 hold only their own label, never 0; folders 1, 2 and 5 to 9 hold all three. Still a good Silver validation rule, since it guards future revisions.
 - `TRANSIENT_OFFSET = 100` in `dataset.ini`.
 
 ---
@@ -249,17 +253,18 @@ All **[measured]** on v2.0.0 at the pinned revision.
 **Wells and time range:**
 - 40 distinct real wells: IDs 1 to 42, with 17 and 18 missing.
 - Real `instance_start` ranges from 2011-08-30 23:53:21 to 2023-09-18 17:01:06 (no tz).
+- Real `instance_start` (from the file name) equals the first `timestamp` in the file for all 1,119 real files.
 
 **Rows:**
-- 76,587,318 in total.
-- Per-source breakdown: see `docs/evidence/bronze/README.md`. The upstream per-group sums were 40,748,658, 32,872,250 and 2,966,410.
+- 76,587,318 in total: 40,748,658 SIMULATED, 32,872,250 REAL and 2,966,410 DRAWN (measured on the upstream files; see `docs/dataset_notes.md`).
 
 **Labels and sensors:**
 - **Null labels:** `class` and `state` are null in 12.25% of REAL rows, and 0% of SIMULATED and DRAWN rows.
 - **Sampling:** observations at 1-second intervals; a 6-hour real file has ~21.5k rows.
-- **All-null sensor columns per file are common, and vary by file:**
-  - one real sample had 9 of 27 sensors entirely null
-  - simulated and drawn samples had 22 of 27 entirely null
+- **All-null sensor columns per file are common, and vary by file** [measured on the 30-file dev sample]:
+  - REAL (21 files): 7 to 23 of the 27 sensors entirely null, typically 9
+  - SIMULATED (7 files): 20 to 22
+  - DRAWN (2 files): 22
 - **Simulated and drawn timestamps** are synthetic, not real calendar time.
 
 **Not yet measured (Silver candidates):**
@@ -267,8 +272,7 @@ All **[measured]** on v2.0.0 at the pinned revision.
 - frozen or stuck sensor values
 - physically implausible values (negative absolute pressures, out-of-range openings)
 - the `state` value domain
-- `class` versus folder `label` consistency
-- whether real `instance_start` from the file name equals the first `timestamp` in the file
+- all-null sensors across the full dataset, not just the dev sample
 
 ---
 
@@ -278,11 +282,10 @@ Package `threew` under `src/`.
 
 | Module | Responsibility |
 |---|---|
-| `threew/config.py` | `load_config(env)`: merges `conf/base.yaml` + `conf/<env>.yaml` into frozen dataclasses. Unknown keys raise errors, and the revision must be a 40-character SHA. Derived paths (landing, bronze, state, runs, staging) are absolute and can't be set in YAML. `to_dict()`. |
+| `threew/config.py` | `load_config(env)`: merges `conf/base.yaml` + `conf/<env>.yaml` into frozen dataclasses. Unknown keys raise errors, and the revision must be a 40-character SHA. Derived paths (landing, bronze, state, runs, staging, bronze_ready) are absolute and can't be set in YAML. `to_dict()`. |
 | `threew/spark.py` | `get_spark(cfg)`: the shared session builder (see §3) |
 | `threew/runs.py` | `new_run_id()` → `(run_id, started_at_utc)` |
 | `threew/lock.py` | `run_lock(path, owner)`: `fcntl.flock` (exclusive, non-blocking). Released by the OS on process death. Raises `LockHeld`. |
-| `threew/logging_setup.py` | logs to stdout and to `<runs>/<run_id>.log` |
 | `threew/source/hub.py` | `RemoteFile`, `HubClient` protocol, `HfHubClient`, `verify_pin`. Only full commit SHAs are accepted for list and download. |
 | `threew/source/retry.py` | `with_retry`: retries timeouts, connection resets, 408, 429, 5xx (5 s, 10 s, 20 s); fails fast on 401 and 404 |
 | `threew/bronze/naming.py` | `InstanceInfo`, `SourceType`, `parse_path`, `parse_all` |
@@ -291,11 +294,12 @@ Package `threew` under `src/`.
 | `threew/bronze/fetch.py` | `FetchResult`, `sha256_of`, `fetch_all`: thread pool, size + sha256 verification, one re-download on mismatch, circuit breaker after 10 consecutive initial failures. `attempts` and `checksum_retries`. |
 | `threew/bronze/land.py` | `land_results`: inspect, `os.replace` into landing, chmod 444, manifest rows in chunks of 100. Order is file first, then record. |
 | `threew/bronze/inspect.py` | `load_contract`, `inspect_file` (footer only), fingerprint, drift lists |
-| `threew/bronze/convert.py` | `convert_file`, `convert_all`: landing → Bronze table (pyarrow, safe ts cast, lineage columns, atomic write, footer row check) |
+| `threew/bronze/convert.py` | `convert_file`, `convert_all` (`only_pending=True` in runs): landing → Bronze table (pyarrow, safe ts cast, lineage columns, atomic write, footer row check). Also `expected_output` and `prune_outputs`. |
 | `threew/bronze/reconcile.py` | `expected_schema`, `reconcile`: 6 checks, fast and deep modes |
 | `threew/bronze/orphans.py` | `find_orphans`, `find_stale_staging` (report only; never delete) |
 | `threew/bronze/report.py` | `RunReport` (atomic JSON), `code_info()` (git SHA, dirty flag, package versions) |
-| `threew/bronze/ingest.py` | ingest-only command: `python -m threew.bronze.ingest --env …` |
+| `threew/bronze/ingest.py` | ingest-only command: `python -m threew.bronze.ingest --env … [--report-copy DIR]`. Also `execute()`, shared with `run.py`: the lock, the run report, the per-run log (`<runs>/<run_id>.log`, the `threew.*` loggers at INFO; the CLIs also log to the terminal) and `--report-copy`. |
+| `threew/bronze/summary.py` | `summarize(report)`: a run report as Markdown (status, source, one row per phase, totals, problems) for the GitHub job summary |
 | `threew/bronze/run.py` | full Bronze: `python -m threew.bronze.run --env … [--deep] [--report-copy DIR]` |
 
 **Scripts (`scripts/`):**
@@ -305,7 +309,7 @@ Package `threew` under `src/`.
 - `fetch_smoke.py`
 - `inspect_landing.py`
 - `build_bronze.py`
-- `reconcile_bronze.py`: `--fast`, `--deep`, `--evidence`
+- `reconcile_bronze.py`: deep by default; `--fast`, `--profile` (also times the other mode), `--evidence` (also saves the plan to `docs/evidence/bronze/`)
 - `report_summary.py`: Markdown for the GitHub job summary
 
 **Config:** `conf/base.yaml`, `conf/dev.yaml`, `conf/prod.yaml`, and the schema contract `conf/contracts/3w_v2.yaml` (30 columns with types, generated from a real footer).
@@ -358,7 +362,7 @@ Dev overrides: `sample_per_class: 3`, `local[2]`, 2g.
 - `checksum_redownloads`
 - `network_retries` = `download_calls` − files − `checksum_redownloads`
 
-**Ready marker fields [measured, dev]:** `run_id`, `env`, `source{repo_id, revision}`, `reconcile{mode, passed, checks}`, `code_commit`, `report`, `published_at`. Check the actual file for any extra fields.
+**Ready marker fields [measured]:** `run_id`, `published_at`, `env`, `bronze_table`, `source{repo_id, revision}`, `files`, `rows`, `reconcile{mode, passed, checks}`, `code_commit`, `report`.
 
 ---
 
@@ -367,10 +371,10 @@ Dev overrides: `sample_per_class: 3`, `local[2]`, 2g.
 | # | Check | How |
 |---|---|---|
 | 1 | Schema | Spark schema == `expected_schema()` |
-| 2 | Total rows | `count()` == sum of `num_rows` over `current()` LANDED + schema_ok |
+| 2 | Total rows | `count()` == sum of `num_rows` over `current()` LANDED + schema_ok, minus files whose conversion failed in this run (left out, and the run is PARTIAL) |
 | 3 | Per file | per `(_source_path, _file_sha256)` count == manifest `num_rows`; 0 missing, 0 extra |
 | 4 | Partitions | `source_type` and `label` partition values == manifest |
-| 5 | Row order | fast: count = n, min = 0, max = n−1, sum = n(n−1)/2; deep adds `countDistinct(_row_in_file)` = n |
+| 5 | Row order | fast: min = 0, max = n−1, sum = n(n−1)/2 and sum of squares = (n−1)n(2n−1)/6, with n the file's row count; deep adds `countDistinct(_row_in_file)` = n, a strict proof |
 | 6 | Fidelity | 3 files (one per source type): every value read by Spark from Bronze == pyarrow read of the landing file (NaN == NaN) |
 
 - Checks 3 to 5 run as **one `groupBy`**, joined to a **broadcast** manifest DataFrame. The saved plan shows `BroadcastHashJoin` with `BroadcastExchange` on the manifest side.
@@ -433,14 +437,14 @@ The VM disk is the bottleneck.
 - a different runner for another repo lives in `~/actions-runner`; don't touch it
 
 **GitHub:**
-- **`ci.yml`:** `lint` (ruff check + format check) and `test` (matrix: Java 8 and 17), on pushes to `main` and on pull requests. `HF_HUB_OFFLINE=1`, no secrets.
+- **`ci.yml`:** `lint` (ruff check + format check) and `test` (matrix: Java 8 and 17), on pushes to any branch, pull requests to `main` and manual dispatch. A new push cancels the outdated run. `HF_HUB_OFFLINE=1`, no secrets.
 - **`bronze.yml`:**
   - schedule `17 3 * * 1` (Mondays 03:17 UTC), plus `workflow_dispatch` (inputs `env`, `deep`)
   - concurrency group per env, with no cancel-in-progress
   - runs on the self-hosted runner, `environment: production` (`main` only, secret `HF_TOKEN`)
   - writes a job summary and uploads the report, log and plan as an artifact for 90 days
 - **`runner-check.yml`:** a manual environment sanity check.
-- **Branch protection on `main`:** requires `lint`, `test (8)` and `test (17)`. All changes go through pull requests.
+- **Branch protection on `main`:** requires `lint`, `test (8)` and `test (17)`, for admins too (`enforce_admins`). All changes go through pull requests.
 
 **Overlap protection [measured]:** GitHub concurrency queues overlapping workflow runs, and `flock` makes a workflow run SKIPPED if a manual SSH run holds the lock (and vice versa).
 
