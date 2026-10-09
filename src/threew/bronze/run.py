@@ -1,7 +1,7 @@
 """Full Bronze run: ingest, convert, prune, reconcile and publish, under one lock and one run report.
 
 Usage:
-    python -m threew.bronze.run --env dev [--deep]
+    python -m threew.bronze.run --env dev [--deep] [--report-copy DIR]
 
 Phases, in order:
     ingest     steps 8-15: download, verify, land and inspect new and changed files (PARTIAL or FAILED as before)
@@ -26,6 +26,7 @@ import time
 from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from pyspark.sql import SparkSession
@@ -62,13 +63,17 @@ def run_bronze(
     deep: bool = False,
     sleep: Callable[[float], None] = time.sleep,
     spark_factory: SparkFactory = spark_session,
+    report_copy: Path | None = None,
 ) -> int:
-    """One full Bronze run. Returns the exit code; the details are in the run report."""
+    """One full Bronze run. Returns the exit code; the details are in the run report.
+
+    With report_copy, the run's report, log and reconcile plan are copied into that folder at the very end.
+    """
 
     def body(report: RunReport, run_id: str, started_at: datetime) -> RunStatus:
         return _bronze_phases(cfg, client, report, run_id, started_at, sleep, deep, spark_factory)
 
-    return execute(cfg, body)
+    return execute(cfg, body, report_copy=report_copy)
 
 
 def _bronze_phases(cfg, client, report: RunReport, run_id, started_at, sleep, deep, spark_factory) -> RunStatus:
@@ -169,13 +174,15 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--env", choices=["dev", "prod"], required=True)
     parser.add_argument("--deep", action="store_true", help="reconcile with countDistinct (a strict row-order proof)")
+    parser.add_argument("--report-copy", type=Path, metavar="DIR", help="copy the run's report, log and plan into DIR")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     logging.getLogger("httpx2").setLevel(logging.WARNING)  # one INFO line per HTTP request otherwise
     logging.getLogger("py4j").setLevel(logging.WARNING)
 
     cfg = load_config(args.env)
-    return run_bronze(cfg, HfHubClient(cfg.source.repo_id, cfg.source.repo_type), deep=args.deep)
+    client = HfHubClient(cfg.source.repo_id, cfg.source.repo_type)
+    return run_bronze(cfg, client, deep=args.deep, report_copy=args.report_copy)
 
 
 if __name__ == "__main__":

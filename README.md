@@ -91,6 +91,14 @@ SKIPPED.
 | PARTIAL | 1 | the run finished, but some files failed to download, land or convert |
 | FAILED | 2 | the run stopped on an error, reconciliation failed, or files drifted with `schema.fail_on_drift` on |
 
+### Scheduled runs
+
+[`.github/workflows/bronze.yml`](.github/workflows/bronze.yml) runs Bronze on the VM's self-hosted runner every Monday
+at 03:17 UTC, and on demand from the Actions tab (`env`: prod or dev, `deep`: strict reconcile). Each run builds a
+fresh environment from `requirements.lock`, writes a summary to the run page (status, one row per phase, every
+problem) and keeps the report, log and reconcile plan as an artifact for 90 days. PARTIAL and FAILED runs turn red;
+GitHub emails whoever last changed the schedule when a scheduled run fails.
+
 Every run writes a report, whatever happens, to `<storage root>/bronze/_runs/<run_id>.json`: config, code version,
 plan, download speed, schema checks, conversion, pruning, reconciliation, the marker, failures, orphaned files in
 landing and leftover staging folders. `scripts/plan_preview.py` and `scripts/inspect_landing.py` show the plan and

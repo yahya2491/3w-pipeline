@@ -9,12 +9,14 @@ Every run, whatever happens, writes a report to <storage.runs>/<run_id>.json.
 
 import argparse
 import logging
+import shutil
 import sys
 import time
 from collections import Counter
-from collections.abc import Callable
-from contextlib import ExitStack
+from collections.abc import Callable, Iterator
+from contextlib import ExitStack, contextmanager
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from threew.bronze.fetch import fetch_all, fetch_stats
@@ -38,19 +40,38 @@ LOCK_FILE = "ingest.lock"  # in storage.state: one run at a time per storage roo
 RunBody = Callable[[RunReport, str, datetime], RunStatus]
 
 
-def run_ingest(cfg: Config, client: HubClient, *, sleep: Callable[[float], None] = time.sleep) -> int:
+def run_ingest(
+    cfg: Config,
+    client: HubClient,
+    *,
+    sleep: Callable[[float], None] = time.sleep,
+    report_copy: Path | None = None,
+) -> int:
     """One ingestion run: download, verify and land (no Bronze table). Returns the exit code."""
-    return execute(
-        cfg, lambda report, run_id, started_at: ingest_phases(cfg, client, report, run_id, started_at, sleep)
-    )
+
+    def body(report: RunReport, run_id: str, started_at: datetime) -> RunStatus:
+        return ingest_phases(cfg, client, report, run_id, started_at, sleep)
+
+    return execute(cfg, body, report_copy=report_copy)
 
 
-def execute(cfg: Config, body: RunBody) -> int:
+def execute(cfg: Config, body: RunBody, *, report_copy: Path | None = None) -> int:
     """Run body(report, run_id, started_at) under the lock, with a run report that is written whatever happens.
 
-    Returns the exit code of the status body returns (SKIPPED if the lock is held, FAILED if body raises).
+    Returns the exit code of the status body returns (SKIPPED if the lock is held, FAILED if body raises). The run's
+    log also goes to <storage.runs>/<run_id>.log. With report_copy, the run's report, log and reconcile plan are
+    copied there at the very end, even if the run raised.
     """
     run_id, started_at = new_run_id()
+    try:
+        with _run_log(cfg.storage.runs / f"{run_id}.log"):
+            return _execute(cfg, body, run_id, started_at)
+    finally:
+        if report_copy is not None:
+            copy_run_files(cfg.storage.runs, run_id, report_copy)
+
+
+def _execute(cfg: Config, body: RunBody, run_id: str, started_at: datetime) -> int:
     report = RunReport(run_id, started_at, cfg.env)
     report["code"] = code_info()
     report["config"] = cfg.to_dict()
@@ -74,6 +95,37 @@ def execute(cfg: Config, body: RunBody) -> int:
             path = report.write(cfg.storage.runs)
             _log_summary(report, path)
     return exit_code
+
+
+def copy_run_files(runs_dir: Path, run_id: str, dest: Path) -> list[Path]:
+    """Copy one run's report, log and reconcile plan (the ones that exist) into dest."""
+    dest = Path(dest)
+    dest.mkdir(parents=True, exist_ok=True)
+    copied = []
+    for name in (f"{run_id}.json", f"{run_id}.log", f"{run_id}_reconcile_plan.txt"):
+        if (runs_dir / name).exists():
+            copied.append(Path(shutil.copy2(runs_dir / name, dest / name)))
+    return copied
+
+
+@contextmanager
+def _run_log(path: Path) -> Iterator[None]:
+    """Also write the pipeline's log lines (INFO and up) to path while the run lasts."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handler = logging.FileHandler(path)
+    handler.setLevel(logging.INFO)
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    pipeline = logging.getLogger("threew")
+    previous_level = pipeline.level
+    if pipeline.getEffectiveLevel() > logging.INFO:
+        pipeline.setLevel(logging.INFO)
+    pipeline.addHandler(handler)
+    try:
+        yield
+    finally:
+        pipeline.removeHandler(handler)
+        handler.close()
+        pipeline.setLevel(previous_level)
 
 
 def ingest_phases(cfg: Config, client: HubClient, report: RunReport, run_id, started_at, sleep) -> RunStatus:
@@ -258,12 +310,13 @@ def _log_summary(report: RunReport, path) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--env", choices=["dev", "prod"], required=True)
+    parser.add_argument("--report-copy", type=Path, metavar="DIR", help="copy the run's report and log into DIR")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     logging.getLogger("httpx2").setLevel(logging.WARNING)  # one INFO line per HTTP request otherwise
 
     cfg = load_config(args.env)
-    return run_ingest(cfg, HfHubClient(cfg.source.repo_id, cfg.source.repo_type))
+    return run_ingest(cfg, HfHubClient(cfg.source.repo_id, cfg.source.repo_type), report_copy=args.report_copy)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,69 @@
+name: Bronze
+
+on:
+  schedule:
+    - cron: "17 3 * * 1" # Mondays 03:17 UTC: off the hour, when GitHub's schedulers are less busy
+  workflow_dispatch:
+    inputs:
+      env:
+        description: Environment
+        type: choice
+        options: [prod, dev]
+        default: prod
+      deep:
+        description: Deep reconcile (adds countDistinct, a strict row-order proof)
+        type: boolean
+        default: false
+
+# A new run waits for the current one instead of cancelling it. The pipeline's own lock is the second line of
+# defence, for runs started by hand over SSH: those make this run SKIPPED.
+concurrency:
+  group: bronze-${{ inputs.env || 'prod' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  bronze:
+    runs-on: [self-hosted, uis-openstack]
+    environment: production # HF_TOKEN is an environment secret, only available to runs from main
+    timeout-minutes: 60 # a full fresh ingest took 12 minutes: generous, but catches a hung run
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      PYTHONUNBUFFERED: "1"
+      BRONZE_ENV: ${{ inputs.env || 'prod' }}
+      DEEP_FLAG: ${{ inputs.deep && '--deep' || '' }}
+    steps:
+      - uses: actions/checkout@v4 # clean: true wipes the workspace, including the last run's venv
+
+      - name: Build the environment from the lock
+        run: |
+          python3.11 -m venv .venv
+          .venv/bin/pip install --quiet -r requirements.lock
+          .venv/bin/pip install --quiet -e . --no-deps
+
+      - name: Run Bronze
+        id: bronze
+        run: |
+          set +e  # keep going: the summary and the artifact come first, the exit code last
+          .venv/bin/python -m threew.bronze.run --env "$BRONZE_ENV" $DEEP_FLAG --report-copy out/
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Job summary
+        if: always()
+        run: .venv/bin/python scripts/report_summary.py out/*.json | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the report, log and plan
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bronze-${{ inputs.env || 'prod' }}-${{ github.run_id }}
+          path: out/
+          retention-days: 90
+          if-no-files-found: warn
+
+      - name: Exit with the run's code
+        run: exit "${CODE:-2}" # SUCCESS and SKIPPED are 0; PARTIAL (1) and FAILED (2) turn the run red
+        env:
+          CODE: ${{ steps.bronze.outputs.code }}
