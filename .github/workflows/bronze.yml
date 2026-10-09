@@ -2,7 +2,7 @@ name: Bronze
 
 on:
   schedule:
-    - cron: "17 3 * * 1" # Mondays 03:17 UTC: off the hour, when GitHub's schedulers are less busy
+    - cron: "22 11 * * *" # TEMPORARY schedule check (step 24.3): 11:22 UTC today; reverted to "17 3 * * 1" next
   workflow_dispatch:
     inputs:
       env:
