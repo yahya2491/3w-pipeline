@@ -44,11 +44,10 @@ class FetchResult:
     staged_path: Path | None  # OK only
     sha256_actual: str | None  # of the last file downloaded, if it could be read
     verified_by: VerifiedBy
-    attempts: int  # all download calls: 1 + network_retries + checksum_redownloads
+    attempts: int  # download calls: 1, plus retries after network errors, plus a re-download after a bad file
     seconds: float
     error: str | None  # FAILED only
-    network_retries: int = 0  # extra calls after temporary network errors (timeouts, resets, 429, 5xx)
-    checksum_redownloads: int = 0  # re-downloads after a file failed verification (size or sha256)
+    checksum_retries: int = 0  # 1 if the file was downloaded again after failing verification (size or sha256)
 
 
 class TooManyFailuresError(RuntimeError):
@@ -89,10 +88,9 @@ def fetch_one(
 
     def result(status: FetchStatus, staged: Path | None, actual: str | None, error: str | None) -> FetchResult:
         seconds = time.monotonic() - start
-        # Each round ends in exactly one call that counts; every other call in it was a network retry
-        retries, redownloads = calls - rounds, rounds - 1
+        checksum_retries = rounds - 1  # a second round only happens after a file failed verification
         return FetchResult(
-            candidate, reason, status, staged, actual, verified_by, calls, seconds, error, retries, redownloads
+            candidate, reason, status, staged, actual, verified_by, calls, seconds, error, checksum_retries
         )
 
     error: str | None = None
@@ -185,8 +183,19 @@ def fetch_stats(results: Sequence[FetchResult], elapsed: float) -> dict[str, Any
         "bytes": ok_bytes,
         "seconds": round(elapsed, 3),
         "mb_per_s": round(ok_bytes / elapsed / 1e6, 3) if elapsed > 0 else None,
-        "network_retries": sum(r.network_retries for r in results),
-        "checksum_redownloads": sum(r.checksum_redownloads for r in results),
+        **retry_counts(results),
+    }
+
+
+def retry_counts(results: Sequence[FetchResult]) -> dict[str, int]:
+    """download_calls = files + checksum_redownloads + network_retries: each file is downloaded once, plus once more
+    if it failed verification, plus once per retry after a temporary network error."""
+    download_calls = sum(r.attempts for r in results)
+    checksum_redownloads = sum(r.checksum_retries for r in results)
+    return {
+        "download_calls": download_calls,
+        "checksum_redownloads": checksum_redownloads,
+        "network_retries": download_calls - len(results) - checksum_redownloads,
     }
 
 

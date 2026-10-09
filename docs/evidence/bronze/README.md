@@ -21,9 +21,10 @@ Source: `Yahya2491/3w-pipeline` @ `c1a7e8d0cfefc0875974ea079d11349a37fa0c56` (`v
 ## First run (`20261008T235040Z-664edd`)
 
 - Fetch: 2,228 OK, 0 FAILED, 1,873,131,359 bytes; every file verified by sha256 against the listing.
-- Retries: 0 network retries. These reports predate the `network_retries` and `checksum_redownloads` fields
-  (commit `00c0e2b`); the count comes from the run's log, where `with_retry` logs every retry as a warning, and it
-  has no warnings at all. Checksum re-downloads weren't logged then, so that count isn't known for this run.
+- Retries: 0 network retries. These reports predate the fetch section's `download_calls`, `network_retries` and
+  `checksum_redownloads` fields (per file: `attempts` and `checksum_retries`); the count comes from the run's log,
+  where `with_retry` logs every retry as a warning, and it has no warnings at all. Checksum re-downloads weren't
+  logged then, so that count isn't known for this run.
 - Schema: one fingerprint, `f59f09e498a1352e`, for all 2,228 files; 0 drifted; codec BROTLI for all 2,228.
 - Totals: 2,228 landed, 0 failed, 2,228 manifest rows; no orphans, no stale staging, no failures.
 - Code: commit `0bd0e9f2`, clean checkout.

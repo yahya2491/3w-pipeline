@@ -72,7 +72,10 @@ def main() -> int:
         print(
             f"OK: {s['ok']} | FAILED: {s['failed']} | {s['bytes']:,} bytes in {s['seconds']:.2f} s ({s['mb_per_s']} MB/s)"
         )
-        print(f"Network retries: {s['network_retries']} | checksum re-downloads: {s['checksum_redownloads']}")
+        print(
+            f"Download calls: {s['download_calls']} | network retries: {s['network_retries']} | "
+            f"checksum re-downloads: {s['checksum_redownloads']}"
+        )
         if s["bytes"]:
             full_bytes = sum(f.size for f in listing)
             estimate = full_bytes / (s["bytes"] / elapsed)

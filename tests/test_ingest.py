@@ -85,7 +85,8 @@ def test_normal_run_then_nothing_to_do(cfg, files, contract):
     assert report["schema"]["codecs"] == {"BROTLI": 7}
     assert report["totals"]["files_landed"] == report["totals"]["landed_files_total"] == 7
     assert report["totals"]["rows_landed"] == report["totals"]["rows_total"] == 1 + 2 + 3 + 4 + 5 + 6 + 7
-    assert (report["fetch"]["network_retries"], report["fetch"]["checksum_redownloads"]) == (0, 0)
+    fetch = report["fetch"]
+    assert (fetch["download_calls"], fetch["checksum_redownloads"], fetch["network_retries"]) == (7, 0, 0)
     assert (report["orphans"], report["stale_staging"], report["failures"]) == ([], [], [])
     assert report["config"]["env"] == "dev"
     assert len(landed(cfg)) == 7
@@ -101,6 +102,16 @@ def test_normal_run_then_nothing_to_do(cfg, files, contract):
     assert sum(hub.downloads.values()) == 7  # nothing downloaded again
     assert Manifest(cfg.storage.state).read().num_rows == 7
     assert list(cfg.storage.staging.iterdir()) == []
+
+
+def test_a_run_that_lands_nothing_reports_the_same_rows_total(cfg, files):
+    hub = FakeHub(files)
+    _, first = run(cfg, hub)
+    _, second = run(cfg, hub)
+    assert second["totals"]["files_landed"] == 0
+    # The sum of num_rows over manifest.current(), never a file count
+    assert second["totals"]["rows_total"] == first["totals"]["rows_total"] == 1 + 2 + 3 + 4 + 5 + 6 + 7
+    assert second["totals"]["rows_total"] != second["totals"]["landed_files_total"]
 
 
 def test_one_file_fails(cfg, files):
@@ -130,7 +141,9 @@ def test_retries_and_redownloads_reach_the_report(cfg, files):
 
     code, report = run(cfg, FlakyHub(files))
     assert (code, report["run"]["status"]) == (0, "SUCCESS")
-    assert (report["fetch"]["network_retries"], report["fetch"]["checksum_redownloads"]) == (1, 1)
+    fetch = report["fetch"]
+    # 7 files: one timed out once, one arrived corrupted once
+    assert (fetch["download_calls"], fetch["checksum_redownloads"], fetch["network_retries"]) == (9, 1, 1)
 
 
 def test_listing_raises_an_unexpected_error(cfg, files):

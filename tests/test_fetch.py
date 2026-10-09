@@ -90,15 +90,14 @@ def test_correct_bytes(tmp_path):
     assert result.sha256_actual == sha(GOOD)
     assert result.staged_path.read_bytes() == GOOD
     assert result.error is None
-    assert (result.network_retries, result.checksum_redownloads) == (0, 0)
+    assert (result.attempts, result.checksum_retries) == (1, 0)
 
 
 def test_wrong_bytes_once_then_correct(tmp_path):
     cand = candidate()
     result = fetch(FakeHub({cand.path: [BAD, GOOD]}), cand, tmp_path)
     assert result.status is FetchStatus.OK
-    assert result.attempts == 2
-    assert (result.network_retries, result.checksum_redownloads) == (0, 1)
+    assert (result.attempts, result.checksum_retries) == (2, 1)
     assert result.staged_path.read_bytes() == GOOD
 
 
@@ -110,7 +109,7 @@ def test_wrong_bytes_twice(tmp_path):
     assert result.error == f"checksum mismatch: expected {sha(GOOD)[:12]} got {sha(BAD)[:12]}"
     assert result.staged_path is None
     assert hub.calls[cand.path] == 2  # the second and final attempt
-    assert (result.network_retries, result.checksum_redownloads) == (0, 1)
+    assert (result.attempts, result.checksum_retries) == (2, 1)
     assert files_in(tmp_path) == []  # no bad file left in staging
 
 
@@ -135,20 +134,20 @@ def test_temporary_error_recovers_through_retry(tmp_path):
     waits = []
     result = fetch(FakeHub({cand.path: [httpx2.ReadTimeout("timed out"), GOOD]}), cand, tmp_path, waits)
     assert result.status is FetchStatus.OK
-    assert result.attempts == 2  # the timed-out call counts
-    assert (result.network_retries, result.checksum_redownloads) == (1, 0)
+    assert (result.attempts, result.checksum_retries) == (2, 0)  # the timed-out call counts
     assert waits == [5]
 
 
-def test_network_retries_and_checksum_redownloads_are_counted_separately(tmp_path):
+def test_network_retries_and_checksum_retries_are_counted_separately(tmp_path):
     cand = candidate()
     timeout = httpx2.ReadTimeout("timed out")
     # Round 1: timeout, timeout, bad bytes. Round 2: timeout, good bytes
     hub = FakeHub({cand.path: [timeout, timeout, BAD, timeout, GOOD]})
     result = fetch(hub, cand, tmp_path)
     assert result.status is FetchStatus.OK
-    assert result.attempts == 5
-    assert (result.network_retries, result.checksum_redownloads) == (3, 1)
+    assert (result.attempts, result.checksum_retries) == (5, 1)
+    stats = fetch_stats([result], elapsed=1.0)
+    assert (stats["download_calls"], stats["checksum_redownloads"], stats["network_retries"]) == (5, 1, 3)
 
 
 def test_permanent_error_is_not_retried(tmp_path):
@@ -159,7 +158,7 @@ def test_permanent_error_is_not_retried(tmp_path):
     assert result.status is FetchStatus.FAILED
     assert result.error.startswith("download failed: HfHubHTTPError: 404")
     assert hub.calls[cand.path] == 1
-    assert (result.network_retries, result.checksum_redownloads) == (0, 0)
+    assert (result.attempts, result.checksum_retries) == (1, 0)
     assert waits == []
 
 
@@ -187,7 +186,8 @@ def test_fetch_stats_sum_both_counters(tmp_path):
     hub = FakeHub({c.path: r for c, r in zip(cands, responses, strict=True)})
     stats = fetch_stats(run_all(hub, cands, tmp_path), elapsed=1.0)
     assert (stats["ok"], stats["failed"]) == (3, 1)
-    assert (stats["network_retries"], stats["checksum_redownloads"]) == (1, 2)
+    # Calls: 1 + 2 (reset, then good) + 2 (bad, then good) + 2 (bad twice) = 7 for 4 files
+    assert (stats["download_calls"], stats["checksum_redownloads"], stats["network_retries"]) == (7, 2, 1)
 
 
 def test_first_10_failures_trip_the_circuit_breaker(tmp_path):
