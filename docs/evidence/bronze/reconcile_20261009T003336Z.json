@@ -1,0 +1,102 @@
+{
+  "finished_at": "20261009T003336Z",
+  "env": "prod",
+  "bronze_path": "/home/ubuntu/3w-data/bronze/3w_observations",
+  "checks": [
+    {
+      "number": 1,
+      "name": "schema",
+      "passed": true,
+      "seconds": 0.037,
+      "details": {
+        "differences": []
+      }
+    },
+    {
+      "number": 2,
+      "name": "total rows",
+      "passed": true,
+      "seconds": 3.921,
+      "details": {
+        "spark": 76587318,
+        "manifest": 76587318
+      }
+    },
+    {
+      "number": 3,
+      "name": "per file",
+      "passed": true,
+      "seconds": 66.875,
+      "details": {
+        "shared_pass": "checks 3-5",
+        "files_in_bronze": 2228,
+        "files_in_manifest": 2228,
+        "missing": 0,
+        "extra": 0,
+        "mismatches": 0,
+        "missing_files": [],
+        "extra_files": [],
+        "mismatched_files": []
+      }
+    },
+    {
+      "number": 4,
+      "name": "partitions",
+      "passed": true,
+      "seconds": 66.875,
+      "details": {
+        "shared_pass": "checks 3-5",
+        "files_in_bronze": 2228,
+        "files_in_manifest": 2228,
+        "problems": 0,
+        "files": []
+      }
+    },
+    {
+      "number": 5,
+      "name": "row order",
+      "passed": true,
+      "seconds": 66.875,
+      "details": {
+        "shared_pass": "checks 3-5",
+        "files_in_bronze": 2228,
+        "files_in_manifest": 2228,
+        "problems": 0,
+        "files": []
+      }
+    },
+    {
+      "number": 6,
+      "name": "fidelity",
+      "passed": true,
+      "seconds": 11.146,
+      "details": {
+        "files": [
+          {
+            "path": "data/0/WELL-00001_20170201010207.parquet",
+            "rows": 21474,
+            "values": 644220
+          },
+          {
+            "path": "data/1/SIMULATED_00001.parquet",
+            "rows": 45599,
+            "values": 1367970
+          },
+          {
+            "path": "data/1/DRAWN_00001.parquet",
+            "rows": 172800,
+            "values": 5184000
+          }
+        ],
+        "differences": []
+      }
+    }
+  ],
+  "spark_seconds": 93.97,
+  "profile": {
+    "checks_3_to_5_seconds": 66.875,
+    "without_count_distinct_seconds": 7.756
+  },
+  "passed": true,
+  "plan_has_broadcast_hash_join": true
+}

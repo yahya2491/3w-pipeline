@@ -1,10 +1,12 @@
 """Reconcile the Bronze table against the manifest and the landing files with Spark.
 
-Prints each check, writes the result to <storage.runs>/reconcile_<timestamp>.json and the physical plan of the
-per-file query to docs/evidence/bronze/reconcile_plan_<env>.txt. Exits 0 if every check passes, 1 otherwise.
+Prints each check and writes the result to <storage.runs>/reconcile_<timestamp>.json, with the physical plan of
+the per-file query next to it. With --evidence, the plan also goes to docs/evidence/bronze/reconcile_plan_<env>.txt
+(off by default, so scheduled runs don't leave the checkout with uncommitted changes).
+Exits 0 if every check passes, 1 otherwise.
 
 Usage:
-    python scripts/reconcile_bronze.py --env dev
+    python scripts/reconcile_bronze.py --env dev [--profile] [--evidence]
 """
 
 import argparse
@@ -26,6 +28,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--env", choices=["dev", "prod"], required=True)
     parser.add_argument("--profile", action="store_true", help="also time the per-file pass without countDistinct")
+    parser.add_argument("--evidence", action="store_true", help="also save the plan to docs/evidence/bronze/")
     args = parser.parse_args()
     logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -61,10 +64,13 @@ def main() -> int:
     tmp = out.with_name(f".{out.name}.tmp")
     tmp.write_text(json.dumps({"finished_at": stamp, **result.to_dict()}, indent=2) + "\n")
     os.replace(tmp, out)
-    EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
-    plan_path = EVIDENCE_DIR / f"reconcile_plan_{cfg.env}.txt"
-    plan_path.write_text(result.plan)
-    print(f"Result: {out}\nPlan:   {plan_path}")
+    plans = [out.with_name(f"reconcile_{stamp}_plan.txt")]
+    if args.evidence:
+        EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
+        plans.append(EVIDENCE_DIR / f"reconcile_plan_{cfg.env}.txt")
+    for plan_path in plans:
+        plan_path.write_text(result.plan)
+    print(f"Result: {out}\nPlan:   {', '.join(map(str, plans))}")
     return 0 if result.passed else 1
 
 

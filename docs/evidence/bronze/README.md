@@ -65,3 +65,38 @@ that was SUCCESS with 0 downloads, so the flag doesn't break a clean run.
 - The lineage columns had been built from Python lists, which hold Python's global lock for every row: 125 ms
   for the largest file (768,314 rows) against 12 ms with `pa.repeat` and `cumulative_sum`.
 - Converting the whole table a second time produced byte-identical files, so a rerun is safe.
+
+### What limits the build: vmstat
+
+`vmstat 2` during a third prod build (42.3 s, output again byte-identical), averaged over the 22 samples while it ran:
+
+| us | sy | id | wa (I/O wait) | blocked processes | disk read | disk write |
+|---|---|---|---|---|---|---|
+| 48% | 10% | 18% | 24% | 1.9 | 30 MB/s | 74 MB/s |
+
+About 2.3 of the 4 cores are busy (matching the 225% CPU), and a quarter of the time goes to waiting on the disk:
+the build writes 3.2 GB at about 75 MB/s. The VM's disk, not Python's global lock, is what keeps it from 4 cores.
+
+## Bronze reconciliation (step 18)
+
+`python scripts/reconcile_bronze.py --env prod --profile` on the VM (Spark `local[4]`, 4 GB driver): all six checks
+pass. Result: [`reconcile_20261009T003336Z.json`](reconcile_20261009T003336Z.json); physical plan:
+[`reconcile_plan_prod.txt`](reconcile_plan_prod.txt) (dev: [`reconcile_plan_dev.txt`](reconcile_plan_dev.txt)).
+
+| # | Check | Result | Seconds |
+|---|---|---|---|
+| 1 | Schema | expected columns and types: 27 sensors double, class/state smallint, timestamp timestamp_ntz, 4 lineage columns, source_type string and label int as partitions | 0.04 |
+| 2 | Total rows | Spark count() 76,587,318 = manifest 76,587,318 | 3.92 |
+| 3 | Per file | 2,228 files in Bronze, 2,228 in the manifest; 0 missing, 0 extra, 0 row-count mismatches | 66.88 (one pass for 3-5) |
+| 4 | Partitions | every file in the source_type= and label= folders the manifest says | (same pass) |
+| 5 | Row order | per file, _row_in_file is exactly 0 .. n-1 | (same pass) |
+| 6 | Fidelity | 7,196,190 values in 239,873 rows (one REAL, one SIMULATED, one DRAWN file) identical between Spark's read of Bronze and pyarrow's read of the landing file, nulls and NaN included | 11.15 |
+
+Total Spark time 93.97 s.
+
+- **Broadcast join:** checks 3-5 are one `groupBy` over the 76.6 million rows, joined with the manifest (2,228
+  rows) as a broadcast. The final plan shows `BroadcastHashJoin LeftOuter BuildRight` with a `BroadcastExchange`
+  on the manifest side, so the big side is never shuffled for the join.
+- **countDistinct is the expensive part:** the same pass without `countDistinct(_row_in_file)` takes 7.76 s
+  instead of 66.88 s, so the distinct count costs about 59 s, 8.6x the rest. It needs a second aggregation stage
+  over (file, row number) pairs, visible as the extra pair of `HashAggregate` steps in the plan.

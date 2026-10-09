@@ -1,0 +1,173 @@
+== Physical Plan ==
+AdaptiveSparkPlan (27)
++- == Final Plan ==
+   * Project (17)
+   +- * BroadcastHashJoin LeftOuter BuildRight (16)
+      :- * HashAggregate (11)
+      :  +- AQEShuffleRead (10)
+      :     +- ShuffleQueryStage (9), Statistics(sizeInBytes=3.1 MiB, rowCount=1.78E+4)
+      :        +- Exchange (8)
+      :           +- * HashAggregate (7)
+      :              +- * HashAggregate (6)
+      :                 +- ShuffleQueryStage (5), Statistics(sizeInBytes=13.1 GiB, rowCount=7.66E+7)
+      :                    +- Exchange (4)
+      :                       +- * HashAggregate (3)
+      :                          +- * ColumnarToRow (2)
+      :                             +- Scan parquet  (1)
+      +- BroadcastQueryStage (15), Statistics(sizeInBytes=16.1 MiB, rowCount=2.23E+3)
+         +- BroadcastExchange (14)
+            +- * Filter (13)
+               +- * Scan ExistingRDD (12)
++- == Initial Plan ==
+   Project (26)
+   +- BroadcastHashJoin LeftOuter BuildRight (25)
+      :- HashAggregate (23)
+      :  +- Exchange (22)
+      :     +- HashAggregate (21)
+      :        +- HashAggregate (20)
+      :           +- Exchange (19)
+      :              +- HashAggregate (18)
+      :                 +- Scan parquet  (1)
+      +- BroadcastExchange (24)
+         +- Filter (13)
+            +- Scan ExistingRDD (12)
+
+
+(1) Scan parquet 
+Output [5]: [_source_path#30, _file_sha256#31, _row_in_file#33L, source_type#34, label#35]
+Batched: true
+Location: InMemoryFileIndex [file:/home/ubuntu/3w-data/bronze/3w_observations]
+ReadSchema: struct<_source_path:string,_file_sha256:string,_row_in_file:bigint>
+
+(2) ColumnarToRow [codegen id : 1]
+Input [5]: [_source_path#30, _file_sha256#31, _row_in_file#33L, source_type#34, label#35]
+
+(3) HashAggregate [codegen id : 1]
+Input [5]: [_source_path#30, _file_sha256#31, _row_in_file#33L, source_type#34, label#35]
+Keys [5]: [_source_path#30, _file_sha256#31, source_type#34, label#35, _row_in_file#33L]
+Functions [3]: [partial_count(1), partial_min(_row_in_file#33L), partial_max(_row_in_file#33L)]
+Aggregate Attributes [3]: [count(1)#113L, min(_row_in_file#33L)#115L, max(_row_in_file#33L)#117L]
+Results [8]: [_source_path#30, _file_sha256#31, source_type#34, label#35, _row_in_file#33L, count#188L, min#190L, max#192L]
+
+(4) Exchange
+Input [8]: [_source_path#30, _file_sha256#31, source_type#34, label#35, _row_in_file#33L, count#188L, min#190L, max#192L]
+Arguments: hashpartitioning(_source_path#30, _file_sha256#31, source_type#34, label#35, _row_in_file#33L, 8), ENSURE_REQUIREMENTS, [plan_id=104]
+
+(5) ShuffleQueryStage
+Output [8]: [_source_path#30, _file_sha256#31, source_type#34, label#35, _row_in_file#33L, count#188L, min#190L, max#192L]
+Arguments: 0
+
+(6) HashAggregate [codegen id : 3]
+Input [8]: [_source_path#30, _file_sha256#31, source_type#34, label#35, _row_in_file#33L, count#188L, min#190L, max#192L]
+Keys [5]: [_source_path#30, _file_sha256#31, source_type#34, label#35, _row_in_file#33L]
+Functions [3]: [merge_count(1), merge_min(_row_in_file#33L), merge_max(_row_in_file#33L)]
+Aggregate Attributes [3]: [count(1)#113L, min(_row_in_file#33L)#115L, max(_row_in_file#33L)#117L]
+Results [8]: [_source_path#30, _file_sha256#31, source_type#34, label#35, _row_in_file#33L, count#188L, min#190L, max#192L]
+
+(7) HashAggregate [codegen id : 3]
+Input [8]: [_source_path#30, _file_sha256#31, source_type#34, label#35, _row_in_file#33L, count#188L, min#190L, max#192L]
+Keys [4]: [_source_path#30, _file_sha256#31, source_type#34, label#35]
+Functions [4]: [merge_count(1), merge_min(_row_in_file#33L), merge_max(_row_in_file#33L), partial_count(distinct _row_in_file#33L)]
+Aggregate Attributes [4]: [count(1)#113L, min(_row_in_file#33L)#115L, max(_row_in_file#33L)#117L, count(_row_in_file#33L)#156L]
+Results [8]: [_source_path#30, _file_sha256#31, source_type#34, label#35, count#188L, min#190L, max#192L, count#195L]
+
+(8) Exchange
+Input [8]: [_source_path#30, _file_sha256#31, source_type#34, label#35, count#188L, min#190L, max#192L, count#195L]
+Arguments: hashpartitioning(_source_path#30, _file_sha256#31, source_type#34, label#35, 8), ENSURE_REQUIREMENTS, [plan_id=156]
+
+(9) ShuffleQueryStage
+Output [8]: [_source_path#30, _file_sha256#31, source_type#34, label#35, count#188L, min#190L, max#192L, count#195L]
+Arguments: 2
+
+(10) AQEShuffleRead
+Input [8]: [_source_path#30, _file_sha256#31, source_type#34, label#35, count#188L, min#190L, max#192L, count#195L]
+Arguments: coalesced
+
+(11) HashAggregate [codegen id : 4]
+Input [8]: [_source_path#30, _file_sha256#31, source_type#34, label#35, count#188L, min#190L, max#192L, count#195L]
+Keys [4]: [_source_path#30, _file_sha256#31, source_type#34, label#35]
+Functions [4]: [count(1), min(_row_in_file#33L), max(_row_in_file#33L), count(distinct _row_in_file#33L)]
+Aggregate Attributes [4]: [count(1)#113L, min(_row_in_file#33L)#115L, max(_row_in_file#33L)#117L, count(_row_in_file#33L)#156L]
+Results [8]: [_source_path#30, _file_sha256#31, source_type#34, label#35, count(1)#113L AS rows#114L, min(_row_in_file#33L)#115L AS min_row#116L, max(_row_in_file#33L)#117L AS max_row#118L, count(_row_in_file#33L)#156L AS distinct_rows#119L]
+
+(12) Scan ExistingRDD [codegen id : 2]
+Output [5]: [_source_path#166, _file_sha256#167, m_source_type#168, m_label#169, m_num_rows#170L]
+Arguments: [_source_path#166, _file_sha256#167, m_source_type#168, m_label#169, m_num_rows#170L], MapPartitionsRDD[13] at applySchemaToPythonRDD at NativeMethodAccessorImpl.java:0, ExistingRDD, UnknownPartitioning(0)
+
+(13) Filter [codegen id : 2]
+Input [5]: [_source_path#166, _file_sha256#167, m_source_type#168, m_label#169, m_num_rows#170L]
+Condition : (isnotnull(_source_path#166) AND isnotnull(_file_sha256#167))
+
+(14) BroadcastExchange
+Input [5]: [_source_path#166, _file_sha256#167, m_source_type#168, m_label#169, m_num_rows#170L]
+Arguments: HashedRelationBroadcastMode(List(input[0, string, false], input[1, string, false]),false), [plan_id=122]
+
+(15) BroadcastQueryStage
+Output [5]: [_source_path#166, _file_sha256#167, m_source_type#168, m_label#169, m_num_rows#170L]
+Arguments: 1
+
+(16) BroadcastHashJoin [codegen id : 4]
+Left keys [2]: [_source_path#30, _file_sha256#31]
+Right keys [2]: [_source_path#166, _file_sha256#167]
+Join type: LeftOuter
+Join condition: None
+
+(17) Project [codegen id : 4]
+Output [11]: [_source_path#30, _file_sha256#31, source_type#34, label#35, rows#114L, min_row#116L, max_row#118L, distinct_rows#119L, m_source_type#168, m_label#169, m_num_rows#170L]
+Input [13]: [_source_path#30, _file_sha256#31, source_type#34, label#35, rows#114L, min_row#116L, max_row#118L, distinct_rows#119L, _source_path#166, _file_sha256#167, m_source_type#168, m_label#169, m_num_rows#170L]
+
+(18) HashAggregate
+Input [5]: [_source_path#30, _file_sha256#31, _row_in_file#33L, source_type#34, label#35]
+Keys [5]: [_source_path#30, _file_sha256#31, source_type#34, label#35, _row_in_file#33L]
+Functions [3]: [partial_count(1), partial_min(_row_in_file#33L), partial_max(_row_in_file#33L)]
+Aggregate Attributes [3]: [count(1)#113L, min(_row_in_file#33L)#115L, max(_row_in_file#33L)#117L]
+Results [8]: [_source_path#30, _file_sha256#31, source_type#34, label#35, _row_in_file#33L, count#188L, min#190L, max#192L]
+
+(19) Exchange
+Input [8]: [_source_path#30, _file_sha256#31, source_type#34, label#35, _row_in_file#33L, count#188L, min#190L, max#192L]
+Arguments: hashpartitioning(_source_path#30, _file_sha256#31, source_type#34, label#35, _row_in_file#33L, 8), ENSURE_REQUIREMENTS, [plan_id=76]
+
+(20) HashAggregate
+Input [8]: [_source_path#30, _file_sha256#31, source_type#34, label#35, _row_in_file#33L, count#188L, min#190L, max#192L]
+Keys [5]: [_source_path#30, _file_sha256#31, source_type#34, label#35, _row_in_file#33L]
+Functions [3]: [merge_count(1), merge_min(_row_in_file#33L), merge_max(_row_in_file#33L)]
+Aggregate Attributes [3]: [count(1)#113L, min(_row_in_file#33L)#115L, max(_row_in_file#33L)#117L]
+Results [8]: [_source_path#30, _file_sha256#31, source_type#34, label#35, _row_in_file#33L, count#188L, min#190L, max#192L]
+
+(21) HashAggregate
+Input [8]: [_source_path#30, _file_sha256#31, source_type#34, label#35, _row_in_file#33L, count#188L, min#190L, max#192L]
+Keys [4]: [_source_path#30, _file_sha256#31, source_type#34, label#35]
+Functions [4]: [merge_count(1), merge_min(_row_in_file#33L), merge_max(_row_in_file#33L), partial_count(distinct _row_in_file#33L)]
+Aggregate Attributes [4]: [count(1)#113L, min(_row_in_file#33L)#115L, max(_row_in_file#33L)#117L, count(_row_in_file#33L)#156L]
+Results [8]: [_source_path#30, _file_sha256#31, source_type#34, label#35, count#188L, min#190L, max#192L, count#195L]
+
+(22) Exchange
+Input [8]: [_source_path#30, _file_sha256#31, source_type#34, label#35, count#188L, min#190L, max#192L, count#195L]
+Arguments: hashpartitioning(_source_path#30, _file_sha256#31, source_type#34, label#35, 8), ENSURE_REQUIREMENTS, [plan_id=80]
+
+(23) HashAggregate
+Input [8]: [_source_path#30, _file_sha256#31, source_type#34, label#35, count#188L, min#190L, max#192L, count#195L]
+Keys [4]: [_source_path#30, _file_sha256#31, source_type#34, label#35]
+Functions [4]: [count(1), min(_row_in_file#33L), max(_row_in_file#33L), count(distinct _row_in_file#33L)]
+Aggregate Attributes [4]: [count(1)#113L, min(_row_in_file#33L)#115L, max(_row_in_file#33L)#117L, count(_row_in_file#33L)#156L]
+Results [8]: [_source_path#30, _file_sha256#31, source_type#34, label#35, count(1)#113L AS rows#114L, min(_row_in_file#33L)#115L AS min_row#116L, max(_row_in_file#33L)#117L AS max_row#118L, count(_row_in_file#33L)#156L AS distinct_rows#119L]
+
+(24) BroadcastExchange
+Input [5]: [_source_path#166, _file_sha256#167, m_source_type#168, m_label#169, m_num_rows#170L]
+Arguments: HashedRelationBroadcastMode(List(input[0, string, false], input[1, string, false]),false), [plan_id=83]
+
+(25) BroadcastHashJoin
+Left keys [2]: [_source_path#30, _file_sha256#31]
+Right keys [2]: [_source_path#166, _file_sha256#167]
+Join type: LeftOuter
+Join condition: None
+
+(26) Project
+Output [11]: [_source_path#30, _file_sha256#31, source_type#34, label#35, rows#114L, min_row#116L, max_row#118L, distinct_rows#119L, m_source_type#168, m_label#169, m_num_rows#170L]
+Input [13]: [_source_path#30, _file_sha256#31, source_type#34, label#35, rows#114L, min_row#116L, max_row#118L, distinct_rows#119L, _source_path#166, _file_sha256#167, m_source_type#168, m_label#169, m_num_rows#170L]
+
+(27) AdaptiveSparkPlan
+Output [11]: [_source_path#30, _file_sha256#31, source_type#34, label#35, rows#114L, min_row#116L, max_row#118L, distinct_rows#119L, m_source_type#168, m_label#169, m_num_rows#170L]
+Arguments: isFinalPlan=true
+
+
