@@ -89,12 +89,14 @@ def convert_file(landed_path: Path, manifest_row: Mapping[str, Any], out_dir: Pa
             return failed(f"timestamp can't be stored in microseconds without losing precision: {exc}")
         table = table.set_column(table.schema.get_field_index(TIMESTAMP), TIMESTAMP, micros)
 
+        # Built in C++ (pa.repeat, cumulative_sum) rather than from Python lists, which hold Python's global lock
+        # for every row and stop the threads from running in parallel
         n = table.num_rows
         lineage = {
-            "_source_path": pa.array([source_path] * n, pa.string()),
-            "_file_sha256": pa.array([file_sha256] * n, pa.string()),
-            "_ingest_run_id": pa.array([manifest_row["run_id"]] * n, pa.string()),
-            "_row_in_file": pa.array(range(n), pa.int64()),
+            "_source_path": pa.repeat(pa.scalar(source_path, pa.string()), n),
+            "_file_sha256": pa.repeat(pa.scalar(file_sha256, pa.string()), n),
+            "_ingest_run_id": pa.repeat(pa.scalar(manifest_row["run_id"], pa.string()), n),
+            "_row_in_file": pc.subtract(pc.cumulative_sum(pa.repeat(pa.scalar(1, pa.int64()), n)), 1),
         }
         for name, column in lineage.items():
             table = table.append_column(name, column)
