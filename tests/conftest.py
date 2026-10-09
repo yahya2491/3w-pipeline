@@ -1,3 +1,4 @@
+import dataclasses
 import io
 
 import pyarrow as pa
@@ -17,9 +18,16 @@ ARROW_TYPES = {
 
 
 @pytest.fixture(scope="session")
-def spark():
+def spark_cfg():
+    """The dev config with a small Spark: one core, two shuffle partitions."""
+    cfg = load_config("dev")
+    return dataclasses.replace(cfg, spark=dataclasses.replace(cfg.spark, master="local[1]", shuffle_partitions=2))
+
+
+@pytest.fixture(scope="session")
+def spark(spark_cfg):
     """One Spark session for the whole test run, built the same way the jobs build theirs."""
-    session = get_spark(load_config("dev"))
+    session = get_spark(spark_cfg)
     yield session
     session.stop()
 

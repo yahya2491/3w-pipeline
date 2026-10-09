@@ -1,16 +1,16 @@
 import os
 import sys
 
-from threew.config import load_config
 from threew.spark import get_spark
 
 
-def test_session_uses_config(spark):
-    cfg = load_config("dev")
+def test_session_uses_config(spark, spark_cfg):
+    cfg = spark_cfg
     assert spark.sparkContext.master == cfg.spark.master
     assert spark.sparkContext.appName == cfg.spark.app_name
     assert spark.conf.get("spark.driver.memory") == cfg.spark.driver_memory
     assert spark.conf.get("spark.sql.shuffle.partitions") == str(cfg.spark.shuffle_partitions)
+    assert spark.conf.get("spark.sql.session.timeZone") == "UTC"
 
 
 def test_workers_run_this_python(spark):
@@ -20,7 +20,7 @@ def test_workers_run_this_python(spark):
     assert worker_python == sys.executable
 
 
-def test_overrides_a_wrong_pyspark_python(spark, monkeypatch):
+def test_overrides_a_wrong_pyspark_python(spark, spark_cfg, monkeypatch):
     monkeypatch.setenv("PYSPARK_PYTHON", "/usr/bin/python3")
-    get_spark(load_config("dev"))
+    get_spark(spark_cfg)
     assert os.environ["PYSPARK_PYTHON"] == sys.executable

@@ -24,5 +24,7 @@ def get_spark(cfg: Config) -> SparkSession:
         .config("spark.driver.memory", cfg.spark.driver_memory)
         .config("spark.sql.shuffle.partitions", cfg.spark.shuffle_partitions)
         .config("spark.pyspark.python", sys.executable)  # used by spark-submit, shown in the Spark UI
+        # All pipeline times are UTC. The 3W timestamps are timestamp_ntz (no time zone), which this never shifts
+        .config("spark.sql.session.timeZone", "UTC")
         .getOrCreate()
     )
