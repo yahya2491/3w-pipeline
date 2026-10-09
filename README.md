@@ -1,5 +1,7 @@
 # 3W pipeline
 
+[![CI](https://github.com/yahya2491/3w-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/yahya2491/3w-pipeline/actions/workflows/ci.yml)
+
 Data pipeline for the Petrobras [3W dataset](https://github.com/petrobras/3W) (DAT535 Data Engineering project).
 
 The raw data is read from a Hugging Face mirror, [`Yahya2491/3w-pipeline`](https://huggingface.co/datasets/Yahya2491/3w-pipeline),
@@ -24,22 +26,30 @@ docs/                project documentation
 
 ## Setup
 
-Needs Python 3.11 and Java 8, 11 or 17 (for Spark 3.5). `requirements.lock` pins every runtime dependency and was resolved
-with Python 3.11.
+Needs Python 3.11 and Java 8, 11 or 17 (for Spark 3.5). Both lock files were resolved with Python 3.11:
+`requirements.lock` pins every runtime dependency (what the VM runs), and `requirements-dev.lock` pins the same
+versions plus pytest and ruff (what CI and development use).
 
 ```bash
 python3.11 -m venv .venv            # or: uv venv --python 3.11 --seed .venv
 source .venv/bin/activate
-pip install -r requirements.lock && pip install pytest && pip install -e . --no-deps
+pip install -r requirements-dev.lock && pip install -e . --no-deps
 pytest -q
+ruff check . && ruff format --check .
 ```
 
-To change dependencies, edit `pyproject.toml` and regenerate the lock inside the Python 3.11 venv:
+To change dependencies, edit `pyproject.toml` and regenerate both locks inside the Python 3.11 venv. Starting the dev
+lock from a copy of the runtime lock keeps their shared versions identical:
 
 ```bash
 pip install pip-tools
 pip-compile --strip-extras --output-file=requirements.lock pyproject.toml
+cp requirements.lock requirements-dev.lock
+pip-compile --strip-extras --extra dev --output-file=requirements-dev.lock pyproject.toml
 ```
+
+CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs ruff and the tests on every push and pull request,
+with Java 8 (the VM's) and Java 17. The tests run with `HF_HUB_OFFLINE=1` and no secrets: they never use the network.
 
 ## Configuration
 
