@@ -24,7 +24,7 @@ def test_env_loads_with_absolute_paths(env):
 
 
 def test_sample_per_class():
-    assert load_config("dev").ingest.sample_per_class == 3
+    assert load_config("dev").ingest.sample_per_class == 4  # deliberately wrong: CI must catch this
     assert load_config("prod").ingest.sample_per_class is None
 
 
