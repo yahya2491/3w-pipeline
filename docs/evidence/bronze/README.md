@@ -46,3 +46,22 @@ Run on the VM after the first run:
 The rerun right after planned 0 NEW, 0 CHANGED and 2,228 unchanged, downloaded nothing and finished in 1.3 s.
 With zero drift shown, `schema.fail_on_drift` was turned on in `conf/prod.yaml` (commit `bb2afb11`); the run after
 that was SUCCESS with 0 downloads, so the flag doesn't break a clean run.
+
+## Bronze table build (step 17)
+
+`python scripts/build_bronze.py --env prod` on the VM, 4 worker threads, converting all 2,228 landed files into
+`bronze/3w_observations/source_type=<type>/label=<label>/<sha256[:16]>.parquet`:
+
+| | First build | After building lineage columns in C++ (`d726e33`) |
+|---|---|---|
+| Files | 2,228 converted, 0 failed, 0 skipped | same |
+| sum(rows_out) | 76,587,318 (= manifest rows_total) | same |
+| Duration | 87.6 s, 874,690 rows/s | 42.8 s, 1,788,565 rows/s |
+| CPU (`/usr/bin/time`) | 203%, max RSS 1.7 GB | 225%, max RSS 1.6 GB |
+| Output | 3,246,119,002 bytes | byte-identical: same sha256 for all 2,228 files |
+
+- Sizes: landing 1.8G (Brotli) -> Bronze 3.1G (Snappy); Snappy is about 1.7x larger but much faster to decode.
+- Files per source_type: REAL 1,119, SIMULATED 1,089, DRAWN 20; 19 partitions (DRAWN only under label 1 and 7).
+- The lineage columns had been built from Python lists, which hold Python's global lock for every row: 125 ms
+  for the largest file (768,314 rows) against 12 ms with `pa.repeat` and `cumulative_sum`.
+- Converting the whole table a second time produced byte-identical files, so a rerun is safe.
