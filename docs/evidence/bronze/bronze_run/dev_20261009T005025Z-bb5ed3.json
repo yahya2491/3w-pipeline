@@ -1,0 +1,281 @@
+{
+  "run": {
+    "run_id": "20261009T005025Z-bb5ed3",
+    "env": "dev",
+    "host": "group20",
+    "started_at": "2026-10-09T00:50:25.204189+00:00",
+    "finished_at": "2026-10-09T00:50:46.135469+00:00",
+    "duration_seconds": 20.931,
+    "status": "SUCCESS",
+    "exit_code": 0,
+    "error": null,
+    "note": null
+  },
+  "code": {
+    "commit": "79f81fe0381d1a5a861b07a071038dd9de1efb13",
+    "dirty": false,
+    "python": "3.11.15",
+    "packages": {
+      "threew": "0.1.0",
+      "pyspark": "3.5.0",
+      "pyarrow": "25.0.1",
+      "huggingface_hub": "2.2.0"
+    }
+  },
+  "config": {
+    "env": "dev",
+    "source": {
+      "repo_id": "Yahya2491/3w-pipeline",
+      "repo_type": "dataset",
+      "revision": "c1a7e8d0cfefc0875974ea079d11349a37fa0c56",
+      "revision_label": "v2.0.0",
+      "include": [
+        "data/[0-9]/*.parquet"
+      ]
+    },
+    "storage": {
+      "root": "/home/ubuntu/3w-pipeline/data/dev",
+      "landing": "/home/ubuntu/3w-pipeline/data/dev/landing/3w",
+      "bronze": "/home/ubuntu/3w-pipeline/data/dev/bronze/3w_observations",
+      "state": "/home/ubuntu/3w-pipeline/data/dev/bronze/_state",
+      "runs": "/home/ubuntu/3w-pipeline/data/dev/bronze/_runs",
+      "staging": "/home/ubuntu/3w-pipeline/data/dev/_staging",
+      "bronze_ready": "/home/ubuntu/3w-pipeline/data/dev/bronze/bronze_ready.json"
+    },
+    "ingest": {
+      "workers": 4,
+      "max_retries": 3,
+      "retry_backoff_seconds": 5,
+      "sample_per_class": 3
+    },
+    "schema": {
+      "fail_on_drift": false,
+      "contract": "/home/ubuntu/3w-pipeline/conf/contracts/3w_v2.yaml"
+    },
+    "spark": {
+      "app_name": "3w-bronze",
+      "master": "local[2]",
+      "driver_memory": "2g",
+      "shuffle_partitions": 8
+    }
+  },
+  "source": {
+    "repo_id": "Yahya2491/3w-pipeline",
+    "repo_type": "dataset",
+    "revision": "c1a7e8d0cfefc0875974ea079d11349a37fa0c56",
+    "revision_label": "v2.0.0",
+    "label_resolves_to": "c1a7e8d0cfefc0875974ea079d11349a37fa0c56",
+    "tag_moved": false
+  },
+  "plan": {
+    "files_listed": 2228,
+    "new": 0,
+    "changed": 0,
+    "unchanged": 30,
+    "removed_upstream": 0,
+    "rejected": 0,
+    "files_to_download": 0,
+    "bytes_to_download": 0,
+    "files_per_class": {},
+    "removed_upstream_paths": [],
+    "rejected_names": []
+  },
+  "fetch": {
+    "files": 0,
+    "ok": 0,
+    "failed": 0,
+    "bytes": 0,
+    "seconds": 0.001,
+    "mb_per_s": 0.0,
+    "network_retries": 0,
+    "checksum_redownloads": 0
+  },
+  "landing": {},
+  "schema": {
+    "contract": "/home/ubuntu/3w-pipeline/conf/contracts/3w_v2.yaml",
+    "contract_fingerprint": "f59f09e498a1352e",
+    "fail_on_drift": false,
+    "files": 0,
+    "schema_ok": 0,
+    "fingerprints": {},
+    "codecs": {},
+    "num_rows": 0,
+    "drifted": []
+  },
+  "failures": [],
+  "orphans": [],
+  "stale_staging": [],
+  "convert": {
+    "pending": 1,
+    "converted": 1,
+    "failed": 0,
+    "skipped": 0,
+    "rows": 45599,
+    "bytes_in": 1391004,
+    "bytes_out": 2441126,
+    "seconds": 0.138,
+    "failures": [],
+    "skipped_files": []
+  },
+  "prune": {
+    "removed": [],
+    "temporary_removed": []
+  },
+  "reconcile": {
+    "env": "dev",
+    "bronze_path": "/home/ubuntu/3w-pipeline/data/dev/bronze/3w_observations",
+    "mode": "fast",
+    "excluded": 0,
+    "checks": [
+      {
+        "number": 1,
+        "name": "schema",
+        "passed": true,
+        "seconds": 0.069,
+        "details": {
+          "differences": []
+        }
+      },
+      {
+        "number": 2,
+        "name": "total rows",
+        "passed": true,
+        "seconds": 1.666,
+        "details": {
+          "spark": 1931052,
+          "manifest": 1931052
+        }
+      },
+      {
+        "number": 3,
+        "name": "per file",
+        "passed": true,
+        "seconds": 2.559,
+        "details": {
+          "shared_pass": "checks 3-5",
+          "files_in_bronze": 30,
+          "files_in_manifest": 30,
+          "missing": 0,
+          "extra": 0,
+          "mismatches": 0,
+          "missing_files": [],
+          "extra_files": [],
+          "mismatched_files": []
+        }
+      },
+      {
+        "number": 4,
+        "name": "partitions",
+        "passed": true,
+        "seconds": 2.559,
+        "details": {
+          "shared_pass": "checks 3-5",
+          "files_in_bronze": 30,
+          "files_in_manifest": 30,
+          "problems": 0,
+          "files": []
+        }
+      },
+      {
+        "number": 5,
+        "name": "row order",
+        "passed": true,
+        "seconds": 2.559,
+        "details": {
+          "shared_pass": "checks 3-5",
+          "files_in_bronze": 30,
+          "files_in_manifest": 30,
+          "mode": "fast (count, min, max, sum, sum of squares)",
+          "problems": 0,
+          "files": []
+        }
+      },
+      {
+        "number": 6,
+        "name": "fidelity",
+        "passed": true,
+        "seconds": 8.672,
+        "details": {
+          "files": [
+            {
+              "path": "data/0/WELL-00001_20170201010207.parquet",
+              "rows": 21474,
+              "values": 644220
+            },
+            {
+              "path": "data/1/SIMULATED_00001.parquet",
+              "rows": 45599,
+              "values": 1367970
+            },
+            {
+              "path": "data/1/DRAWN_00001.parquet",
+              "rows": 172800,
+              "values": 5184000
+            }
+          ],
+          "differences": []
+        }
+      }
+    ],
+    "spark_seconds": 16.19,
+    "profile": {},
+    "passed": true,
+    "plan_has_broadcast_hash_join": true
+  },
+  "publish": {
+    "written": true,
+    "path": "/home/ubuntu/3w-pipeline/data/dev/bronze/bronze_ready.json",
+    "reason": null,
+    "marker": {
+      "run_id": "20261009T005025Z-bb5ed3",
+      "published_at": "2026-10-09T00:50:46.134611+00:00",
+      "env": "dev",
+      "bronze_table": "/home/ubuntu/3w-pipeline/data/dev/bronze/3w_observations",
+      "source": {
+        "repo_id": "Yahya2491/3w-pipeline",
+        "revision": "c1a7e8d0cfefc0875974ea079d11349a37fa0c56"
+      },
+      "files": 30,
+      "rows": 1931052,
+      "reconcile": {
+        "mode": "fast",
+        "passed": true,
+        "checks": {
+          "1": true,
+          "2": true,
+          "3": true,
+          "4": true,
+          "5": true,
+          "6": true
+        }
+      },
+      "code_commit": "79f81fe0381d1a5a861b07a071038dd9de1efb13",
+      "report": "/home/ubuntu/3w-pipeline/data/dev/bronze/_runs/20261009T005025Z-bb5ed3.json"
+    }
+  },
+  "phases": {
+    "pin": 0.271,
+    "list": 0.718,
+    "plan": 0.069,
+    "fetch": 0.001,
+    "land": 0.0,
+    "checks": 0.004,
+    "convert": 0.138,
+    "prune": 0.011,
+    "reconcile": 19.692,
+    "publish": 0.001
+  },
+  "totals": {
+    "files_listed": 2228,
+    "files_planned": 0,
+    "files_landed": 0,
+    "files_failed": 0,
+    "bytes_landed": 0,
+    "rows_landed": 0,
+    "manifest_rows": 30,
+    "landed_files_total": 30,
+    "rows_total": 1931052,
+    "bronze_files": 30,
+    "bronze_rows": 1931052
+  }
+}

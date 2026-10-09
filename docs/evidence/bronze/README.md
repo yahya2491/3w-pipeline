@@ -100,3 +100,27 @@ Total Spark time 93.97 s.
 - **countDistinct is the expensive part:** the same pass without `countDistinct(_row_in_file)` takes 7.76 s
   instead of 66.88 s, so the distinct count costs about 59 s, 8.6x the rest. It needs a second aggregation stage
   over (file, row number) pairs, visible as the extra pair of `HashAggregate` steps in the plan.
+
+## One Bronze run: self-healing and refusing to publish (step 19)
+
+`python -m threew.bronze.run` runs ingest, convert, prune, reconcile (fast mode) and publish under one lock and
+one report. Reports in [`bronze_run/`](bronze_run/); all on the VM.
+
+| Demo (dev) | What was done before the run | Result |
+|---|---|---|
+| A [`dev_20261009T004922Z-8b11b4`](bronze_run/dev_20261009T004922Z-8b11b4.json) | nothing | SUCCESS, exit 0: 0 downloaded, 0 converted, reconcile passes, marker written (30 files, 1,931,052 rows) |
+| B [`dev_20261009T004943Z-235779`](bronze_run/dev_20261009T004943Z-235779.json) | one Bronze output deleted by hand | SUCCESS, exit 0: exactly 1 file converted again, reconcile passes, marker written. **Self-healing** |
+| C [`dev_20261009T005004Z-18a69f`](bronze_run/dev_20261009T005004Z-18a69f.json) | one output replaced by a copy with its first row removed (45,599 -> 45,598 rows) | **FAILED, exit 2**: checks 2, 3, 5 and 6 fail (check 3: `data/1/SIMULATED_00001.parquet` Spark 45,598 vs manifest 45,599); marker withdrawn and not written. **Refuses to publish a bad table** |
+| D [`dev_20261009T005025Z-bb5ed3`](bronze_run/dev_20261009T005025Z-bb5ed3.json) | the tampered file deleted | SUCCESS, exit 0: 1 file converted again, reconcile passes, marker back |
+
+Prod ([`prod_20261009T005103Z-3252a6`](bronze_run/prod_20261009T005103Z-3252a6.json)): SUCCESS, exit 0, in 36.0 s;
+0 downloaded, 0 converted, 0 pruned; fast reconcile passes with 2,228 files, 0 missing, 0 extra, 0 mismatches and
+76,587,318 rows; marker written.
+
+| Reconcile on prod | Deep (step 18, with countDistinct) | Fast (step 19) |
+|---|---|---|
+| Checks 3-5, one pass | 66.88 s | 11.39 s |
+| Spark time for all six checks | 93.97 s | 29.81 s |
+
+The reconcile phase took 34.0 s in all, including about 4 s to start and stop the Spark session, which runs for
+that phase only.
