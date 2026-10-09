@@ -56,17 +56,17 @@ The key for an instance is **`_source_path`**, for example `data/2/WELL-00002_20
 import json
 from pyspark.sql import functions as F
 from threew.config import load_config
-from threew.spark import get_spark   # sets the venv Python, UTC session time zone, config values
+from threew.spark import get_spark  # sets the venv Python, UTC session time zone, config values
 
-cfg = load_config("prod")            # "dev" on your laptop
+cfg = load_config("prod")  # "dev" on your laptop
 spark = get_spark(cfg)
 
 # 1. Refuse to run if Bronze isn't ready (raises FileNotFoundError while the marker is absent)
-marker = json.loads(cfg.storage.bronze_ready.read_text())   # <root>/bronze/bronze_ready.json
+marker = json.loads(cfg.storage.bronze_ready.read_text())  # <root>/bronze/bronze_ready.json
 print(marker["run_id"], marker["source"]["revision"])
 
 # 2. Read the table (partition pruning works on source_type and label)
-bronze = spark.read.parquet(str(cfg.storage.bronze))         # <root>/bronze/3w_observations
+bronze = spark.read.parquet(str(cfg.storage.bronze))  # <root>/bronze/3w_observations
 real = bronze.where(F.col("source_type") == "REAL")
 
 # 3. Hyphenated names: F.col("P-PDG") works; in Spark SQL use backticks: `P-PDG`
