@@ -1,0 +1,37 @@
+name: Runner check
+
+# Manual only: checks that the VM runner works and that production jobs get what they need
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: [self-hosted, uis-openstack]
+    environment: production # HF_TOKEN is an environment secret, only available to runs from main
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Who and where
+        run: |
+          echo "hostname: $(hostname)"
+          echo "user: $(whoami)"
+          echo "pwd: $(pwd)"
+      - name: Python and Java
+        run: |
+          python3.11 --version
+          java -version 2>&1
+      - name: Disk
+        run: df -h /home/ubuntu/3w-data
+      - name: Token
+        run: test -n "$HF_TOKEN" && echo "token present" # never print the token itself
+      - name: Hugging Face login
+        run: |
+          python3.11 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet "$(grep -E '^huggingface-hub==' requirements.lock)"
+          "$RUNNER_TEMP/venv/bin/python" -c "from huggingface_hub import whoami; print(whoami()['name'])"
+      - name: Bronze ready
+        run: test -f /home/ubuntu/3w-data/bronze/bronze_ready.json && echo "bronze ready"
