@@ -7,6 +7,8 @@ Data pipeline for the Petrobras [3W dataset](https://github.com/petrobras/3W) (D
 The raw data is read from a Hugging Face mirror, [`Yahya2491/3w-pipeline`](https://huggingface.co/datasets/Yahya2491/3w-pipeline),
 pinned to one commit. See [`docs/source.md`](docs/source.md) for the pinned revision and how its integrity was checked,
 and [`docs/dataset_notes.md`](docs/dataset_notes.md) for measured facts about the data that later layers depend on.
+To build on Bronze, start with [`docs/SILVER_HANDOVER.md`](docs/SILVER_HANDOVER.md); every detail is in
+[`docs/BRONZE_REFERENCE.md`](docs/BRONZE_REFERENCE.md).
 
 All pipeline dates and times are UTC.
 
