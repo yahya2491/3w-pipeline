@@ -14,6 +14,7 @@ from threew.bronze.ingest import LOCK_FILE, run_ingest
 from threew.bronze.inspect import fingerprint
 from threew.bronze.manifest import Manifest
 from threew.bronze.report import SECTIONS
+from threew.bronze.summary import summarize
 from threew.config import REPO_ROOT, StorageConfig, load_config
 from threew.lock import run_lock
 
@@ -77,6 +78,7 @@ def test_normal_run_then_nothing_to_do(cfg, files, contract):
     bronze_only = {"convert", "prune", "reconcile", "publish"}  # filled by threew.bronze.run, not by ingest
     assert all(report[section] is not None for section in SECTIONS if section not in bronze_only)
     assert all(report[section] is None for section in bronze_only)
+    assert "| reconcile | — |" in summarize(report)  # an ingest-only report renders too
     assert report["run"]["error"] is None
     assert set(report["phases"]) == {"pin", "list", "plan", "fetch", "land", "checks"}
     assert report["plan"]["new"] == 7

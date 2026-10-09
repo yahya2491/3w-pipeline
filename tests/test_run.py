@@ -2,17 +2,20 @@
 
 import dataclasses
 import json
+import subprocess
+import sys
 from contextlib import contextmanager
 
 import pyarrow.parquet as pq
 import pytest
-from fakes import FakeHub
+from fakes import FakeHub, http_error
 
 from threew.bronze import run as run_module
 from threew.bronze.ingest import LOCK_FILE
 from threew.bronze.report import SECTIONS
 from threew.bronze.run import run_bronze
-from threew.config import StorageConfig, load_config
+from threew.bronze.summary import summarize
+from threew.config import REPO_ROOT, StorageConfig, load_config
 from threew.lock import run_lock
 
 REAL = "data/2/WELL-00002_20131104004101.parquet"
@@ -86,6 +89,13 @@ def test_first_run_then_rerun(cfg, files, spark_factory):
     assert first["totals"]["bronze_rows"] == first["totals"]["rows_total"] == 12
     assert len(outputs(cfg)) == 3
     assert spark_factory.stops == ["dev"]
+    summary = summarize(first)
+    assert summary.startswith(f"## ✅ SUCCESS · run `{first['run']['run_id']}` (dev)")
+    assert "| reconcile | 6/6 checks passed · fast ·" in summary
+    assert "| convert | 3 converted, 0 failed |" in summary
+    assert "| publish | marker written: yes |" in summary
+    assert "**Totals:** 3 files · 12 rows" in summary
+    assert "No problems." in summary
 
     code, second = run(cfg, hub, spark_factory)
     assert (code, second["run"]["status"]) == (0, "SUCCESS")
@@ -149,6 +159,11 @@ def test_tampered_output_fails_and_withdraws_the_marker(cfg, files, spark_factor
     assert report["publish"]["written"] is False
     assert "reconciliation failed" in report["publish"]["reason"]
     assert marker(cfg) is None
+    summary = summarize(report)
+    assert summary.startswith("## ❌ FAILED")
+    assert "**Failed reconcile checks**" in summary
+    assert "check 3 per file: " in summary
+    assert "marker written: no (reconciliation failed" in summary
 
 
 def test_conversion_error_is_partial_without_a_marker(cfg, files, parquet_bytes, spark_factory):
@@ -163,20 +178,42 @@ def test_conversion_error_is_partial_without_a_marker(cfg, files, parquet_bytes,
     assert report["reconcile"]["excluded"] == 1
     assert report["publish"]["written"] is False
     assert marker(cfg) is None
+    summary = summarize(report)
+    assert summary.startswith("## ⚠️ PARTIAL")
+    assert f"**Conversion failures** (1):\n  - `{bad}`: timestamp can't be stored in microseconds" in summary
 
 
-def test_exception_still_writes_the_report_releases_the_lock_and_stops_spark(cfg, files, spark_factory, monkeypatch):
+def test_download_failure_is_partial_and_listed(cfg, files, spark_factory):
+    code, report = run(cfg, FakeHub(files, errors={DRAWN: http_error(404)}), spark_factory)
+    assert (code, report["run"]["status"]) == (1, "PARTIAL")
+    assert report["convert"]["converted"] == 2
+    assert reconcile_passed(report)  # the two files that landed
+    summary = summarize(report)
+    assert summary.startswith("## ⚠️ PARTIAL")
+    assert f"**Failed files** (1):\n  - `{DRAWN}`: download failed: HfHubHTTPError: 404" in summary
+
+
+def test_exception_still_writes_the_report_releases_the_lock_and_stops_spark(
+    cfg, files, spark_factory, monkeypatch, tmp_path
+):
     def explode(*args, **kwargs):
         raise RuntimeError("reconcile exploded")
 
     monkeypatch.setattr(run_module, "reconcile", explode)
-    code, report = run(cfg, FakeHub(files), spark_factory)
+    out = tmp_path / "out"
+    code, report = run(cfg, FakeHub(files), spark_factory, report_copy=out)
     assert (code, report["run"]["status"]) == (2, "FAILED")
     assert report["run"]["error"]["message"] == "reconcile exploded"
     assert spark_factory.stops == ["dev"]  # stopped even though reconcile raised
     with run_lock(cfg.storage.state / LOCK_FILE):  # released
         pass
     assert marker(cfg) is None
+    run_id = report["run"]["run_id"]
+    assert sorted(p.name for p in out.iterdir()) == [f"{run_id}.json", f"{run_id}.log"]  # copied despite the error
+    assert "reconcile exploded" in (out / f"{run_id}.log").read_text()
+    summary = summarize(report)
+    assert summary.startswith("## ❌ FAILED")
+    assert "- **Run error:** `RuntimeError: reconcile exploded`" in summary
 
 
 def test_lock_held_skips_and_leaves_the_marker(cfg, files, spark_factory):
@@ -186,3 +223,36 @@ def test_lock_held_skips_and_leaves_the_marker(cfg, files, spark_factory):
         code, report = run(cfg, hub, spark_factory)
     assert (code, report["run"]["status"]) == (0, "SKIPPED")
     assert marker(cfg) is not None  # a skipped run touches nothing
+    summary = summarize(report)
+    assert summary.startswith("## ⏭️ SKIPPED")
+    assert "an-ingest-run" in summary  # names the run that held the lock
+    assert "| ingest | — |" in summary
+
+
+def test_report_copy_has_the_report_log_and_plan(cfg, files, spark_factory, tmp_path):
+    out = tmp_path / "out"
+    _, report = run(cfg, FakeHub(files), spark_factory, report_copy=out)
+    run_id = report["run"]["run_id"]
+    assert sorted(p.name for p in out.iterdir()) == [
+        f"{run_id}.json",
+        f"{run_id}.log",
+        f"{run_id}_reconcile_plan.txt",
+    ]
+    assert json.loads((out / f"{run_id}.json").read_text()) == report
+    log = (out / f"{run_id}.log").read_text()
+    assert f"run {run_id}: SUCCESS (exit 0)" in log
+    assert "BroadcastHashJoin" in (out / f"{run_id}_reconcile_plan.txt").read_text()
+
+
+def test_report_summary_script(cfg, files, spark_factory, tmp_path):
+    out = tmp_path / "out"
+    _, report = run(cfg, FakeHub(files), spark_factory, report_copy=out)
+    script = REPO_ROOT / "scripts" / "report_summary.py"
+    printed = subprocess.run(
+        [sys.executable, script, *map(str, out.glob("*.json"))], capture_output=True, text=True, check=True
+    ).stdout
+    assert printed == summarize(report) + "\n"
+    missing = str(out / "missing*.json")
+    nothing = subprocess.run([sys.executable, script, missing], capture_output=True, text=True, check=False)
+    assert nothing.returncode == 0
+    assert "No run report was produced" in nothing.stdout
