@@ -41,6 +41,8 @@ class StorageConfig:
     runs: Path = field(init=False)
     # Downloads go to <staging>/<run_id>/ first. Same filesystem as landing, so step 13's os.replace is atomic
     staging: Path = field(init=False)
+    # Written only after a fully successful run; next to the table, not inside it, so Spark never reads it
+    bronze_ready: Path = field(init=False)
 
     def __post_init__(self) -> None:
         # object.__setattr__ because the dataclass is frozen
@@ -49,6 +51,7 @@ class StorageConfig:
         object.__setattr__(self, "state", self.root / "bronze" / "_state")
         object.__setattr__(self, "runs", self.root / "bronze" / "_runs")
         object.__setattr__(self, "staging", self.root / "_staging")
+        object.__setattr__(self, "bronze_ready", self.root / "bronze" / "bronze_ready.json")
 
 
 @dataclass(frozen=True)

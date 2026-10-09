@@ -52,27 +52,39 @@ python -c "from threew.config import load_config; print(load_config('prod'))"
 
 `HF_TOKEN` is never in a config file; it comes from the environment.
 
-## Running ingestion
+## Running the Bronze layer
 
 ```bash
-python -m threew.bronze.ingest --env dev     # laptop: 3 files per class into ./data/dev
-python -m threew.bronze.ingest --env prod    # VM: all 2,228 files into /home/ubuntu/3w-data
+python -m threew.bronze.run --env dev       # laptop: 3 files per class into ./data/dev
+python -m threew.bronze.run --env prod      # VM: all 2,228 files into /home/ubuntu/3w-data
+python -m threew.bronze.ingest --env dev    # only the ingest phase, e.g. for debugging
 ```
 
-A run downloads only files that are new or changed since the last run, verifies each one (sha256, then the schema
-contract), lands it under `landing/3w/ingest_date=<date>/run_id=<run_id>/label=<label>/` and records it in the
-manifest. Only one run at a time per storage root: a second run is SKIPPED.
+One run, under one lock and one report, goes through these phases:
+
+| Phase | Does | On failure |
+|---|---|---|
+| ingest | downloads files that are new or changed upstream, verifies each one (sha256, then the schema contract), lands it under `landing/3w/ingest_date=<date>/run_id=<run_id>/label=<label>/` and records it in the manifest | PARTIAL, or FAILED |
+| convert | converts landed files that have no Bronze output yet into `bronze/3w_observations/source_type=<type>/label=<label>/` | PARTIAL |
+| prune | deletes Bronze outputs no current manifest row points to (e.g. the old version of a changed file) | FAILED |
+| reconcile | six Spark checks of the table against the manifest and the landing files (`--deep` adds a strict row-order proof) | FAILED |
+| publish | writes `bronze/bronze_ready.json`, only if everything above succeeded | |
+
+The ready marker is withdrawn when a run starts and written again only by a fully successful run: read Bronze only
+when `bronze_ready.json` exists, and use its `run_id`. Only one run at a time per storage root: a second one is
+SKIPPED.
 
 | Status | Exit code | Meaning |
 |---|---|---|
-| SUCCESS | 0 | everything planned landed (schema drift is listed; it fails the run only with `schema.fail_on_drift`) |
+| SUCCESS | 0 | every phase succeeded (schema drift is listed; it fails the run only with `schema.fail_on_drift`) |
 | SKIPPED | 0 | another run held the lock |
-| PARTIAL | 1 | the run finished, but some files FAILED |
-| FAILED | 2 | the run stopped on an error, or files drifted with `schema.fail_on_drift` on |
+| PARTIAL | 1 | the run finished, but some files failed to download, land or convert |
+| FAILED | 2 | the run stopped on an error, reconciliation failed, or files drifted with `schema.fail_on_drift` on |
 
 Every run writes a report, whatever happens, to `<storage root>/bronze/_runs/<run_id>.json`: config, code version,
-plan, download speed, schema checks, failures, orphaned files in landing and leftover staging folders.
-`scripts/plan_preview.py` and `scripts/inspect_landing.py` show the plan and the landed files without changing anything.
+plan, download speed, schema checks, conversion, pruning, reconciliation, the marker, failures, orphaned files in
+landing and leftover staging folders. `scripts/plan_preview.py` and `scripts/inspect_landing.py` show the plan and
+the landed files without changing anything; `scripts/reconcile_bronze.py` runs the checks on their own.
 
 ## Publishing the mirror
 

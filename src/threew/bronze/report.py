@@ -33,6 +33,10 @@ SECTIONS = (
     "failures",
     "orphans",
     "stale_staging",
+    "convert",  # the rest only in full Bronze runs (threew.bronze.run)
+    "prune",
+    "reconcile",
+    "publish",
     "phases",
     "totals",
 )

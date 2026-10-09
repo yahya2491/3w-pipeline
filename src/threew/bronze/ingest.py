@@ -14,6 +14,7 @@ import time
 from collections import Counter
 from collections.abc import Callable
 from contextlib import ExitStack
+from datetime import datetime
 from typing import Any
 
 from threew.bronze.fetch import fetch_all, fetch_stats
@@ -34,8 +35,21 @@ log = logging.getLogger(__name__)
 LOCK_FILE = "ingest.lock"  # in storage.state: one run at a time per storage root
 
 
+RunBody = Callable[[RunReport, str, datetime], RunStatus]
+
+
 def run_ingest(cfg: Config, client: HubClient, *, sleep: Callable[[float], None] = time.sleep) -> int:
-    """One ingestion run. Returns the exit code; the details are in the run report."""
+    """One ingestion run: download, verify and land (no Bronze table). Returns the exit code."""
+    return execute(
+        cfg, lambda report, run_id, started_at: ingest_phases(cfg, client, report, run_id, started_at, sleep)
+    )
+
+
+def execute(cfg: Config, body: RunBody) -> int:
+    """Run body(report, run_id, started_at) under the lock, with a run report that is written whatever happens.
+
+    Returns the exit code of the status body returns (SKIPPED if the lock is held, FAILED if body raises).
+    """
     run_id, started_at = new_run_id()
     report = RunReport(run_id, started_at, cfg.env)
     report["code"] = code_info()
@@ -46,7 +60,7 @@ def run_ingest(cfg: Config, client: HubClient, *, sleep: Callable[[float], None]
         try:
             owner = {"run_id": run_id, "started_at": started_at.isoformat(), "host": report["run"]["host"]}
             held.enter_context(run_lock(cfg.storage.state / LOCK_FILE, owner))
-            status = _run_phases(cfg, client, report, run_id, started_at, sleep)
+            status = body(report, run_id, started_at)
         except LockHeld as e:
             status, note = RunStatus.SKIPPED, str(e)
         except Exception as e:
@@ -62,7 +76,8 @@ def run_ingest(cfg: Config, client: HubClient, *, sleep: Callable[[float], None]
     return exit_code
 
 
-def _run_phases(cfg: Config, client: HubClient, report: RunReport, run_id, started_at, sleep) -> RunStatus:
+def ingest_phases(cfg: Config, client: HubClient, report: RunReport, run_id, started_at, sleep) -> RunStatus:
+    """Pin check, listing, plan, download and verify, land and inspect: steps 8 to 15."""
     source, ingest = cfg.source, cfg.ingest
 
     def retry(fn):
@@ -212,6 +227,29 @@ def _log_summary(report: RunReport, path) -> None:
     for key in ("orphans", "stale_staging"):
         if report[key]:
             log.warning("  %s: %s", key, report[key])
+    if report["convert"]:
+        c = report["convert"]
+        log.info(
+            "  convert: %s pending, %s converted, %s failed, %s rows",
+            c["pending"],
+            c["converted"],
+            c["failed"],
+            c["rows"],
+        )
+    if report["prune"]:
+        log.info("  prune: %s removed", len(report["prune"]["removed"]))
+    if report["reconcile"]:
+        r = report["reconcile"]
+        failed = [c["number"] for c in r["checks"] if not c["passed"]]
+        log.info(
+            "  reconcile (%s): %s in %ss",
+            r["mode"],
+            "all pass" if not failed else f"FAILED checks {failed}",
+            r["spark_seconds"],
+        )
+    if report["publish"]:
+        p = report["publish"]
+        log.info("  publish: %s", f"marker written: {p['path']}" if p["written"] else f"no marker: {p['reason']}")
     log.info("  report: %s", path)
 
 

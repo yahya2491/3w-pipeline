@@ -4,7 +4,8 @@
 2 Total rows     count() equals the manifest's num_rows total
 3 Per file       every (file, version) has the manifest's row count; no file missing, none extra
 4 Partitions     each file sits in the source_type= and label= folders the manifest says
-5 Row order      per file, _row_in_file is exactly 0 .. n-1: no row duplicated or missing
+5 Row order      per file, _row_in_file is exactly 0 .. n-1: no row duplicated or missing. Fast mode checks count,
+                 min, max, sum and sum of squares, all cheap; deep mode adds countDistinct, which proves it
 6 Fidelity       for one REAL, one SIMULATED and one DRAWN file, every value Spark reads from Bronze equals what
                  pyarrow reads from the landing file, row by row, nulls included
 
@@ -73,6 +74,8 @@ class CheckResult:
 class ReconcileResult:
     env: str
     bronze_path: str
+    mode: str  # "fast" or "deep"
+    excluded: int  # files left out on purpose, e.g. because their conversion failed in this run
     checks: list[CheckResult]
     spark_seconds: float
     plan: str  # formatted physical plan of the checks 3-5 query
@@ -112,12 +115,25 @@ def schema_differences(actual: StructType, expected: StructType) -> list[str]:
     return problems
 
 
-def reconcile(spark: SparkSession, cfg: Config, manifest: Manifest, *, profile: bool = False) -> ReconcileResult:
-    """Run the six checks. profile=True also times the checks 3-5 pass without countDistinct, for comparison."""
+def reconcile(
+    spark: SparkSession,
+    cfg: Config,
+    manifest: Manifest,
+    *,
+    deep: bool = True,
+    profile: bool = False,
+    exclude: frozenset[tuple[str, str]] = frozenset(),
+) -> ReconcileResult:
+    """Run the six checks.
+
+    deep=False skips countDistinct (see check 5). profile=True also times the checks 3-5 pass the other way, for
+    comparison. exclude lists (path, sha256) pairs the table isn't expected to hold.
+    """
     spark_start = time.monotonic()
     contract = load_contract(cfg.schema.contract)
     # The files Bronze should hold: the current LANDED version of each path that matched the contract
-    expected = [r for r in manifest.current().to_pylist() if r["schema_ok"] is True]
+    current = [r for r in manifest.current().to_pylist() if r["schema_ok"] is True]
+    expected = [r for r in current if (r["path"], r["sha256"]) not in exclude]
     by_key = {(r["path"], r["sha256"]): r for r in expected}
     bronze = spark.read.parquet(str(cfg.storage.bronze))
     checks: list[CheckResult] = []
@@ -139,32 +155,40 @@ def reconcile(spark: SparkSession, cfg: Config, manifest: Manifest, *, profile: 
 
     # 3, 4, 5: one pass over the table, joined with the broadcast manifest
     start = time.monotonic()
-    per_file = per_file_stats(bronze)
+    per_file = per_file_stats(bronze, distinct=deep)
     joined = per_file.join(F.broadcast(manifest_frame(spark, expected)), on=KEYS, how="left")
     groups = joined.collect()
     pass_seconds = _since(start)
     plan = _explain(joined)
-    checks += _per_file_checks(groups, by_key, pass_seconds)
+    checks += _per_file_checks(groups, by_key, pass_seconds, deep)
 
-    if profile:  # the same pass without countDistinct, to see what the distinct count costs
+    if profile:  # the same pass the other way, to see what the distinct count costs
         start = time.monotonic()
-        per_file_stats(bronze, distinct=False).collect()
-        profile_data = {"checks_3_to_5_seconds": pass_seconds, "without_count_distinct_seconds": _since(start)}
+        per_file_stats(bronze, distinct=not deep).collect()
+        other = _since(start)
+        with_distinct, without = (pass_seconds, other) if deep else (other, pass_seconds)
+        profile_data = {"with_count_distinct_seconds": with_distinct, "without_count_distinct_seconds": without}
     else:
         profile_data = {}
 
     # 6 Fidelity
     start = time.monotonic()
     checks.append(_fidelity_check(bronze, cfg, contract, expected, start))
-    return ReconcileResult(cfg.env, str(cfg.storage.bronze), checks, _since(spark_start), plan, profile_data)
+    mode = "deep" if deep else "fast"
+    excluded = len(current) - len(expected)
+    seconds = _since(spark_start)
+    return ReconcileResult(cfg.env, str(cfg.storage.bronze), mode, excluded, checks, seconds, plan, profile_data)
 
 
 def per_file_stats(bronze: DataFrame, distinct: bool = True) -> DataFrame:
-    """Rows, first and last row number (and distinct row numbers) per file version and partition."""
+    """Per file version and partition: rows, and the min, max, sum and sum of squares of the row numbers
+    (with distinct=True also the number of distinct row numbers)."""
     aggs = [
         F.count(F.lit(1)).alias("rows"),
         F.min("_row_in_file").alias("min_row"),
         F.max("_row_in_file").alias("max_row"),
+        F.sum("_row_in_file").alias("sum_row"),
+        F.sum(F.col("_row_in_file") * F.col("_row_in_file")).alias("sum_sq_row"),
     ]
     if distinct:
         aggs.append(F.countDistinct("_row_in_file").alias("distinct_rows"))
@@ -185,7 +209,19 @@ def manifest_frame(spark: SparkSession, rows: list[dict[str, Any]]) -> DataFrame
     return spark.createDataFrame(data, schema)
 
 
-def _per_file_checks(groups, by_key: dict, pass_seconds: float) -> list[CheckResult]:
+def _row_numbers_ok(g, deep: bool) -> bool:
+    """0 .. n-1 has min 0, max n-1, sum n(n-1)/2 and sum of squares (n-1)n(2n-1)/6; deep also counts distinct."""
+    n = g["rows"]
+    ok = (
+        g["min_row"] == 0
+        and g["max_row"] == n - 1
+        and g["sum_row"] == n * (n - 1) // 2
+        and g["sum_sq_row"] == (n - 1) * n * (2 * n - 1) // 6
+    )
+    return ok and (not deep or g["distinct_rows"] == n)
+
+
+def _per_file_checks(groups, by_key: dict, pass_seconds: float, deep: bool) -> list[CheckResult]:
     in_bronze: dict[tuple, list] = defaultdict(list)
     for g in groups:
         in_bronze[(g["_source_path"], g["_file_sha256"])].append(g)
@@ -195,17 +231,10 @@ def _per_file_checks(groups, by_key: dict, pass_seconds: float) -> list[CheckRes
     mismatches, partition_problems, order_problems = [], [], []
     for key, gs in sorted(in_bronze.items()):
         for g in gs:  # 5: within one file, row numbers are exactly 0 .. n-1
-            n = g["rows"]
-            if not (g["min_row"] == 0 and g["max_row"] == n - 1 and g["distinct_rows"] == n):
-                order_problems.append(
-                    {
-                        "file": list(key),
-                        "rows": n,
-                        "min": g["min_row"],
-                        "max": g["max_row"],
-                        "distinct": g["distinct_rows"],
-                    }
-                )
+            if not _row_numbers_ok(g, deep):
+                problem = {"file": list(key), "rows": g["rows"], "min": g["min_row"], "max": g["max_row"]}
+                problem |= {"sum": g["sum_row"], "distinct": g["distinct_rows"] if deep else None}
+                order_problems.append(problem)
         if key not in by_key:
             continue
         rows = sum(g["rows"] for g in gs)
@@ -245,7 +274,12 @@ def _per_file_checks(groups, by_key: dict, pass_seconds: float) -> list[CheckRes
             "row order",
             not order_problems,
             pass_seconds,
-            {**shared, "problems": len(order_problems), "files": order_problems[:MAX_LISTED]},
+            {
+                **shared,
+                "mode": "deep (with countDistinct)" if deep else "fast (count, min, max, sum, sum of squares)",
+                "problems": len(order_problems),
+                "files": order_problems[:MAX_LISTED],
+            },
         ),
     ]
 

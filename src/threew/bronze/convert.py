@@ -122,19 +122,25 @@ def convert_file(landed_path: Path, manifest_row: Mapping[str, Any], out_dir: Pa
         return failed(f"{type(exc).__name__}: {exc}")
 
 
-def convert_all(manifest: Manifest, storage_cfg: StorageConfig, workers: int) -> list[ConvertResult]:
-    """Convert every current LANDED file with schema_ok into storage.bronze; others are SKIPPED. In path order."""
+def convert_all(
+    manifest: Manifest, storage_cfg: StorageConfig, workers: int, *, only_pending: bool = False
+) -> list[ConvertResult]:
+    """Convert current LANDED files with schema_ok into storage.bronze; others are SKIPPED. In path order.
+
+    only_pending converts only files whose Bronze output doesn't exist yet, and leaves the others out of the
+    result. Output names are deterministic and written atomically, so an existing output is a finished one.
+    """
     rows = manifest.current().to_pylist()  # newest LANDED row per path
     results: dict[str, ConvertResult] = {}
     todo = []
     for row in rows:
-        if row["schema_ok"] is True:
-            todo.append(row)
-        else:
+        if row["schema_ok"] is not True:
             reason = "not inspected" if row["schema_ok"] is None else "schema_ok is false"
             results[row["path"]] = ConvertResult(
                 row["path"], ConvertStatus.SKIPPED, None, None, None, None, None, 0.0, reason
             )
+        elif not (only_pending and expected_output(row, storage_cfg).exists()):
+            todo.append(row)
 
     def convert(row):
         return convert_file(storage_cfg.root / row["landing_path"], row, storage_cfg.bronze)
@@ -147,7 +153,42 @@ def convert_all(manifest: Manifest, storage_cfg: StorageConfig, workers: int) ->
                 log.warning("convert failed: %s: %s", result.source_path, result.error)
             if done % 250 == 0:
                 log.info("converted %d/%d", done, len(todo))
-    return [results[row["path"]] for row in rows]
+    return [results[row["path"]] for row in rows if row["path"] in results]
+
+
+def expected_output(row: Mapping[str, Any], storage_cfg: StorageConfig) -> Path:
+    """Where a manifest row's Bronze output is (or will be)."""
+    file_sha256 = row["sha256"] or sha256_of(storage_cfg.root / row["landing_path"])
+    return storage_cfg.bronze / output_relpath(row, file_sha256)
+
+
+class PruneError(RuntimeError):
+    """Pruning would remove the whole table: the manifest is empty or unreadable, not the table stale."""
+
+
+def prune_outputs(manifest: Manifest, storage_cfg: StorageConfig) -> dict[str, list[str]]:
+    """Delete Bronze outputs that no current, contract-matching manifest row points to, e.g. the old version of a
+    file that changed upstream, and temporary files left by a crashed write. Paths are relative to storage.bronze.
+    """
+    bronze = storage_cfg.bronze
+    if not bronze.exists():
+        return {"removed": [], "temporary_removed": []}
+    keep = {expected_output(r, storage_cfg) for r in manifest.current().to_pylist() if r["schema_ok"] is True}
+    outputs = sorted(bronze.rglob("*.parquet"))
+    if outputs and not keep:
+        raise PruneError(f"the manifest lists no convertible files, but {bronze} has {len(outputs)}: refusing")
+    removed = [p for p in outputs if p not in keep and not p.name.startswith(".")]
+    temporary = sorted(p for p in bronze.rglob(".*.tmp") if p.is_file())
+    for path in removed + temporary:
+        path.unlink()
+    for folder in sorted({p.parent for p in removed + temporary}, key=lambda d: len(d.parts), reverse=True):
+        for empty in (folder, folder.parent):  # label=, then source_type=, if nothing is left in them
+            if empty != bronze and empty.exists() and not any(empty.iterdir()):
+                empty.rmdir()
+    return {
+        "removed": [p.relative_to(bronze).as_posix() for p in removed],
+        "temporary_removed": [p.relative_to(bronze).as_posix() for p in temporary],
+    }
 
 
 def _since(start: float) -> float:

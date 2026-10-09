@@ -27,7 +27,8 @@ EVIDENCE_DIR = REPO_ROOT / "docs" / "evidence" / "bronze"
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--env", choices=["dev", "prod"], required=True)
-    parser.add_argument("--profile", action="store_true", help="also time the per-file pass without countDistinct")
+    parser.add_argument("--fast", action="store_true", help="skip countDistinct (check 5 uses sums instead)")
+    parser.add_argument("--profile", action="store_true", help="also time the per-file pass the other way")
     parser.add_argument("--evidence", action="store_true", help="also save the plan to docs/evidence/bronze/")
     args = parser.parse_args()
     logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -36,7 +37,8 @@ def main() -> int:
     spark = get_spark(cfg)
     spark.sparkContext.setLogLevel("WARN")
     try:
-        result = reconcile(spark, cfg, Manifest(cfg.storage.state), profile=args.profile)
+        manifest = Manifest(cfg.storage.state)
+        result = reconcile(spark, cfg, manifest, deep=not args.fast, profile=args.profile)
     finally:
         spark.stop()
 

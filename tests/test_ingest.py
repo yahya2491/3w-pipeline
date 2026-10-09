@@ -1,16 +1,14 @@
 """End-to-end ingest with a fake hub: temporary folders, no network, no Spark."""
 
 import dataclasses
-import hashlib
 import json
 import re
 import shutil
-from collections import defaultdict
 from pathlib import Path
 
 import httpx2
 import pytest
-from huggingface_hub.errors import HfHubHTTPError
+from fakes import FakeHub, http_error
 
 from threew.bronze.ingest import LOCK_FILE, run_ingest
 from threew.bronze.inspect import fingerprint
@@ -18,9 +16,7 @@ from threew.bronze.manifest import Manifest
 from threew.bronze.report import SECTIONS
 from threew.config import REPO_ROOT, StorageConfig, load_config
 from threew.lock import run_lock
-from threew.source.hub import RemoteFile, matches
 
-REVISION = load_config("dev").source.revision
 DRIFTED = "data/5/SIMULATED_00003.parquet"
 
 
@@ -43,40 +39,6 @@ def files(parquet_bytes) -> dict[str, bytes]:
 @pytest.fixture
 def drifted_files(files, contract, parquet_bytes) -> dict[str, bytes]:
     return {**files, DRIFTED: parquet_bytes(7, columns={n: t for n, t in contract.items() if n != "P-PDG"})}
-
-
-class FakeHub:
-    def __init__(self, files: dict[str, bytes], errors: dict[str, Exception] | None = None) -> None:
-        self.files = files
-        self.errors = errors or {}  # path -> exception raised on every download of it
-        self.list_error: Exception | None = None
-        self.downloads: dict[str, int] = defaultdict(int)
-
-    def resolve_revision(self, label: str) -> str:
-        return REVISION
-
-    def list_files(self, revision, include):
-        if self.list_error:
-            raise self.list_error
-        return [
-            RemoteFile(path, len(data), hashlib.sha256(data).hexdigest(), f"blob-{path}")
-            for path, data in sorted(self.files.items())
-            if matches(path, include)
-        ]
-
-    def download(self, path, revision, dest_dir):
-        self.downloads[path] += 1
-        if path in self.errors:
-            raise self.errors[path]
-        target = Path(dest_dir) / path
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(self.files[path])
-        return target
-
-
-def http_error(status: int) -> HfHubHTTPError:
-    request = httpx2.Request("GET", "https://huggingface.co/datasets/x/resolve/abc/f.parquet")
-    return HfHubHTTPError(f"{status} Client Error", response=httpx2.Response(status, request=request))
 
 
 @pytest.fixture
@@ -112,7 +74,9 @@ def test_normal_run_then_nothing_to_do(cfg, files, contract):
     hub = FakeHub(files)
     code, report = run(cfg, hub)
     assert (code, report["run"]["status"]) == (0, "SUCCESS")
-    assert all(report[section] is not None for section in SECTIONS)
+    bronze_only = {"convert", "prune", "reconcile", "publish"}  # filled by threew.bronze.run, not by ingest
+    assert all(report[section] is not None for section in SECTIONS if section not in bronze_only)
+    assert all(report[section] is None for section in bronze_only)
     assert report["run"]["error"] is None
     assert set(report["phases"]) == {"pin", "list", "plan", "fetch", "land", "checks"}
     assert report["plan"]["new"] == 7
