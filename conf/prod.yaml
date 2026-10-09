@@ -2,3 +2,8 @@
 
 storage:
   root: /home/ubuntu/3w-data
+
+schema:
+  # On since the first full run (20261008T235040Z-664edd): all 2,228 files matched the contract.
+  # From now on an upstream schema change fails the run (exit 2) instead of landing.
+  fail_on_drift: true
