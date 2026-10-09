@@ -120,7 +120,8 @@ def test_normal_run_then_nothing_to_do(cfg, files, contract):
     assert report["schema"]["fingerprints"] == {fingerprint(contract): 7}
     assert report["schema"]["codecs"] == {"BROTLI": 7}
     assert report["totals"]["files_landed"] == report["totals"]["landed_files_total"] == 7
-    assert report["totals"]["rows_landed"] == 1 + 2 + 3 + 4 + 5 + 6 + 7
+    assert report["totals"]["rows_landed"] == report["totals"]["rows_total"] == 1 + 2 + 3 + 4 + 5 + 6 + 7
+    assert (report["fetch"]["network_retries"], report["fetch"]["checksum_redownloads"]) == (0, 0)
     assert (report["orphans"], report["stale_staging"], report["failures"]) == ([], [], [])
     assert report["config"]["env"] == "dev"
     assert len(landed(cfg)) == 7
@@ -129,6 +130,10 @@ def test_normal_run_then_nothing_to_do(cfg, files, contract):
     code, second = run(cfg, hub)
     assert (code, second["run"]["status"]) == (0, "SUCCESS")
     assert (second["plan"]["new"], second["plan"]["unchanged"], second["fetch"]["files"]) == (0, 7, 0)
+    # A rerun lands nothing, but rows_total still counts every row in landing (rows, not files)
+    assert second["totals"]["rows_total"] == report["totals"]["rows_total"] == 28
+    assert second["totals"]["landed_files_total"] == 7
+    assert second["totals"]["rows_landed"] == 0
     assert sum(hub.downloads.values()) == 7  # nothing downloaded again
     assert Manifest(cfg.storage.state).read().num_rows == 7
     assert list(cfg.storage.staging.iterdir()) == []
@@ -143,6 +148,25 @@ def test_one_file_fails(cfg, files):
     assert "404" in failure["error"]
     assert failure["attempts"] == 1
     assert report["landing"] == {"LANDED": 6, "FAILED": 1}
+
+
+def test_retries_and_redownloads_reach_the_report(cfg, files):
+    class FlakyHub(FakeHub):
+        """The first download of one file times out; the first copy of another arrives corrupted."""
+
+        def download(self, path, revision, dest_dir):
+            self.downloads[path] += 1
+            if path == "data/0/WELL-00001_20170201010207.parquet" and self.downloads[path] == 1:
+                raise httpx2.ReadTimeout("timed out")
+            target = Path(dest_dir) / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            corrupt = path == "data/2/SIMULATED_00001.parquet" and self.downloads[path] == 1
+            target.write_bytes(self.files[path][::-1] if corrupt else self.files[path])
+            return target
+
+    code, report = run(cfg, FlakyHub(files))
+    assert (code, report["run"]["status"]) == (0, "SUCCESS")
+    assert (report["fetch"]["network_retries"], report["fetch"]["checksum_redownloads"]) == (1, 1)
 
 
 def test_listing_raises_an_unexpected_error(cfg, files):

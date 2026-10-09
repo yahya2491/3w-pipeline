@@ -194,11 +194,13 @@ def _log_summary(report: RunReport, path) -> None:
         log.info("  plan: NEW %s, CHANGED %s, unchanged %s", plan["new"], plan["changed"], plan["unchanged"])
     if fetch:
         log.info(
-            "  fetch: %s OK, %s FAILED, %s bytes, %s MB/s",
+            "  fetch: %s OK, %s FAILED, %s bytes, %s MB/s, %s network retries, %s checksum re-downloads",
             fetch["ok"],
             fetch["failed"],
             fetch["bytes"],
             fetch["mb_per_s"],
+            fetch["network_retries"],
+            fetch["checksum_redownloads"],
         )
     if totals:
         log.info(

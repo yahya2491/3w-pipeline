@@ -44,9 +44,11 @@ class FetchResult:
     staged_path: Path | None  # OK only
     sha256_actual: str | None  # of the last file downloaded, if it could be read
     verified_by: VerifiedBy
-    attempts: int  # download calls: retries after network errors and the re-download after a bad file both count
+    attempts: int  # all download calls: 1 + network_retries + checksum_redownloads
     seconds: float
     error: str | None  # FAILED only
+    network_retries: int = 0  # extra calls after temporary network errors (timeouts, resets, 429, 5xx)
+    checksum_redownloads: int = 0  # re-downloads after a file failed verification (size or sha256)
 
 
 class TooManyFailuresError(RuntimeError):
@@ -77,7 +79,8 @@ def fetch_one(
     remote = candidate.remote
     verified_by = VerifiedBy.SHA256 if remote.sha256 else VerifiedBy.SIZE_ONLY
     start = time.monotonic()
-    calls = 0
+    calls = 0  # every download call
+    rounds = 0  # download-then-verify rounds: the second one only after a bad file
 
     def download() -> Path:
         nonlocal calls
@@ -86,11 +89,16 @@ def fetch_one(
 
     def result(status: FetchStatus, staged: Path | None, actual: str | None, error: str | None) -> FetchResult:
         seconds = time.monotonic() - start
-        return FetchResult(candidate, reason, status, staged, actual, verified_by, calls, seconds, error)
+        # Each round ends in exactly one call that counts; every other call in it was a network retry
+        retries, redownloads = calls - rounds, rounds - 1
+        return FetchResult(
+            candidate, reason, status, staged, actual, verified_by, calls, seconds, error, retries, redownloads
+        )
 
     error: str | None = None
     actual: str | None = None
     for _ in range(VERIFY_ATTEMPTS):
+        rounds += 1
         try:
             staged = with_retry(download, max_retries, backoff, sleep=sleep)
         except Exception as exc:  # noqa: BLE001  one file failing must never stop the others
@@ -177,6 +185,8 @@ def fetch_stats(results: Sequence[FetchResult], elapsed: float) -> dict[str, Any
         "bytes": ok_bytes,
         "seconds": round(elapsed, 3),
         "mb_per_s": round(ok_bytes / elapsed / 1e6, 3) if elapsed > 0 else None,
+        "network_retries": sum(r.network_retries for r in results),
+        "checksum_redownloads": sum(r.checksum_redownloads for r in results),
     }
 
 
