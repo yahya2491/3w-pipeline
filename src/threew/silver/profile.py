@@ -5,10 +5,7 @@ Usage:
 """
 
 import argparse
-import json
 import sys
-from pathlib import Path
-from typing import Any
 
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
@@ -16,6 +13,7 @@ from pyspark.sql.window import Window
 
 from threew.bronze.inspect import load_contract
 from threew.config import Config, load_config
+from threew.silver.input import read_bronze_ready_marker
 from threew.spark import get_spark
 
 
@@ -196,25 +194,9 @@ def timestamp_quality_summary(per_recording: DataFrame) -> DataFrame:
     )
 
 
-def _read_ready_marker(cfg: Config) -> dict[str, Any]:
-    path = cfg.storage.bronze_ready
-    if not path.is_file():
-        raise FileNotFoundError(f"Bronze is not marked ready at {path}; run the Bronze pipeline first.")
-
-    marker = json.loads(path.read_text(encoding="utf-8"))
-    if marker.get("env") != cfg.env:
-        raise ValueError(f"Bronze marker environment {marker.get('env')!r} does not match {cfg.env!r}.")
-    if Path(marker.get("bronze_table", "")).resolve() != cfg.storage.bronze:
-        raise ValueError("Bronze marker points to a different table than the current environment config.")
-    reconcile = marker.get("reconcile")
-    if not isinstance(reconcile, dict) or reconcile.get("passed") is not True:
-        raise ValueError("Bronze ready marker does not report a successful reconciliation.")
-    return marker
-
-
 def profile_bronze(cfg: Config) -> None:
     """Print a read-only overview of Bronze sensors, labels, and timestamp consistency."""
-    marker = _read_ready_marker(cfg)
+    marker = read_bronze_ready_marker(cfg)
     sensor_names = tuple(
         name for name, type_name in load_contract(cfg.schema.contract).items() if type_name == "double"
     )
