@@ -46,6 +46,21 @@ SENSOR_RENAMES = {
     "T-TPT": "subsea_tree_tpt_temperature_c",
 }
 
+
+EVENT_NAMES = {
+    0: "Normal Operation",
+    1: "Abrupt Increase of BSW",
+    2: "Spurious Closure of DHSV",
+    3: "Severe Slugging",
+    4: "Flow Instability",
+    5: "Rapid Productivity Loss",
+    6: "Quick Restriction in PCK",
+    7: "Scaling in PCK",
+    8: "Hydrate in Production Line",
+    9: "Hydrate in Service Line",
+}
+TRANSIENT_LABELS = (1, 2, 5, 6, 7, 8, 9)
+
 MANIFEST_SCHEMA = StructType(
     [
         StructField("_source_path", StringType(), nullable=False),
@@ -147,4 +162,38 @@ def build_silver_observations(bronze: DataFrame, manifest_rows: Sequence[Mapping
         F.col("instance_start"),
         *[F.col(source).cast(DoubleType()).alias(target) for source, target in SENSOR_RENAMES.items()],
     ]
-    return joined.select(*columns)
+    silver = joined.select(*columns)
+
+    event_name_map = F.create_map(*[item for code, name in EVENT_NAMES.items() for item in (F.lit(code), F.lit(name))])
+    class_code = F.col("class_code").cast(IntegerType())
+    instance_label = F.col("instance_label")
+    row_event_code = (
+        F.when(class_code == 0, F.lit(0))
+        .when(class_code.between(1, 9), class_code)
+        .when(class_code.between(101, 109), class_code - F.lit(100))
+        .otherwise(F.lit(None).cast(IntegerType()))
+    )
+
+    valid_normal_period = instance_label.isin(0, 1, 2, 5, 6, 7, 8, 9) & (class_code == 0)
+    valid_steady_event = instance_label.between(1, 9) & (class_code == instance_label)
+    valid_transient_event = instance_label.isin(*TRANSIENT_LABELS) & (class_code == instance_label + F.lit(100))
+    class_matches_recording = valid_normal_period | valid_steady_event | valid_transient_event
+
+    return (
+        silver.withColumn("instance_event_name", F.element_at(event_name_map, instance_label))
+        .withColumn("row_event_name", F.element_at(event_name_map, row_event_code))
+        .withColumn(
+            "row_event_phase",
+            F.when(class_code.isNull(), F.lit("unknown"))
+            .when(class_code == 0, F.lit("normal"))
+            .when(class_code.between(1, 9), F.lit("steady"))
+            .when(class_code.between(101, 109), F.lit("transient"))
+            .otherwise(F.lit("unrecognized")),
+        )
+        .withColumn(
+            "class_label_status",
+            F.when(class_code.isNull(), F.lit("unlabeled"))
+            .when(class_matches_recording, F.lit("consistent"))
+            .otherwise(F.lit("inconsistent")),
+        )
+    )

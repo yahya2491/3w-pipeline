@@ -26,6 +26,18 @@ These fields and the sensor fields below are columns in the same silver_observat
 
 Keep `class_code`, `instance_label`, and `state_code` separate. Missing class/state values stay missing. Synthetic timestamps stay as source clock values, not real calendar dates. SIMULATED and DRAWN recordings have no well ID or real start time.
 
+
+## Derived event fields
+
+| Silver field | Meaning | Rule |
+|---|---|---|
+| `instance_event_name` | Readable name for the recording's event category | Map `instance_label` 0-9 using `docs/BRONZE_REFERENCE.md`. |
+| `row_event_name` | Readable event name for this observation | Derive from `class_code`; class 0 means Normal Operation, 1-9 use that event label, and 101-109 use the label after subtracting 100. Null or unsupported codes have no event name. |
+| `row_event_phase` | What part of the recording this row represents | 0 = `normal`; 1-9 = `steady`; 101-109 = `transient`; null = `unknown`; other codes = `unrecognized`. |
+| `class_label_status` | Whether the row label fits the recording label | Null class = `unlabeled`; valid combinations = `consistent`; other combinations = `inconsistent`. This follows the measured dataset rules in the Bronze reference, including events 3 and 4 having no normal or transient rows. |
+
+These fields explain the existing codes; they do not replace them. Silver keeps every observation and reports inconsistent labels rather than silently changing or dropping rows.
+
 ## Sensor fields
 
 Each source sensor stays a nullable double in its original unit. A sensor may be null for many or all rows in a recording; that is reported as a data limitation, not a reason by itself to drop observations. Zero is a value, not a missing-value marker.
@@ -68,4 +80,4 @@ Each source sensor stays a nullable double in its original unit. A sensor may be
 - Keep observations in `silver_observations`; create separate `instance_quality` and `sensor_availability` summaries.
 - A run is usable only after its outputs are checked against Bronze and a ready marker points to the completed run.
 
-Milestone 4 will add a tested `row_event_phase`: class 0 is normal, 1-9 are steady events, 101-109 are transient events, and a null class is unknown. The original class code and recording label remain available.
+Milestone 4 adds readable event names and row phases, plus a status for checking row class against the recording label. The original class code and recording label remain available.

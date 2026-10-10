@@ -65,6 +65,24 @@ def _bronze_fixture(spark):
             "state": 2,
         },
     ]
+    unlabeled_row = dict(source_rows[0])
+    unlabeled_row.update(
+        {
+            "_row_in_file": 2,
+            "timestamp": datetime.fromisoformat("2020-01-01T00:00:02"),
+            "class": None,
+        }
+    )
+    mismatched_row = dict(source_rows[0])
+    mismatched_row.update(
+        {
+            "_row_in_file": 3,
+            "timestamp": datetime.fromisoformat("2020-01-01T00:00:03"),
+            "class": 2,
+        }
+    )
+    source_rows.extend([unlabeled_row, mismatched_row])
+
     for index, row in enumerate(source_rows):
         row.update({name: float(index + 10) for name in SENSOR_RENAMES})
     source_rows[1]["QGL"] = None
@@ -103,7 +121,7 @@ def test_transform_keeps_one_row_shape_and_adds_recording_metadata(spark):
     silver = build_silver_observations(bronze, _manifest_rows())
 
     rows = silver.orderBy("source_type", "_row_in_file").collect()
-    assert len(rows) == bronze.count() == 3
+    assert len(rows) == bronze.count() == 5
     assert len(SENSOR_RENAMES) == 27
     assert len(set(SENSOR_RENAMES.values())) == 27
     assert "P-PDG" not in silver.columns
@@ -113,7 +131,11 @@ def test_transform_keeps_one_row_shape_and_adds_recording_metadata(spark):
 
     real_first = rows[0].asDict()
     assert real_first["instance_label"] == 1
+    assert real_first["instance_event_name"] == "Abrupt Increase of BSW"
     assert real_first["class_code"] == 0
+    assert real_first["row_event_name"] == "Normal Operation"
+    assert real_first["row_event_phase"] == "normal"
+    assert real_first["class_label_status"] == "consistent"
     assert real_first["downhole_pdg_pressure_pa"] == 101.25
     assert real_first["well_id"] == 1
     assert real_first["instance_start"] == datetime.fromisoformat("2020-01-01T00:00:00")
@@ -121,14 +143,33 @@ def test_transform_keeps_one_row_shape_and_adds_recording_metadata(spark):
 
     real_second = rows[1].asDict()
     assert real_second["class_code"] == 101
+    assert real_second["instance_event_name"] == "Abrupt Increase of BSW"
+    assert real_second["row_event_name"] == "Abrupt Increase of BSW"
+    assert real_second["row_event_phase"] == "transient"
+    assert real_second["class_label_status"] == "consistent"
     assert real_second["state_code"] is None
     assert real_second["gas_lift_flow_rate_m3_s"] is None
 
-    simulated = rows[2].asDict()
+    unlabeled = rows[2].asDict()
+    assert unlabeled["class_code"] is None
+    assert unlabeled["row_event_name"] is None
+    assert unlabeled["row_event_phase"] == "unknown"
+    assert unlabeled["class_label_status"] == "unlabeled"
+
+    mismatched = rows[3].asDict()
+    assert mismatched["class_code"] == 2
+    assert mismatched["row_event_name"] == "Spurious Closure of DHSV"
+    assert mismatched["row_event_phase"] == "steady"
+    assert mismatched["class_label_status"] == "inconsistent"
+
+    simulated = rows[4].asDict()
     assert simulated["source_type"] == "SIMULATED"
     assert simulated["instance_id"] == "SIMULATED_00001"
     assert simulated["well_id"] is None
     assert simulated["instance_start"] is None
+    assert simulated["row_event_name"] == "Abrupt Increase of BSW"
+    assert simulated["row_event_phase"] == "steady"
+    assert simulated["class_label_status"] == "consistent"
     assert silver.schema["timestamp"].dataType == TimestampNTZType()
 
 
@@ -172,3 +213,32 @@ def test_transform_rejects_an_unexpected_bronze_sensor_type(spark):
 
     with pytest.raises(ValueError, match="unexpected field types"):
         build_silver_observations(bronze, _manifest_rows())
+
+
+def test_recording_specific_class_rules_flag_normal_class_for_event_3(spark):
+    bronze = _bronze_fixture(spark)
+    real_path = "data/1/WELL-00001.parquet"
+    bronze = bronze.withColumn(
+        "label",
+        F.when(F.col("_source_path") == real_path, F.lit(3)).otherwise(F.col("label")),
+    ).withColumn(
+        "class",
+        F.when(
+            (F.col("_source_path") == real_path) & (F.col("_row_in_file") == 1),
+            F.lit(103).cast(ShortType()),
+        ).otherwise(F.col("class")),
+    )
+    manifest_rows = _manifest_rows()
+    manifest_rows[0]["_manifest_label"] = 3
+
+    rows = (
+        build_silver_observations(bronze, manifest_rows)
+        .filter(F.col("_source_path") == real_path)
+        .orderBy("_row_in_file")
+        .collect()
+    )
+    assert rows[0]["instance_event_name"] == "Severe Slugging"
+    assert rows[0]["row_event_name"] == "Normal Operation"
+    assert rows[0]["class_label_status"] == "inconsistent"
+    assert rows[1]["row_event_phase"] == "transient"
+    assert rows[1]["class_label_status"] == "inconsistent"
