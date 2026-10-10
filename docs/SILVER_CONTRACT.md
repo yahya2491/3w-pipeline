@@ -1,6 +1,6 @@
 # Silver table contract (draft)
 
-**Status:** Working draft for Milestone 2. Sensor meanings and units come from `docs/BRONZE_REFERENCE.md` section 6. Silver keeps source units and values; it does not fill, clip, or convert measurements.
+**Status:** Working contract; timestamp policy updated in Milestone 5. Sensor meanings and units come from `docs/BRONZE_REFERENCE.md` section 6. Silver keeps source units and values; it does not fill, clip, or convert measurements.
 
 ## What one row means
 
@@ -26,6 +26,14 @@ These fields and the sensor fields below are columns in the same silver_observat
 
 Keep `class_code`, `instance_label`, and `state_code` separate. Missing class/state values stay missing. Synthetic timestamps stay as source clock values, not real calendar dates. SIMULATED and DRAWN recordings have no well ID or real start time.
 
+
+## Timestamp and row order
+
+Keep `timestamp` exactly as Bronze provides it: a timestamp without a time zone. Do not assign a time zone, shift times, fill gaps, sort rows by timestamp, or remove observations to make the sequence look regular. Synthetic timestamps remain synthetic source values, not real calendar dates.
+
+For continuity checks, order rows within each original file by `_row_in_file`, then compare adjacent timestamps. The production profile of all 2,228 recordings found no null or duplicate timestamps, repeated adjacent times, backward intervals, or gaps over one second. Every adjacent interval was one second.
+
+This is a quality result, not a reason to add a repeated time-delta column to every observation. Report future problems in the separate per-recording quality summary.
 
 ## Derived event fields
 
@@ -76,7 +84,7 @@ Each source sensor stays a nullable double in its original unit. A sensor may be
 
 - Keep every Bronze observation unless a specific row cannot be represented safely. If any rows are rejected, keep their key and a reason in a separate output.
 - Do not fill missing sensors, class, or state. Do not clip or convert sensor values.
-- Keep the source timestamp and original row position. Add continuity or quality fields only after their rules are defined and tested.
+- Keep the source timestamp and original row position. Report timestamp continuity in the separate per-recording quality summary; do not add a repetitive interval column to each observation.
 - Keep observations in `silver_observations`; create separate `instance_quality` and `sensor_availability` summaries.
 - A run is usable only after its outputs are checked against Bronze and a ready marker points to the completed run.
 

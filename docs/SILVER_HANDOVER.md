@@ -93,13 +93,13 @@ These are measured, not guessed.
 3. **Empty labels in real data.** `class` and `state` are null in 12.25% of real rows, and never in simulated or drawn rows. You need a rule for these: reject, flag, or fill.
 4. **Many sensors are entirely null within a file,** and which ones varies by file and by source type. On the 30-file dev sample, real files had 7 to 23 of the 27 sensors entirely null (typically 9), simulated files 20 to 22 and drawn files 22: they have only a handful of sensors filled in. So "which sensors does this instance have" is a real modelling question.
 5. **Timestamps have no time zone.** 3W doesn't say which zone they're in. Bronze keeps them as written (`timestamp_ntz`), and nothing is shifted. Real instances start between 2011-08-30 and 2023-09-18 (the start time in each file name, which equals the file's first `timestamp`).
+   A profile of all 2,228 recordings found no null or duplicate timestamps, repeated adjacent times, backward intervals, or gaps over one second; every adjacent interval was one second. Silver keeps these source timestamps unchanged and checks sequence order using `_row_in_file`.
 6. **Column names have hyphens and Portuguese abbreviations.** Renaming them to snake_case English is a natural Silver standardisation step.
 7. **Schema is identical across all 2,228 files.** That's 30 columns with one fingerprint, checked on every Bronze run against `conf/contracts/3w_v2.yaml`.
 8. **No byte-identical duplicate files exist.** There's nothing to deduplicate at the file level.
 9. **Row labels match the folder.** Every row's `class` is 0, the folder `label`, `100 + label`, or null, checked on all 2,228 files. Folders 3 and 4 hold only their own label, never 0.
 
 **Not measured yet,** and good first profiling tasks for Silver:
-- duplicate or missing timestamps within an instance
 - frozen (stuck) sensor values
 - out-of-range or negative values
 - the full range of `state` values

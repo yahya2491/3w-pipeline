@@ -139,6 +139,7 @@ def test_transform_keeps_one_row_shape_and_adds_recording_metadata(spark):
     assert real_first["downhole_pdg_pressure_pa"] == 101.25
     assert real_first["well_id"] == 1
     assert real_first["instance_start"] == datetime.fromisoformat("2020-01-01T00:00:00")
+    assert real_first["timestamp"] == datetime.fromisoformat("2020-01-01T00:00:00")
     assert isinstance(real_first["timestamp"], datetime)
 
     real_second = rows[1].asDict()
@@ -170,6 +171,7 @@ def test_transform_keeps_one_row_shape_and_adds_recording_metadata(spark):
     assert simulated["row_event_name"] == "Abrupt Increase of BSW"
     assert simulated["row_event_phase"] == "steady"
     assert simulated["class_label_status"] == "consistent"
+    assert simulated["timestamp"] == datetime.fromisoformat("1970-01-01T00:00:00")
     assert silver.schema["timestamp"].dataType == TimestampNTZType()
 
 
