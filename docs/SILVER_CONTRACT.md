@@ -98,3 +98,23 @@ These outputs are separate from the observation table; they do not change or rem
 - A run is usable only after its outputs are checked against Bronze and a ready marker points to the completed run.
 
 Milestone 4 adds readable event names and row phases, plus a status for checking row class against the recording label. The original class code and recording label remain available.
+
+## Saving and checking a Silver run
+
+Milestone 7 saves three Parquet outputs under the environment's storage root:
+
+- silver/runs/<run_id>/silver_observations/
+- silver/runs/<run_id>/instance_quality/
+- silver/runs/<run_id>/sensor_availability/
+- silver/_runs/<run_id>.json
+- silver/silver_ready.json
+
+Each run has a separate folder, so a failed attempt cannot replace a previously completed dev run. The JSON run report records the Bronze run used, output paths, row counts, and check results. The ready marker is written only after the saved tables pass read-back checks; it points to the latest successful run.
+
+Before publishing the marker, the run checks that Silver has the same total observation count as Bronze, the same number of rows for every source-file version, one instance_quality row with the same count per recording, and exactly 27 distinct sensor rows per recording. A failed check stops the run and leaves the ready marker pointing to the last successful run.
+
+Run the first version from the repository root in the WSL development checkout:
+
+    python -m threew.silver.run --env dev
+
+This command currently accepts only dev; it does not write production Silver data.

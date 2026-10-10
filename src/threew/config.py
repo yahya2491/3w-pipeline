@@ -41,6 +41,9 @@ class StorageConfig:
     runs: Path = field(init=False)
     # Downloads go to <staging>/<run_id>/ first. Same filesystem as landing, so step 13's os.replace is atomic
     staging: Path = field(init=False)
+    silver: Path = field(init=False)
+    silver_runs: Path = field(init=False)
+    silver_ready: Path = field(init=False)
     # Written only after a fully successful run; next to the table, not inside it, so Spark never reads it
     bronze_ready: Path = field(init=False)
 
@@ -52,6 +55,9 @@ class StorageConfig:
         object.__setattr__(self, "runs", self.root / "bronze" / "_runs")
         object.__setattr__(self, "staging", self.root / "_staging")
         object.__setattr__(self, "bronze_ready", self.root / "bronze" / "bronze_ready.json")
+        object.__setattr__(self, "silver", self.root / "silver")
+        object.__setattr__(self, "silver_runs", self.silver / "_runs")
+        object.__setattr__(self, "silver_ready", self.silver / "silver_ready.json")
 
 
 @dataclass(frozen=True)
