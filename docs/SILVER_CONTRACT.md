@@ -80,6 +80,15 @@ Each source sensor stays a nullable double in its original unit. A sensor may be
 | `T-PDG` | `downhole_pdg_temperature_c` | Permanent downhole gauge temperature | degrees C |
 | `T-TPT` | `subsea_tree_tpt_temperature_c` | Subsea tree temperature at the TPT | degrees C |
 
+
+## Quality summaries
+
+These outputs are separate from the observation table; they do not change or remove observations.
+
+- `instance_quality` has one row per source-file version, keyed by `_source_path` and `_file_sha256`. It reports observation count, unlabeled and inconsistent rows, null state/timestamps, timestamp continuity counts, and how many of the 27 sensors have at least one finite value.
+- `sensor_availability` has one row per recording per sensor (27 rows per recording). It reports the number and percentage of observations with finite sensor values, along with how many do not. A zero reading is finite and counts as present; null, NaN, and infinite values do not.
+
+
 ## First-version rules and outputs
 
 - Keep every Bronze observation unless a specific row cannot be represented safely. If any rows are rejected, keep their key and a reason in a separate output.
