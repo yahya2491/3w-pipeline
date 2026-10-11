@@ -1,6 +1,6 @@
 # Bronze layer reference
 
-Detailed reference for the 3W data engineering pipeline as of the end of the Bronze layer (October 2026). It's written for AI agents and for looking things up. For a readable overview, see `docs/SILVER_HANDOVER.md`.
+Detailed reference for the 3W data engineering pipeline as of the end of the Bronze layer (October 2026). For a project overview, see the [README](../../README.md).
 
 **Source of truth:** the repository code and the run reports on the VM. If this file disagrees with the code, trust the code, and update this file in the same pull request. Facts marked **[measured]** were checked on the real prod data. **[design]** means a decision. **[unverified]** means believed but not checked.
 

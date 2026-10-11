@@ -2,7 +2,7 @@
 
 ## Where we are
 
-This report explains the existing commit milestone numbers. It describes what we did in each. The [contract](SILVER_CONTRACT.md) defines the tables and field meanings. Additionally this file was written and appended to while working on the Silver implementation. It is a record of what was done, you might see the plan changing in the middle.
+This report describes the work completed in each commit milestone. The [contract](SILVER_CONTRACT.md) defines the tables and field meanings. The report was updated throughout the Silver implementation and records changes to the plan along the way.
 
 ## Pipeline
 
@@ -13,6 +13,10 @@ Original dataset files
          -> silver_observations: one row per original observation
          -> instance_quality: one summary per recording
          -> sensor_availability: one summary per recording and sensor
+         -> quality_issues: quality problems and reasons
+         -> quality_quarantine: error-level issues for review
+         -> event_reference: shared event definitions
+         -> sensor_reference: shared sensor definitions and units
     -> Gold / analysis: a consumer of these checked tables
 ```
 
@@ -32,12 +36,12 @@ The development bronze run was run using
 python -m threew.bronze.run --env dev
 ```
 
-We also ran the extended profile on the VM's complete Bronze table: 2,228 recordings and 76,587,318 observations. The supplied output showed no null or duplicate timestamps, repeated adjacent times, backward intervals, or gaps over one second. Every compared adjacent interval was one second. This is historical VM evidence from 10 October, not a full-scale run repeated during this review.
+We also ran the extended profile on the VM's complete Bronze table: 2,228 recordings and 76,587,318 observations. The recorded output showed no null or duplicate timestamps, repeated adjacent times, backward intervals, or gaps over one second. Every compared adjacent interval was one second. These results refer to the VM profile run from 10 October; they do not verify later code changes.
 
 The whole extended run was ran using
 
 ```bash
-python -m threew.bronze.profile --env vm
+threew.silver.profile --env prod
 ```
 
 Missing sensors means that a sensor was not present in a recording, or that all its readings were null, NaN or positive/negative infinity. There were 27 sensors in the original dataset. The profile found that every recording had at least four sensors with usable readings, and no recording had all 27 sensors missing.
@@ -71,7 +75,7 @@ A Bronze row contains one moment of sensor readings. Some useful facts describe 
 pytest -q tests/test_silver_input.py tests/test_silver_transform.py
 ```
 
-The tests were run on the 30 file sample, but they were also designed to be run on the full dataset to ensure that the code works correctly in all cases.
+The tests were run on the 30 file sample, but they were also designed to be run on the full dataset to ensure that the code works correctly.
 
 ## Milestone 4 - Explain the event labels
 
@@ -112,7 +116,7 @@ Example of an event 1 recording with class codes:
 | 1 | 1 | Abrupt Increase of BSW | Steady |
 | 1 | Null | No row event name | Unknown |
 
-As seen above, its starts as normal operation, but then steadly transitions into the event. For event 0, you have a class code of 0 universally to all recordings. Silver adds readable names for these events and phases. 
+The example starts with normal operation and transitions into the event. Event 0 supports class code 0. Silver adds readable names for these events and phases.
 
 
 What silver adds:
@@ -229,19 +233,29 @@ pytest -q tests/test_silver_quality.py
 
 [run.py](../../src/threew/silver/run.py) puts the Silver steps together. It
 reads the verified Bronze table, applies the Silver transformation, builds
-the two quality summaries, and writes three Parquet tables:
+the two quality summaries, and now writes seven Parquet tables (the
+original three from this milestone plus four added in Milestone 8):
 
 - `silver_observations`: one row for each original Bronze observation;
 - `instance_quality`: one row per recording with recording-level quality
-  checks; and
+  checks;
 - `sensor_availability`: one row per recording and sensor with sensor-level
-  availability counts.
+  availability counts;
+- `quality_issues`: quality problems with the affected row, field, reason,
+  severity, and recommended action;
+- `quality_quarantine`: the error-level issues kept separately for review;
+- `event_reference`: the 10 shared event definitions; and
+- `sensor_reference`: the 27 shared sensor definitions and units.
 
 | Saved Silver Parquet table | Contents | Related milestones |
 |---|---|---|
 | `silver_observations` | Original Bronze observations with renamed fields, recording details, event explanations, and the original timestamp preserved unchanged. | Milestones 2–5 |
 | `instance_quality` | One row per recording containing timestamp-quality metrics, missing-label checks, event-label checks, and sensor coverage. | Milestones 5–6 |
 | `sensor_availability` | One row per recording and sensor containing usable-reading counts and availability percentages. | Milestone 6 |
+| `quality_issues` | Quality problems with their affected rows and fields, reasons, severities, and recommended actions. | Milestone 8 |
+| `quality_quarantine` | Error-level issue entries for review; the original observations remain in `silver_observations`. | Milestone 8 |
+| `event_reference` | The 10 shared event definitions and supported class/phase combinations. | Milestone 8 |
+| `sensor_reference` | The 27 shared sensor definitions, names, units, and documented value rules. | Milestone 8 |
 
 Each run receives its own folder under `silver/runs/<run_id>/`. After writing,
 Silver reads the saved Parquet tables back and checks their schemas, keys,
@@ -352,32 +366,21 @@ HF_HUB_OFFLINE=1 pytest -q
 
 ```
 
-## Milestone 10 - Run Silver on the full dataset
+## Milestone 10 - Run Silver on the full dataset x2
 
-The dev sample is small. This milestone checks Silver against the full Bronze table on the VM. Use your own VM checkout and a separate output folder:
+The dev sample is small. This milestone checks Silver against the full Bronze table on the VM. Run from the VM checkout with a separate output folder:
 
 ```bash
 python -m threew.silver.run --env prod --output-root /home/ubuntu/3w-data/silver-oh
 ```
 
-Run the same command twice. Then compare the three tables from the two runs. Record the run IDs, row counts, time taken, and output sizes. The expected baseline is 76,587,318 observations, 2,228 recording summaries, and 60,156 sensor summaries. Check the VM's Bronze marker for the exact counts it reports.
+Complete two successful runs using the same code, configuration, and Bronze input. Compare the contents of all seven output tables: silver_observations, instance_quality, sensor_availability, quality_issues, quality_quarantine, event_reference, and sensor_reference.
+Record both run IDs, row counts, run times, and output sizes. The expected baseline is 76,587,318 observations, 2,228 recording summaries, 60,156 sensor summaries, 10 event references, and 27 sensor references. Quality issue counts depend on the input and rules, but should match between these unchanged runs.
 
 The `silver-oh` folder is just a test destination. The command still reads production Bronze; it does not write to the official production Silver folder. See the [run guide](SILVER_RUN_GUIDE.md) for how to compare the outputs.
 
-**Status:** not yet done.
+## Final Milestone (11)
 
-## Milestone 11 - Review, merge, and connect the run
+We check the silver implementation, the runs match. We also check the quality issues and quarantine tables, and the event and sensor reference tables. The final milestone is to check that the Silver implementation is complete and correct, and that it meets the contract and requirements. 
 
-After committing your branch, push it and open a pull request to `main`. This project uses the same code for dev and prod; the configuration selects which data location to use. GitHub's automatic checks must pass, and the pull request needs review before it is merged.
-
-After the full-dataset test, decide whether Silver should run automatically after Bronze finishes. If so, connect the two runs and check one complete Bronze-to-Silver run. The full-dataset test or automatic checks may reveal a problem that needs a code fix.
-
-**Status:** full-dataset results, CI, pull request review, and the scheduling decision remain.
-
-## Milestone 12 - Show one use for Silver
-
-Use the Silver tables to answer one small data question. Then explain what you found and what the data cannot tell you. For example, you could compare how often one sensor has usable readings in different recording types. The [run guide](SILVER_RUN_GUIDE.md) has an example query to help you get started.
-
-This is a later analysis that uses Silver. It does not require another round of sensor transformations.
-
-**Status:** the analysis and course report remain after Silver's full-dataset check and handover.
+We then make a PR to merge to Silver.

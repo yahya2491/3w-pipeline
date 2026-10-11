@@ -6,14 +6,12 @@ Data pipeline for the Petrobras [3W dataset](https://github.com/petrobras/3W) (D
 
 The raw data is read from a Hugging Face mirror, [`Yahya2491/3w-pipeline`](https://huggingface.co/datasets/Yahya2491/3w-pipeline),
 pinned to one commit. See [`docs/source.md`](docs/source.md) for the pinned revision and how its integrity was checked,
-and [`docs/dataset_notes.md`](docs/dataset_notes.md) for measured facts about the data that later layers depend on.
-To build on Bronze, start with [`docs/SILVER_HANDOVER.md`](docs/SILVER_HANDOVER.md); every detail is in
-[`docs/BRONZE_REFERENCE.md`](docs/BRONZE_REFERENCE.md).
+and [`docs/bronze/dataset_notes.md`](docs/bronze/dataset_notes.md) for measured facts about the data that later layers depend on.
+To build on Bronze, start with the [Bronze reference](docs/bronze/BRONZE_REFERENCE.md).
 
-Silver progress is documented in the [milestone report](docs/SILVER_MILESTONE_REPORT.md).
-See the [functional review](docs/SILVER_REVIEW.md) for verified results and remaining fixes,
-and the [Silver contract](docs/SILVER_CONTRACT.md) for table definitions.
-The [Silver run guide](docs/SILVER_RUN_GUIDE.md) covers commands, failures and a consumer query.
+Silver progress is documented in the [milestone report](docs/silver/SILVER_MILESTONE_REPORT.md).
+See the [Silver contract](docs/silver/SILVER_CONTRACT.md) for table definitions.
+The [Silver run guide](docs/silver/SILVER_RUN_GUIDE.md) covers commands, failures and comparison of saved runs.
 
 All pipeline dates and times are UTC.
 
@@ -59,6 +57,10 @@ pip-compile --strip-extras --extra dev --output-file=requirements-dev.lock pypro
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs ruff and the tests on every push and pull request,
 with Java 8 (the VM's) and Java 17. The tests run with `HF_HUB_OFFLINE=1` and no secrets: they never use the network.
 
+Automated tests use small fixtures; full-dataset validation requires separate pipeline runs and saved evidence.
+Silver reconciliation reuses the transformation functions, so passing it alone does not prove the transformation
+rules are correct. Tests with explicit expected values provide additional checks.
+
 ## Configuration
 
 `conf/base.yaml` holds the shared settings; `conf/dev.yaml` (laptop, 3 files per class) and `conf/prod.yaml` (VM, all files)
@@ -101,8 +103,10 @@ SKIPPED.
 
 ### Scheduled runs
 
-[`.github/workflows/bronze.yml`](.github/workflows/bronze.yml) runs Bronze on the VM's self-hosted runner every Monday
-at 03:17 UTC, and on demand from the Actions tab (`env`: prod or dev, `deep`: strict reconcile). Each run builds a
+The intended weekly Bronze schedule is Monday at 03:17 UTC on the VM's self-hosted runner.
+This `silver-profiling` checkout's [workflow](.github/workflows/bronze.yml) still contains a temporary 15-minute
+schedule; check the workflow on the deployed branch for the active schedule. It also runs on demand from the
+Actions tab (`env`: prod or dev, `deep`: strict reconcile). Each run builds a
 fresh environment from `requirements.lock`, writes a summary to the run page (status, one row per phase, every
 problem) and keeps the report, log and reconcile plan as an artifact for 90 days. PARTIAL and FAILED runs turn red;
 GitHub emails whoever last changed the schedule when a scheduled run fails.

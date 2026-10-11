@@ -1,0 +1,378 @@
+{
+  "code": {
+    "commit": "921d1204dcca57090d181d59a8cfa638efc1f89e",
+    "dirty": false,
+    "packages": {
+      "huggingface_hub": "2.2.0",
+      "pyarrow": "25.0.1",
+      "pyspark": "3.5.0",
+      "threew": "0.1.0"
+    },
+    "python": "3.11.15"
+  },
+  "config": {
+    "env": "prod",
+    "ingest": {
+      "max_retries": 3,
+      "retry_backoff_seconds": 5,
+      "sample_per_class": null,
+      "workers": 4
+    },
+    "schema": {
+      "contract": "/home/ubuntu/3w-pipeline/conf/contracts/3w_v2.yaml",
+      "fail_on_drift": true
+    },
+    "source": {
+      "include": [
+        "data/[0-9]/*.parquet"
+      ],
+      "repo_id": "Yahya2491/3w-pipeline",
+      "repo_type": "dataset",
+      "revision": "c1a7e8d0cfefc0875974ea079d11349a37fa0c56",
+      "revision_label": "v2.0.0"
+    },
+    "spark": {
+      "app_name": "3w-bronze",
+      "driver_memory": "4g",
+      "master": "local[4]",
+      "shuffle_partitions": 8
+    },
+    "storage": {
+      "bronze": "/home/ubuntu/3w-data/bronze/3w_observations",
+      "bronze_ready": "/home/ubuntu/3w-data/bronze/bronze_ready.json",
+      "landing": "/home/ubuntu/3w-data/landing/3w",
+      "root": "/home/ubuntu/3w-data",
+      "runs": "/home/ubuntu/3w-data/bronze/_runs",
+      "silver": "/home/ubuntu/3w-data/silver",
+      "silver_ready": "/home/ubuntu/3w-data/silver/silver_ready.json",
+      "silver_runs": "/home/ubuntu/3w-data/silver/_runs",
+      "staging": "/home/ubuntu/3w-data/_staging",
+      "state": "/home/ubuntu/3w-data/bronze/_state"
+    }
+  },
+  "config_sha256": "e96535d58fcc7fafd06e24c099a4e2a121ba9fe11b9ad10cddec4c7197887a4a",
+  "contract": {
+    "sha256": "e69959c9f1965ea78b7b4d763e33c2a77428100e5441b5a3b5a0818e5d91a3db",
+    "version": 1
+  },
+  "duration_seconds": 3236.232,
+  "env": "prod",
+  "error": null,
+  "finished_at": "2026-10-11T21:04:24.374800+00:00",
+  "output_root": "/home/ubuntu/3w-data/silver-oh",
+  "phase": "publish",
+  "phase_seconds": {
+    "input": 0.411,
+    "input_checks": 54.95,
+    "lock": 0.0,
+    "read_back_and_check": 2274.768,
+    "transform_and_write": 890.77
+  },
+  "published": true,
+  "quality_summary": {
+    "by_rule": [
+      {
+        "affected_use": "labeled_analysis",
+        "count": 4028400,
+        "issue_code": "missing_class",
+        "severity": "warning"
+      },
+      {
+        "affected_use": "sensor_measurement",
+        "count": 5193,
+        "issue_code": "no_finite_sensor_readings",
+        "severity": "error"
+      },
+      {
+        "affected_use": "sensor_measurement",
+        "count": 161872,
+        "issue_code": "opening_out_of_range",
+        "severity": "error"
+      }
+    ],
+    "has_quality_errors": true,
+    "issue_entries": 4195465,
+    "observation_rows": 76587318,
+    "quarantine_issue_entries": 167065,
+    "quarantine_row_percent": 0.2181,
+    "recording_totals": {
+      "backward_intervals": 0,
+      "duplicate_timestamp_rows": 0,
+      "gaps_over_one_second": 0,
+      "inconsistent_class_rows": 0,
+      "null_state_rows": 4028400,
+      "null_timestamp_rows": 0,
+      "recordings_without_finite_sensors": 0,
+      "unlabeled_rows": 4028400
+    },
+    "rows_with_issues": 4190668,
+    "rows_with_quarantine_issues": 167065,
+    "sensor_availability": [
+      {
+        "finite_readings": 17688282,
+        "missing_or_nonfinite_readings": 58899036,
+        "observation_rows": 76587318,
+        "sensor_name": "annulus_master_valve_state"
+      },
+      {
+        "finite_readings": 25460515,
+        "missing_or_nonfinite_readings": 51126803,
+        "observation_rows": 76587318,
+        "sensor_name": "annulus_pressure_pa"
+      },
+      {
+        "finite_readings": 18293462,
+        "missing_or_nonfinite_readings": 58293856,
+        "observation_rows": 76587318,
+        "sensor_name": "annulus_wing_valve_state"
+      },
+      {
+        "finite_readings": 18538730,
+        "missing_or_nonfinite_readings": 58048588,
+        "observation_rows": 76587318,
+        "sensor_name": "crossover_valve_state"
+      },
+      {
+        "finite_readings": 68671102,
+        "missing_or_nonfinite_readings": 7916216,
+        "observation_rows": 76587318,
+        "sensor_name": "downhole_pdg_pressure_pa"
+      },
+      {
+        "finite_readings": 20811272,
+        "missing_or_nonfinite_readings": 55776046,
+        "observation_rows": 76587318,
+        "sensor_name": "downhole_pdg_temperature_c"
+      },
+      {
+        "finite_readings": 13865397,
+        "missing_or_nonfinite_readings": 62721921,
+        "observation_rows": 76587318,
+        "sensor_name": "downhole_safety_valve_state"
+      },
+      {
+        "finite_readings": 31896234,
+        "missing_or_nonfinite_readings": 44691084,
+        "observation_rows": 76587318,
+        "sensor_name": "gas_lift_choke_downstream_pressure_pa"
+      },
+      {
+        "finite_readings": 8491513,
+        "missing_or_nonfinite_readings": 68095805,
+        "observation_rows": 76587318,
+        "sensor_name": "gas_lift_choke_opening_pct"
+      },
+      {
+        "finite_readings": 308726,
+        "missing_or_nonfinite_readings": 76278592,
+        "observation_rows": 76587318,
+        "sensor_name": "gas_lift_choke_upstream_pressure_pa"
+      },
+      {
+        "finite_readings": 24565960,
+        "missing_or_nonfinite_readings": 52021358,
+        "observation_rows": 76587318,
+        "sensor_name": "gas_lift_flow_rate_m3_s"
+      },
+      {
+        "finite_readings": 17105271,
+        "missing_or_nonfinite_readings": 59482047,
+        "observation_rows": 76587318,
+        "sensor_name": "gas_lift_shutdown_valve_state"
+      },
+      {
+        "finite_readings": 18176203,
+        "missing_or_nonfinite_readings": 58411115,
+        "observation_rows": 76587318,
+        "sensor_name": "pig_crossover_valve_state"
+      },
+      {
+        "finite_readings": 22115960,
+        "missing_or_nonfinite_readings": 54471358,
+        "observation_rows": 76587318,
+        "sensor_name": "production_choke_downstream_pressure_pa"
+      },
+      {
+        "finite_readings": 60554418,
+        "missing_or_nonfinite_readings": 16032900,
+        "observation_rows": 76587318,
+        "sensor_name": "production_choke_downstream_temperature_c"
+      },
+      {
+        "finite_readings": 12326458,
+        "missing_or_nonfinite_readings": 64260860,
+        "observation_rows": 76587318,
+        "sensor_name": "production_choke_opening_pct"
+      },
+      {
+        "finite_readings": 69507467,
+        "missing_or_nonfinite_readings": 7079851,
+        "observation_rows": 76587318,
+        "sensor_name": "production_choke_upstream_pressure_pa"
+      },
+      {
+        "finite_readings": 23617605,
+        "missing_or_nonfinite_readings": 52969713,
+        "observation_rows": 76587318,
+        "sensor_name": "production_choke_upstream_temperature_c"
+      },
+      {
+        "finite_readings": 17773205,
+        "missing_or_nonfinite_readings": 58814113,
+        "observation_rows": 76587318,
+        "sensor_name": "production_master_valve_state"
+      },
+      {
+        "finite_readings": 24316107,
+        "missing_or_nonfinite_readings": 52271211,
+        "observation_rows": 76587318,
+        "sensor_name": "production_shutdown_valve_state"
+      },
+      {
+        "finite_readings": 0,
+        "missing_or_nonfinite_readings": 76587318,
+        "observation_rows": 76587318,
+        "sensor_name": "production_shutdown_valve_upstream_pressure_pa"
+      },
+      {
+        "finite_readings": 18938036,
+        "missing_or_nonfinite_readings": 57649282,
+        "observation_rows": 76587318,
+        "sensor_name": "production_wing_valve_state"
+      },
+      {
+        "finite_readings": 0,
+        "missing_or_nonfinite_readings": 76587318,
+        "observation_rows": 76587318,
+        "sensor_name": "service_pump_downstream_pressure_pa"
+      },
+      {
+        "finite_readings": 0,
+        "missing_or_nonfinite_readings": 76587318,
+        "observation_rows": 76587318,
+        "sensor_name": "service_pump_flow_rate_m3_s"
+      },
+      {
+        "finite_readings": 0,
+        "missing_or_nonfinite_readings": 76587318,
+        "observation_rows": 76587318,
+        "sensor_name": "subsea_production_line_pressure_pa"
+      },
+      {
+        "finite_readings": 71205535,
+        "missing_or_nonfinite_readings": 5381783,
+        "observation_rows": 76587318,
+        "sensor_name": "subsea_tree_tpt_pressure_pa"
+      },
+      {
+        "finite_readings": 66325278,
+        "missing_or_nonfinite_readings": 10262040,
+        "observation_rows": 76587318,
+        "sensor_name": "subsea_tree_tpt_temperature_c"
+      }
+    ]
+  },
+  "reconcile": {
+    "checks": {
+      "bronze_marker_unchanged": true,
+      "bronze_observation_keys_are_unique_and_non_null": true,
+      "bronze_recording_counts_match_manifest": true,
+      "bronze_recordings_match_ready_marker": true,
+      "bronze_row_positions_are_non_negative": true,
+      "bronze_rows_match_ready_marker": true,
+      "event_reference_schema_matches": true,
+      "event_reference_values_match": true,
+      "instance_quality_has_one_matching_row_per_recording": true,
+      "instance_quality_schema_matches_contract": true,
+      "instance_quality_values_match_observations": true,
+      "quality_issue_keys_are_unique_and_non_null": true,
+      "quality_issues_schema_matches": true,
+      "quality_issues_values_match": true,
+      "quality_quarantine_schema_matches": true,
+      "quality_quarantine_values_match": true,
+      "sensor_availability_has_27_unique_sensors_per_recording": true,
+      "sensor_availability_schema_matches_contract": true,
+      "sensor_availability_values_match_observations": true,
+      "sensor_reference_schema_matches": true,
+      "sensor_reference_values_match": true,
+      "silver_observation_keys_are_unique_and_non_null": true,
+      "silver_observation_keys_match_bronze": true,
+      "silver_observation_row_counts_match_per_recording": true,
+      "silver_observation_rows_match_bronze": true,
+      "silver_preserved_values_match_bronze": true,
+      "silver_recording_and_event_details_match": true,
+      "silver_required_fields_are_non_null": true,
+      "silver_schema_matches_contract": true
+    },
+    "counts": {
+      "bronze_recordings": 2228,
+      "bronze_rows": 76587318,
+      "event_reference_rows": 10,
+      "instance_quality_rows": 2228,
+      "quality_issues_rows": 4195465,
+      "quality_quarantine_rows": 167065,
+      "sensor_availability_rows": 60156,
+      "sensor_reference_rows": 27,
+      "silver_observation_rows": 76587318,
+      "silver_recordings": 2228
+    },
+    "passed": true
+  },
+  "reference_version": 1,
+  "run_id": "20261011T201028142426Z-7a99e5c0",
+  "source": {
+    "bronze_run_id": "20261011T142406Z-74e619",
+    "repo_id": "Yahya2491/3w-pipeline",
+    "revision": "c1a7e8d0cfefc0875974ea079d11349a37fa0c56"
+  },
+  "started_at": "2026-10-11T20:10:28.142426+00:00",
+  "status": "SUCCESS",
+  "tables": {
+    "event_reference": {
+      "parquet_bytes": 12031,
+      "path": "/home/ubuntu/3w-data/silver-oh/runs/20261011T201028142426Z-7a99e5c0/event_reference",
+      "rows": 10
+    },
+    "instance_quality": {
+      "parquet_bytes": 285536,
+      "path": "/home/ubuntu/3w-data/silver-oh/runs/20261011T201028142426Z-7a99e5c0/instance_quality",
+      "rows": 2228
+    },
+    "quality_issues": {
+      "parquet_bytes": 4403056,
+      "path": "/home/ubuntu/3w-data/silver-oh/runs/20261011T201028142426Z-7a99e5c0/quality_issues",
+      "rows": 4195465
+    },
+    "quality_quarantine": {
+      "parquet_bytes": 715587,
+      "path": "/home/ubuntu/3w-data/silver-oh/runs/20261011T201028142426Z-7a99e5c0/quality_quarantine",
+      "rows": 167065
+    },
+    "sensor_availability": {
+      "parquet_bytes": 337708,
+      "path": "/home/ubuntu/3w-data/silver-oh/runs/20261011T201028142426Z-7a99e5c0/sensor_availability",
+      "rows": 60156
+    },
+    "sensor_reference": {
+      "parquet_bytes": 13964,
+      "path": "/home/ubuntu/3w-data/silver-oh/runs/20261011T201028142426Z-7a99e5c0/sensor_reference",
+      "rows": 27
+    },
+    "silver_observations": {
+      "parquet_bytes": 2752993119,
+      "path": "/home/ubuntu/3w-data/silver-oh/runs/20261011T201028142426Z-7a99e5c0/silver_observations",
+      "rows": 76587318
+    }
+  },
+  "usage_policy": {
+    "domains": "Check documented valve codes and percentage openings; do not invent pressure/flow/temperature limits.",
+    "duplicate_identity": "Stop on repeated source-path/file-hash/row-position keys, including identical copies.",
+    "duplicate_timestamp": "Keep distinct observations; flag every row sharing a timestamp within its recording.",
+    "missing_class": "Keep sensor readings; exclude this label from analyses requiring a known class.",
+    "missing_sensors": "Individual missing sensors stay in availability summaries. A row with no finite sensors is flagged for sensor use.",
+    "quarantine": "Review error issues for their affected field/use; join their keys to observations for complete readings.",
+    "source_versions": "Use Bronze's current manifest; a new file hash is a new source version, not a row duplicate.",
+    "state_code": "Domain not documented: preserve values, count missingness, and do not invent an allowed-code list.",
+    "timestamps": "Preserve source time and row order; flag problems. Never infer replacement timestamps."
+  }
+}
