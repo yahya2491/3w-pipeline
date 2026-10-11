@@ -352,9 +352,6 @@ HF_HUB_OFFLINE=1 pytest -q
 
 ```
 
-**Status:** not yet done.
-
-
 ## Milestone 10 - Run Silver on the full dataset
 
 The dev sample is small. This milestone checks Silver against the full Bronze table on the VM. Use your own VM checkout and a separate output folder:
