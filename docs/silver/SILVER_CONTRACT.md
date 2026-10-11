@@ -1,6 +1,6 @@
-# Silver table contract (draft)
+# Silver table contract
 
-**Status:** Working contract; timestamp policy updated in Milestone 5. Sensor meanings and units come from `docs/BRONZE_REFERENCE.md` section 6. Silver keeps source units and values; it does not fill, clip, or convert measurements.
+**Status:** Working contract; Milestone 7 checks implemented. Fractional timestamp intervals are supported. Sensor meanings and units come from `docs/BRONZE_REFERENCE.md` section 6. Silver keeps source units and values; it does not fill, clip, or convert measurements.
 
 ## What one row means
 
@@ -111,10 +111,14 @@ Milestone 7 saves three Parquet outputs under the environment's storage root:
 
 Each run has a separate folder, so a failed attempt cannot replace a previously completed dev run. The JSON run report records the Bronze run used, output paths, row counts, and check results. The ready marker is written only after the saved tables pass read-back checks; it points to the latest successful run.
 
-Before publishing the marker, the run checks that Silver has the same total observation count as Bronze, the same number of rows for every source-file version, one instance_quality row with the same count per recording, and exactly 27 distinct sensor rows per recording. A failed check stops the run and leaves the ready marker pointing to the last successful run.
+Before publishing the marker, the runner validates Bronze totals and per-recording counts against the captured ready marker and manifest. It checks saved schemas, required non-null fields, unique observation keys, exact key equality and all preserved values against Bronze. Recording/event details and both quality tables are checked against freshly computed expectations, including the exact recording-and-sensor pairs.
+
+The input stays under the existing Bronze writer lock and the selected output has its own lock. A final marker check catches an input marker changed outside that protocol. Failed and skipped attempts write reports and preserve the previous Silver marker. Reports include timings, output sizes and source/code/config/contract information.
+
+The separate run directories and final ready marker define which run consumers should read. Repeatability is checked in integration tests by comparing all three tables as sets of rows with duplicate counts included. See [the run guide](SILVER_RUN_GUIDE.md) and [functional review](SILVER_REVIEW.md).
 
 Run the first version from the repository root in the WSL development checkout:
 
     python -m threew.silver.run --env dev
 
-This command currently accepts only dev; it does not write production Silver data.
+Local development uses dev. Production input requires an explicit isolated `--output-root`; the canonical production Silver directory remains protected. See the run guide for the VM command.

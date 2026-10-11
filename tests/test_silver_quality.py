@@ -144,3 +144,67 @@ def test_quality_summaries_report_recordings_and_sensor_coverage(spark, request)
     assert simulated_flow["rows_without_finite_values"] == 1
     assert simulated_flow["percent_rows_with_finite_values"] == 0.0
     assert simulated_flow["has_finite_values"] is False
+
+
+def test_quality_preserves_fractional_time_and_reports_abnormal_sequences(spark, request):
+    from pyspark.sql import functions as F
+
+    source = _silver_fixture(spark).filter("source_type = 'REAL'").limit(1)
+    times = [
+        "2020-01-01 00:00:00.5",
+        "2020-01-01 00:00:01.5",
+        "2020-01-01 00:00:01.5",
+        "2020-01-01 00:00:03",
+        "2020-01-01 00:00:02.75",
+        None,
+        "2020-01-01 00:00:06",
+    ]
+    values = spark.createDataFrame(list(enumerate(times)), "position long, time string")
+    observations = (
+        source.drop("timestamp", "_row_in_file")
+        .crossJoin(values)
+        .withColumn("timestamp", F.col("time").cast("timestamp_ntz"))
+        .withColumnRenamed("position", "_row_in_file")
+        .drop("time")
+    )
+    summaries = build_quality_summaries(observations)
+    request.addfinalizer(summaries.unpersist)
+    row = summaries.instance_quality.first()
+    assert row["null_timestamp_rows"] == 1
+    assert row["duplicate_timestamp_rows"] == 1
+    assert row["timestamp_intervals_compared"] == 4
+    assert row["one_second_intervals"] == 1
+    assert row["repeated_adjacent_timestamps"] == 1
+    assert row["backward_intervals"] == 1
+    assert row["gaps_over_one_second"] == 1
+    assert row["largest_gap_seconds"] == 1.5
+
+
+def test_quality_distinguishes_zero_from_missing_and_nonfinite_values(spark, request):
+    from pyspark.sql import functions as F
+
+    source = _silver_fixture(spark).filter("source_type = 'REAL'").limit(1)
+    source = source.drop(*SENSOR_FIELDS, "_row_in_file")
+    values = spark.createDataFrame(
+        list(enumerate([0.0, None, float("nan"), float("inf"), float("-inf")])), "position long, value double"
+    )
+    observations = source.crossJoin(values).withColumnRenamed("position", "_row_in_file")
+    for sensor in SENSOR_FIELDS:
+        observations = observations.withColumn(sensor, F.lit(None).cast("double"))
+    observations = observations.withColumn(SENSOR_FIELDS[0], F.col("value")).drop("value")
+    summaries = build_quality_summaries(observations)
+    request.addfinalizer(summaries.unpersist)
+    quality = summaries.instance_quality.first()
+    assert quality["sensors_present"] == 1
+    sensor = summaries.sensor_availability.filter(F.col("sensor_name") == SENSOR_FIELDS[0]).first()
+    assert sensor["rows_with_finite_values"] == 1
+    assert sensor["rows_without_finite_values"] == 4
+    assert sensor["percent_rows_with_finite_values"] == 20.0
+    assert sensor["has_finite_values"] is True
+
+    empty = build_quality_summaries(observations.withColumn(SENSOR_FIELDS[0], F.lit(None).cast("double")))
+    request.addfinalizer(empty.unpersist)
+    row = empty.instance_quality.first()
+    assert row["no_sensors_present"] is True
+    assert row["sensors_present"] == 0
+    assert row["sensors_missing_entire_recording"] == 27

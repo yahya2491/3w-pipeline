@@ -84,7 +84,7 @@ def _bronze_fixture(spark):
     source_rows.extend([unlabeled_row, mismatched_row])
 
     for index, row in enumerate(source_rows):
-        row.update({name: float(index + 10) for name in SENSOR_RENAMES})
+        row.update({name: float(index * 100 + sensor_index) for sensor_index, name in enumerate(SENSOR_RENAMES)})
     source_rows[1]["QGL"] = None
     source_rows[0]["P-PDG"] = 101.25
     return spark.createDataFrame(
@@ -128,6 +128,14 @@ def test_transform_keeps_one_row_shape_and_adds_recording_metadata(spark):
     assert "downhole_pdg_pressure_pa" in silver.columns
     assert "QGL" not in silver.columns
     assert "gas_lift_flow_rate_m3_s" in silver.columns
+
+    source_rows = {
+        tuple(row[name] for name in ("_source_path", "_file_sha256", "_row_in_file")): row for row in bronze.collect()
+    }
+    for row in rows:
+        source_row = source_rows[tuple(row[name] for name in ("_source_path", "_file_sha256", "_row_in_file"))]
+        for source, target in SENSOR_RENAMES.items():
+            assert row[target] == source_row[source]
 
     real_first = rows[0].asDict()
     assert real_first["instance_label"] == 1

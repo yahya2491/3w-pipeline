@@ -91,3 +91,33 @@ def test_timestamp_quality_counts_duplicates_and_non_one_second_intervals(spark)
     }
     assert summary["REAL"]["recordings_with_duplicate_times"] == 1
     assert summary["SIMULATED"]["null_timestamps"] == 1
+
+
+def test_timestamp_profile_keeps_subsecond_intervals_and_multi_day_gaps(spark):
+    rows = [
+        (i, time)
+        for i, time in enumerate(
+            [
+                "2020-01-01 00:00:00.000001",
+                "2020-01-01 00:00:01.000001",
+                "2020-01-01 00:00:01.5",
+                "2020-01-02 00:00:01.750001",
+            ]
+        )
+    ]
+    df = spark.createDataFrame(rows, "_row_in_file long, timestamp string").withColumn(
+        "timestamp", F.col("timestamp").cast("timestamp_ntz")
+    )
+    for name, value in {
+        "source_type": "REAL",
+        "label": 1,
+        "_source_path": "real.parquet",
+        "_file_sha256": "hash",
+    }.items():
+        df = df.withColumn(name, F.lit(value))
+    row = timestamp_quality_by_recording(df).first()
+    assert row["intervals_compared"] == 3
+    assert row["one_second_intervals"] == 1
+    assert row["repeated_adjacent_timestamps"] == 0
+    assert row["gaps_over_one_second"] == 1
+    assert row["largest_gap_seconds"] == 86400.250001

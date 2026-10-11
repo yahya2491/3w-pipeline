@@ -147,11 +147,11 @@ def timestamp_quality_by_recording(df: DataFrame) -> DataFrame:
     recording_keys = ("source_type", "label", "_source_path", "_file_sha256")
     ordered = Window.partitionBy("_source_path", "_file_sha256").orderBy("_row_in_file")
     with_previous = (
-        df.withColumn("_profile_timestamp_seconds", F.unix_timestamp(F.col("timestamp").cast("string")))
-        .withColumn("_profile_previous_seconds", F.lag("_profile_timestamp_seconds").over(ordered))
+        df.withColumn("_profile_timestamp", F.col("timestamp"))
+        .withColumn("_profile_previous_timestamp", F.lag("_profile_timestamp").over(ordered))
         .withColumn(
             "_profile_interval_seconds",
-            F.col("_profile_timestamp_seconds") - F.col("_profile_previous_seconds"),
+            (F.col("_profile_timestamp") - F.col("_profile_previous_timestamp")).cast("decimal(20,6)").cast("double"),
         )
     )
     stats = with_previous.groupBy(*recording_keys).agg(

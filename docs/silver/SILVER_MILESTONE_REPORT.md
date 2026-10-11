@@ -1,0 +1,325 @@
+# Silver milestone report
+
+## Where we are
+
+This report explains the existing commit milestone numbers. It describes what we did in each. The [contract](SILVER_CONTRACT.md) defines the tables and field meanings. Additionally this file was written and appended to while working on the Silver implementation. It is a record of what was done, you might see the plan changing in the middle.
+
+## Pipeline
+
+```text
+Original dataset files
+    -> Bronze: download, verify, preserve observations and source identifiers
+    -> Silver: rename fields, attach recording details, explain event codes
+         -> silver_observations: one row per original observation
+         -> instance_quality: one summary per recording
+         -> sensor_availability: one summary per recording and sensor
+    -> Gold / analysis: a consumer of these checked tables
+```
+
+Silver keeps the original readings, missing values, timestamps and labels. It makes the data understandable and reports its limitations. It does not invent measurements to make the tables look complete.
+
+## Milestone 1 - Read Bronze and produce a first profile
+
+We added [profile.py](../../src/threew/silver/profile.py). This is a read-only inspection command. It reports recording and row counts, source categories, missing class/state values, sensor missingness, sensor coverage per recording, and timestamp consistency.
+
+It was used to check the Bronze output and uses it as a overall reference for Silver. The profile does not download or rebuild Bronze. It reads the existing ready marker and manifest, then reads the Bronze Parquet files to report the observations.
+
+The development Bronze run downloaded 30 original Parquet files, verified them and converted them into 1,931,052 observations. The profile reads those observations; it does not download another sample or build Silver.
+
+The development bronze run was run using
+
+```bash
+python -m threew.bronze.run --env dev
+```
+
+We also ran the extended profile on the VM's complete Bronze table: 2,228 recordings and 76,587,318 observations. The supplied output showed no null or duplicate timestamps, repeated adjacent times, backward intervals, or gaps over one second. Every compared adjacent interval was one second. This is historical VM evidence from 10 October, not a full-scale run repeated during this review.
+
+The whole extended run was ran using
+
+```bash
+python -m threew.bronze.profile --env vm
+```
+
+Missing sensors means that a sensor was not present in a recording, or that all its readings were null, NaN or positive/negative infinity. There were 27 sensors in the original dataset. The profile found that every recording had at least four sensors with usable readings, and no recording had all 27 sensors missing.
+
+## Milestone 2 - Write down the Silver table contract
+
+
+We wrote [SILVER_CONTRACT.md](SILVER_CONTRACT.md). A contract is a shared description of the output: its columns, types, meanings and rules. 
+
+One Silver observation is one original Bronze observation. Its identity is the source path, source-file hash and original row number together. The contract lists all 27 sensor names and units, the recording details, the row labels, and the two quality tables.
+
+Main silver decisions are to preserve the original readings, missing values, timestamps and labels; to rename the Portuguese sensor abbreviations to readable English names; and to add recording details and readable event names.
+
+So basically in the silver we transformed the original bronze data into a more understandable format, while keeping the original data intact. The contract ensures that everyone knows what to expect from the Silver tables and how to use them correctly.
+
+## Milestone 3 - Add recording details and clearer column names
+
+A Bronze row contains one moment of sensor readings. Some useful facts describe the whole recording, such as its well ID and recording ID. Those facts are in Bronze's manifest, a small catalogue with one entry per source file.
+
+[input.py](../../src/threew/silver/input.py) checks that Bronze is ready and reads the catalogue. [transform.py](../../src/threew/silver/transform.py) matches each observation to its recording details using the source path and file hash (a fingerprint of the file). It then gives hard-to-read columns clearer names. For example, `P-PDG` becomes `downhole_pdg_pressure_pa`. It also renames `class`, `label`, and `state`, and adds recording details when available. The original readings and number of rows stay the same. So essentially we look at the catalogue to find the details of the bronze file recordings and then we apply our transformations to the observations to make them more understandable.
+
+**Files**
+
+- `input.py` checks the Bronze receipt and reads the catalogue.
+- `transform.py` adds recording details and renames columns.
+- [test_silver_input.py](../../tests/test_silver_input.py) and [test_silver_transform.py](../../tests/test_silver_transform.py) check that the match and renames work.
+
+**To test this part:**
+
+```bash
+pytest -q tests/test_silver_input.py tests/test_silver_transform.py
+```
+
+The tests were run on the 30 file sample, but they were also designed to be run on the full dataset to ensure that the code works correctly in all cases.
+
+## Milestone 4 - Explain the event labels
+
+The recording label tells us what kind of event the whole recording is about. The class code tells us what is happening at each second inside it.
+
+The original data uses `label` to identify the event represented by the whole recording and `class` to describe the condition at each row. A class of `0` represents normal operation. For event `N`, class `N` represents the established event and class `100 + N` represents its transient phase. For example, in an Event 1 recording, classes 0, 1, and 101 represent normal operation, steady Event 1, and transient Event 1 respectively. Silver preserves these original codes and adds readable event names, phase names, and consistency flags. It does not change or remove source rows; missing class values remain missing.
+
+Its a little hard to follow, but essentially the dataset is split into 10 different event types (Event 0 through Event 9, with each with its own label numbering from 0 to 9), and each event type (like event label 1 is a abrupt increase of BSW). On the other hand, the class codes are used to identify which phase of the event is happening at each second in the recording. Look at the tabels below for more details. Silver adds readable names for these events and phases, and also checks for consistency between the class codes and the recording labels.
+
+Event classes in original dataset:
+
+| Recording label | Event | Description | Transient class |
+|---:|---|---|---:|
+| 0 | Normal Operation | The well is operating normally. | Not applicable |
+| 1 | Abrupt Increase of BSW | A sudden increase in basic sediment and water in the produced fluid. | 101 |
+| 2 | Spurious Closure of DHSV | The downhole safety valve closes unexpectedly. | 102 |
+| 3 | Severe Slugging | Large, unstable surges of liquid and gas move through the production system. | None |
+| 4 | Flow Instability | The production flow becomes unstable or oscillates. | None |
+| 5 | Rapid Productivity Loss | The well's production capability decreases quickly. | 105 |
+| 6 | Quick Restriction in PCK | A rapid restriction occurs in the production choke. | 106 |
+| 7 | Scaling in PCK | Mineral deposits build up in the production choke and restrict flow. | 107 |
+| 8 | Hydrate in Production Line | Hydrate deposits form in the production line and obstruct flow. | 108 |
+| 9 | Hydrate in Service Line | Hydrate deposits form in the service line and obstruct flow. | 109 |
+
+Meanings of the row level class codes:
+| Class code | Meaning | Example for recording label 1 |
+|---:|---|---|
+| 0 | Normal operation | The well is operating normally before or around the event. |
+| N | The event is established or in its steady phase | `class = 1` means established Abrupt Increase of BSW. |
+| 100 + N | The event is in its transient phase | `class = 101` means transient Abrupt Increase of BSW. |
+| Null | No row-level class label is available | The row is retained but cannot be assigned a phase. |
+
+Example of an event 1 recording with class codes:
+| Recording label | Class code | Row event name | Row phase |
+|---:|---:|---|---|
+| 1 | 0 | Normal Operation | Normal |
+| 1 | 101 | Abrupt Increase of BSW | Transient |
+| 1 | 1 | Abrupt Increase of BSW | Steady |
+| 1 | Null | No row event name | Unknown |
+
+As seen above, its starts as normal operation, but then steadly transitions into the event. For event 0, you have a class code of 0 universally to all recordings. Silver adds readable names for these events and phases. 
+
+
+What silver adds:
+
+| Original Bronze field | Silver field | Meaning |
+|---|---|---|
+| `label` | `instance_label` | Numeric event type for the complete recording. |
+| `class` | `class_code` | Numeric event or phase code for the individual row. |
+| — | `instance_event_name` | Readable name for the recording-level event. |
+| — | `row_event_name` | Readable name for the event represented by the row class. |
+| — | `row_event_phase` | `normal`, `steady`, `transient`, `unknown`, or `unrecognized`. |
+| — | `class_label_status` | Whether the row class is `consistent`, `inconsistent`, or `unlabeled` for the recording. |
+**Files**
+
+- The label rules are in [transform.py](../../src/threew/silver/transform.py).
+- [test_silver_transform.py](../../tests/test_silver_transform.py) checks normal, steady, transient, missing, and inconsistent labels.
+
+**Check this part:**
+
+```bash
+pytest -q tests/test_silver_transform.py
+```
+
+## Milestone 5 - Keep timestamps and check the time sequence
+
+We decided to keep each timestamp exactly as Bronze provides it. To check the order, Silver uses the original row number in the file and compares each timestamp with the next one. It can report missing times, repeated times, time moving backwards, or gaps.
+
+Silver currently as of this milestone does not change timestamps, fill gaps, sort rows by time, or remove readings. We also decided here not to add a repeated time-gap column to every observation. The time results belong in a separate summary for each recording.
+
+
+**Files**
+
+- [quality.py](../../src/threew/silver/quality.py) calculates the time checks.
+- [test_silver_quality.py](../../tests/test_silver_quality.py) checks unusual times, including fractional seconds.
+
+**Check this part:**
+
+```bash
+pytest -q tests/test_silver_quality.py
+```
+
+## Milestone 6 - Make two quality summaries
+
+A recording is one original source file, identified by its source path and file hash. 
+
+So in this milestone we created two quality summaries to avoid repeating recording-wide facts on millions of rows. The first summary is `instance_quality`, which has one row per recording. The second summary is `sensor_availability`, which has one row per recording and sensor. 
+
+The observation table keeps every reading. Instead of repeating recording-wide facts on millions of rows, Silver puts them in two smaller tables:
+
+- `instance_quality`: one row per recording. It counts missing labels, timestamp problems, and how many sensors have usable readings.
+- `sensor_availability`: one row per recording and sensor. It shows how many readings for that sensor can be used.
+
+Instance quality:
+| Column | Meaning |
+|---|---|
+| `source_type` | Recording source: `REAL`, `SIMULATED`, or `DRAWN`. |
+| `instance_label` | Event label for the complete recording. |
+| `instance_event_name` | Readable name of the recording-level event. |
+| `_source_path` | Original source-file path. |
+| `_file_sha256` | SHA-256 hash identifying the exact source-file version. |
+| `instance_id` | Source recording identifier. |
+| `well_id` | Well identifier, when available. |
+| `instance_start` | Recording start time, when available. |
+| `recording_rows` | Number of observations in the recording. |
+| `unlabeled_rows` | Number of rows with a missing `class_code`. |
+| `null_state_rows` | Number of rows with a missing `state_code`. |
+| `null_timestamp_rows` | Number of rows with a missing timestamp. |
+| `duplicate_timestamp_rows` | Number of repeated non-null timestamps. |
+| `timestamp_intervals_compared` | Number of adjacent timestamp intervals checked. |
+| `one_second_intervals` | Number of adjacent intervals exactly one second long. |
+| `repeated_adjacent_timestamps` | Number of adjacent rows with the same timestamp. |
+| `backward_intervals` | Number of intervals where time moves backwards. |
+| `gaps_over_one_second` | Number of intervals longer than one second. |
+| `largest_gap_seconds` | Size of the largest detected timestamp gap. |
+| `inconsistent_class_rows` | Number of rows whose class does not fit the recording label. |
+| `unrecognized_class_rows` | Number of rows with an unsupported class code. |
+| `sensors_present` | Number of the 27 sensors with at least one usable value. |
+| `sensors_missing_entire_recording` | Number of sensors with no usable value anywhere in the recording. |
+| `no_sensors_present` | Whether all 27 sensors are unavailable in the recording. |
+
+Sensor availability:
+
+| Column | Meaning |
+|---|---|
+| `source_type` | Recording source: `REAL`, `SIMULATED`, or `DRAWN`. |
+| `instance_label` | Event label for the complete recording. |
+| `instance_event_name` | Readable name of the recording-level event. |
+| `_source_path` | Original source-file path. |
+| `_file_sha256` | SHA-256 hash identifying the exact source-file version. |
+| `instance_id` | Source recording identifier. |
+| `well_id` | Well identifier, when available. |
+| `instance_start` | Recording start time, when available. |
+| `recording_rows` | Total number of observations in the recording. |
+| `sensor_name` | Silver name of the sensor. |
+| `rows_with_finite_values` | Number of rows with a usable finite sensor value. |
+| `rows_without_finite_values` | Number of rows where the sensor value is unavailable. |
+| `percent_rows_with_finite_values` | Percentage of rows with a usable finite sensor value. |
+| `has_finite_values` | Whether the sensor has at least one usable value. |
+
+A zero sensor reading counts as a real value. Null, NaN (not a number), and infinite values count as unavailable in the summaries. The observation table still keeps the original values.
+
+**Files**
+
+- [quality.py](../../src/threew/silver/quality.py) builds the summaries.
+- [test_silver_quality.py](../../tests/test_silver_quality.py) checks the counts and percentages.
+
+**Check this part:**
+
+```bash
+pytest -q tests/test_silver_quality.py
+```
+
+## Milestone 7 - Build Silver and check what was saved
+
+[run.py](../../src/threew/silver/run.py) puts the Silver steps together. It
+reads the verified Bronze table, applies the Silver transformation, builds
+the two quality summaries, and writes three Parquet tables:
+
+- `silver_observations`: one row for each original Bronze observation;
+- `instance_quality`: one row per recording with recording-level quality
+  checks; and
+- `sensor_availability`: one row per recording and sensor with sensor-level
+  availability counts.
+
+| Saved Silver Parquet table | Contents | Related milestones |
+|---|---|---|
+| `silver_observations` | Original Bronze observations with renamed fields, recording details, event explanations, and the original timestamp preserved unchanged. | Milestones 2–5 |
+| `instance_quality` | One row per recording containing timestamp-quality metrics, missing-label checks, event-label checks, and sensor coverage. | Milestones 5–6 |
+| `sensor_availability` | One row per recording and sensor containing usable-reading counts and availability percentages. | Milestone 6 |
+
+Each run receives its own folder under `silver/runs/<run_id>/`. After writing,
+Silver reads the saved Parquet tables back and checks their schemas, keys,
+row counts, preserved Bronze values, transformed event details, and quality
+summary values. Only after these checks pass does it publish
+`silver_ready.json` for that run.
+
+The `silver_observations` table contains the Milestone 4 transformations:
+renamed columns, recording metadata, readable event names, event phases, and
+class-label consistency status. The two quality summary tables are the
+outputs defined in Milestone 6.
+
+**Files**
+
+- `run.py` builds and saves the tables.
+- `reconcile.py` checks the saved tables.
+- [test_silver_run.py](../../tests/test_silver_run.py) checks the normal run and failure cases.
+
+**Build and check the development sample:**
+
+```bash
+python -m threew.silver.run --env dev
+```
+
+Two recorded builds passed all 19 Silver checks on the 30-file dev sample. Each contained 1,931,052 observations, 30 recording summaries, and 810 sensor summaries. The saved tables had the same contents both times. See the [validation record](../evidence/silver/silver_fixes_20261011.json).
+
+## Milestone 8 - Final changes
+
+
+
+## Milestone 9 - Make runs save and Test good runs
+
+The first part of the milestone is about stopping one run from interfering with another. The runner gives each attempt its own folder and uses a temporary lock (a guard that stops two runs writing to the same place at once). If a run fails, the previous ready marker stays in place. A production test must write to a separate folder so it cannot overwrite the official Silver output.
+
+These safeguards are part of `run.py`; they are not more data transformations. The failure and lock tests are in [test_silver_run.py](../../tests/test_silver_run.py).
+
+**Status:** implemented locally. The full-dataset VM run in Milestone 10 is still needed to check it at production scale.
+
+The tests use small sample data, so they do not need to download the full dataset. They check that good inputs work and that problems—like a missing row, changed reading, wrong summary, or failed write—are caught.
+
+**Run the checks from the project folder, with the environment active:**
+
+```bash
+ruff check .
+ruff format --check .
+HF_HUB_OFFLINE=1 pytest -q
+
+```
+
+**Status:** not yet done.
+
+
+## Milestone 10 - Run Silver on the full dataset
+
+The dev sample is small. This milestone checks Silver against the full Bronze table on the VM. Use your own VM checkout and a separate output folder:
+
+```bash
+python -m threew.silver.run --env prod --output-root /home/ubuntu/3w-data/silver-oh
+```
+
+Run the same command twice. Then compare the three tables from the two runs. Record the run IDs, row counts, time taken, and output sizes. The expected baseline is 76,587,318 observations, 2,228 recording summaries, and 60,156 sensor summaries. Check the VM's Bronze marker for the exact counts it reports.
+
+The `silver-oh` folder is just a test destination. The command still reads production Bronze; it does not write to the official production Silver folder. See the [run guide](SILVER_RUN_GUIDE.md) for how to compare the outputs.
+
+**Status:** not yet done.
+
+## Milestone 11 - Review, merge, and connect the run
+
+After committing your branch, push it and open a pull request to `main`. This project uses the same code for dev and prod; the configuration selects which data location to use. GitHub's automatic checks must pass, and the pull request needs review before it is merged.
+
+After the full-dataset test, decide whether Silver should run automatically after Bronze finishes. If so, connect the two runs and check one complete Bronze-to-Silver run. The full-dataset test or automatic checks may reveal a problem that needs a code fix.
+
+**Status:** full-dataset results, CI, pull request review, and the scheduling decision remain.
+
+## Milestone 12 - Show one use for Silver
+
+Use the Silver tables to answer one small data question. Then explain what you found and what the data cannot tell you. For example, you could compare how often one sensor has usable readings in different recording types. The [run guide](SILVER_RUN_GUIDE.md) has an example query to help you get started.
+
+This is a later analysis that uses Silver. It does not require another round of sensor transformations.
+
+**Status:** the analysis and course report remain after Silver's full-dataset check and handover.

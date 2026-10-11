@@ -1,59 +1,48 @@
-"""Build, save, and reconcile Silver outputs from a ready Bronze table.
+"""Build and verify Silver. Production input requires an explicit isolated output root.
 
 Usage:
     python -m threew.silver.run --env dev
-
-This first version writes only to the dev environment. Each run gets its own folder under
-<storage.root>/silver/runs/, and silver_ready.json points to the latest successful run.
+    python -m threew.silver.run --env prod --output-root /home/ubuntu/3w-data/silver-oh
 """
 
 import argparse
+import hashlib
 import json
+import logging
 import os
 import sys
+import time
 import uuid
 from collections.abc import Callable, Iterator
-from contextlib import AbstractContextManager, contextmanager
+from contextlib import AbstractContextManager, ExitStack, contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from pyspark import StorageLevel
-from pyspark.sql import DataFrame, SparkSession
-from pyspark.sql import functions as F
+from pyspark.sql import SparkSession
 
-from threew.config import Config, load_config
-from threew.silver.input import current_manifest_rows, read_bronze_ready_marker
-from threew.silver.quality import SENSOR_FIELDS, build_quality_summaries
+from threew.bronze.ingest import LOCK_FILE
+from threew.bronze.report import code_info
+from threew.config import REPO_ROOT, Config, load_config
+from threew.lock import LockHeld, run_lock
+from threew.silver.input import current_manifest_counts, current_manifest_rows, read_bronze_ready_marker
+from threew.silver.quality import build_quality_summaries
+from threew.silver.reconcile import RECORDING_KEY, input_checks, output_checks
 from threew.silver.transform import build_silver_observations
 from threew.spark import get_spark
 
 SparkFactory = Callable[[Config], AbstractContextManager[SparkSession]]
-RECORDING_KEY = ("_source_path", "_file_sha256")
 
 
 @contextmanager
 def spark_session(cfg: Config) -> Iterator[SparkSession]:
-    """Create one Spark session for the Silver run and always stop it afterwards."""
     session = get_spark(cfg)
     session.sparkContext.setLogLevel("WARN")
     try:
         yield session
     finally:
         session.stop()
-
-
-def _sum_rows(df: DataFrame, column: str) -> int:
-    value = df.agg(F.sum(F.col(column))).first()[0]
-    return int(value or 0)
-
-
-def _recording_count_mismatches(expected: DataFrame, actual: DataFrame, actual_count: str) -> int:
-    """Count recordings missing from either table or having different row counts."""
-    joined = expected.join(actual, on=list(RECORDING_KEY), how="full_outer")
-    return joined.filter(
-        F.col("bronze_rows").isNull() | F.col(actual_count).isNull() | (F.col("bronze_rows") != F.col(actual_count))
-    ).count()
 
 
 def _write_json_atomically(path: Path, payload: dict[str, Any]) -> None:
@@ -66,158 +55,201 @@ def _write_json_atomically(path: Path, payload: dict[str, Any]) -> None:
         temporary_path.unlink(missing_ok=True)
 
 
-def run_silver(cfg: Config, *, spark_factory: SparkFactory = spark_session) -> dict[str, Any]:
-    """Write a versioned dev run and publish its marker only after read-back checks pass."""
-    if cfg.env != "dev":
-        raise ValueError("Silver writes are limited to --env dev until the production run is reviewed.")
+def _overlap(a: Path, b: Path) -> bool:
+    return a == b or a.is_relative_to(b) or b.is_relative_to(a)
 
-    bronze_marker = read_bronze_ready_marker(cfg)
-    manifest_rows = current_manifest_rows(cfg)
-    now = datetime.now(UTC)
+
+def _output_root(cfg: Config, output_root: Path | None) -> Path:
+    if cfg.env == "prod" and output_root is None:
+        raise ValueError(
+            "Production input requires an explicit isolated --output-root; canonical production Silver is protected."
+        )
+    if output_root is None:
+        return cfg.storage.silver
+    path = Path(output_root).expanduser().resolve()
+    protected = [cfg.storage.bronze.parent, cfg.storage.landing.parent, cfg.storage.staging, cfg.storage.root]
+    # Siblings such as <root>/silver-oh are allowed; the input root itself and
+    # any ancestors are not, and neither are Bronze/landing/staging directories.
+    if (
+        path == cfg.storage.root
+        or cfg.storage.root.is_relative_to(path)
+        or any(_overlap(path, p) for p in protected[:-1])
+    ):
+        raise ValueError("Silver output must be separate from Bronze, landing, staging and their ancestors.")
+    if cfg.env == "prod" and _overlap(path, cfg.storage.silver):
+        raise ValueError("Canonical production Silver is protected; choose a separate --output-root.")
+    return path
+
+
+@contextmanager
+def _phase(report: dict[str, Any], name: str) -> Iterator[None]:
+    report["phase"] = name
+    started = time.monotonic()
+    try:
+        yield
+    finally:
+        report["phase_seconds"][name] = round(time.monotonic() - started, 3)
+
+
+def _require_checks(report: dict[str, Any], checks: dict[str, bool]) -> None:
+    report["reconcile"]["checks"].update(checks)
+    failed = [name for name, passed in checks.items() if not passed]
+    if failed:
+        raise RuntimeError(f"Silver reconciliation failed: {', '.join(failed)}")
+
+
+def run_silver(
+    cfg: Config, *, spark_factory: SparkFactory = spark_session, output_root: Path | None = None
+) -> dict[str, Any]:
+    """Hold the writer's input lock and the output lock until verified publication."""
+    silver_root = _output_root(cfg, output_root)
+    now, started = datetime.now(UTC), time.monotonic()
     run_id = f"{now:%Y%m%dT%H%M%S%fZ}-{uuid.uuid4().hex[:8]}"
-    run_root = cfg.storage.silver / "runs" / run_id
-    if run_root.exists():
-        raise FileExistsError(f"Silver run folder already exists: {run_root}")
-
-    table_paths = {
-        "silver_observations": run_root / "silver_observations",
-        "instance_quality": run_root / "instance_quality",
-        "sensor_availability": run_root / "sensor_availability",
-    }
-
-    with spark_factory(cfg) as spark:
-        bronze = spark.read.parquet(str(cfg.storage.bronze))
-        silver = build_silver_observations(bronze, manifest_rows)
-        summaries = build_quality_summaries(silver)
-        try:
-            silver.write.mode("errorifexists").parquet(str(table_paths["silver_observations"]))
-            summaries.instance_quality.write.mode("errorifexists").parquet(str(table_paths["instance_quality"]))
-            summaries.sensor_availability.write.mode("errorifexists").parquet(str(table_paths["sensor_availability"]))
-        finally:
-            summaries.unpersist()
-
-        # Re-read the saved tables so the checks cover what downstream users will consume.
-        silver_saved = spark.read.parquet(str(table_paths["silver_observations"]))
-        quality_saved = spark.read.parquet(str(table_paths["instance_quality"]))
-        sensors_saved = spark.read.parquet(str(table_paths["sensor_availability"]))
-
-        bronze_counts = (
-            bronze.groupBy(*RECORDING_KEY)
-            .count()
-            .withColumnRenamed("count", "bronze_rows")
-            .persist(StorageLevel.MEMORY_AND_DISK)
-        )
-        silver_counts = (
-            silver_saved.groupBy(*RECORDING_KEY)
-            .count()
-            .withColumnRenamed("count", "silver_rows")
-            .persist(StorageLevel.MEMORY_AND_DISK)
-        )
-        try:
-            bronze_recordings = bronze_counts.count()
-            bronze_rows = _sum_rows(bronze_counts, "bronze_rows")
-            silver_recordings = silver_counts.count()
-            silver_rows = _sum_rows(silver_counts, "silver_rows")
-            instance_quality_rows = quality_saved.count()
-            sensor_availability_rows = sensors_saved.count()
-
-            quality_counts = quality_saved.select(
-                *RECORDING_KEY,
-                F.col("recording_rows").alias("quality_rows"),
-            )
-            sensor_recording_shape = sensors_saved.groupBy(*RECORDING_KEY).agg(
-                F.count("*").alias("sensor_rows"),
-                F.countDistinct("sensor_name").alias("distinct_sensor_rows"),
-                F.count(F.when(F.col("sensor_name").isNull() | ~F.col("sensor_name").isin(*SENSOR_FIELDS), 1)).alias(
-                    "unknown_sensor_rows"
-                ),
-            )
-            sensor_recording_issues = sensor_recording_shape.filter(
-                (F.col("sensor_rows") != len(SENSOR_FIELDS))
-                | (F.col("distinct_sensor_rows") != len(SENSOR_FIELDS))
-                | (F.col("unknown_sensor_rows") != 0)
-            ).count()
-
-            checks = {
-                "silver_observation_rows_match_bronze": silver_rows == bronze_rows,
-                "silver_observation_row_counts_match_per_recording": (
-                    _recording_count_mismatches(bronze_counts, silver_counts, "silver_rows") == 0
-                ),
-                "instance_quality_has_one_matching_row_per_recording": (
-                    instance_quality_rows == bronze_recordings
-                    and _recording_count_mismatches(bronze_counts, quality_counts, "quality_rows") == 0
-                ),
-                "sensor_availability_has_27_unique_sensors_per_recording": (
-                    sensor_availability_rows == bronze_recordings * len(SENSOR_FIELDS)
-                    and sensor_recording_shape.count() == bronze_recordings
-                    and sensor_recording_issues == 0
-                ),
-            }
-        finally:
-            bronze_counts.unpersist()
-            silver_counts.unpersist()
-
-    passed = all(checks.values())
-    counts = {
-        "bronze_rows": bronze_rows,
-        "silver_observation_rows": silver_rows,
-        "bronze_recordings": bronze_recordings,
-        "silver_recordings": silver_recordings,
-        "instance_quality_rows": instance_quality_rows,
-        "sensor_availability_rows": sensor_availability_rows,
-    }
-    reconciliation = {"passed": passed, "checks": checks, "counts": counts}
+    run_root = silver_root / "runs" / run_id
+    report_path = silver_root / "_runs" / f"{run_id}.json"
+    ready_path = silver_root / "silver_ready.json"
+    table_paths = {name: run_root / name for name in ("silver_observations", "instance_quality", "sensor_availability")}
+    contract = REPO_ROOT / "docs" / "SILVER_CONTRACT.md"
+    config = cfg.to_dict()
     report = {
         "run_id": run_id,
         "env": cfg.env,
         "started_at": now.isoformat(),
-        "source": {
-            "bronze_run_id": bronze_marker["run_id"],
-            "repo_id": cfg.source.repo_id,
-            "revision": bronze_marker["source"]["revision"],
-        },
-        "tables": {
-            name: {"path": str(path), "rows": counts[row_key]}
-            for name, path, row_key in (
-                ("silver_observations", table_paths["silver_observations"], "silver_observation_rows"),
-                ("instance_quality", table_paths["instance_quality"], "instance_quality_rows"),
-                ("sensor_availability", table_paths["sensor_availability"], "sensor_availability_rows"),
-            )
-        },
-        "reconcile": reconciliation,
+        "status": "RUNNING",
+        "phase": "lock",
+        "phase_seconds": {},
+        "error": None,
+        "code": code_info(),
+        "config": config,
+        "config_sha256": hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest(),
+        "contract": {"version": 1, "sha256": hashlib.sha256(contract.read_bytes()).hexdigest()},
+        "output_root": str(silver_root),
+        "source": None,
+        "tables": {name: {"path": str(path), "rows": None} for name, path in table_paths.items()},
+        "reconcile": {"passed": False, "checks": {}, "counts": {}},
+        "published": False,
     }
-    report_path = cfg.storage.silver_runs / f"{run_id}.json"
-    _write_json_atomically(report_path, report)
-    if not passed:
-        failed = [name for name, check_passed in checks.items() if not check_passed]
-        raise RuntimeError(f"Silver reconciliation failed: {', '.join(failed)}. See {report_path}.")
-
-    marker = {
-        "run_id": run_id,
-        "published_at": datetime.now(UTC).isoformat(),
-        "env": cfg.env,
-        "source": report["source"],
-        "tables": report["tables"],
-        "reconcile": reconciliation,
-        "report": str(report_path),
-    }
-    _write_json_atomically(cfg.storage.silver_ready, marker)
-
-    print(f"Bronze run: {bronze_marker['run_id']} ({bronze_rows:,} rows, {bronze_recordings:,} recordings)")
-    print(f"Silver run: {run_id}")
-    print(f"Silver observations: {silver_rows:,} rows")
-    print(f"Instance quality: {instance_quality_rows:,} rows")
-    print(f"Sensor availability: {sensor_availability_rows:,} rows")
-    print(f"Reconciliation: all {len(checks)} checks passed")
-    print(f"Ready marker: {cfg.storage.silver_ready}")
+    with ExitStack() as held:
+        try:
+            owner = {"run_id": run_id, "started_at": now.isoformat(), "layer": "silver"}
+            with _phase(report, "lock"):
+                held.enter_context(run_lock(cfg.storage.state / LOCK_FILE, owner))
+                held.enter_context(run_lock(silver_root / "_state" / "silver.lock", owner))
+            with _phase(report, "input"):
+                bronze_marker = read_bronze_ready_marker(cfg)
+                report["source"] = {"bronze_run_id": bronze_marker["run_id"], **bronze_marker["source"]}
+                manifest_rows = current_manifest_rows(cfg)
+                manifest_counts = current_manifest_counts(cfg)
+                if run_root.exists():
+                    raise FileExistsError(f"Silver run folder already exists: {run_root}")
+            with spark_factory(cfg) as spark:
+                bronze = spark.read.parquet(str(cfg.storage.bronze))
+                bronze_counts = (
+                    bronze.groupBy(*RECORDING_KEY)
+                    .count()
+                    .withColumnRenamed("count", "bronze_rows")
+                    .persist(StorageLevel.MEMORY_AND_DISK)
+                )
+                try:
+                    with _phase(report, "input_checks"):
+                        _require_checks(report, input_checks(spark, bronze_counts, bronze_marker, manifest_counts))
+                    with _phase(report, "transform_and_write"):
+                        silver = build_silver_observations(bronze, manifest_rows)
+                        summaries = build_quality_summaries(silver)
+                        try:
+                            silver.write.mode("errorifexists").parquet(str(table_paths["silver_observations"]))
+                            summaries.instance_quality.write.mode("errorifexists").parquet(
+                                str(table_paths["instance_quality"])
+                            )
+                            summaries.sensor_availability.write.mode("errorifexists").parquet(
+                                str(table_paths["sensor_availability"])
+                            )
+                        finally:
+                            summaries.unpersist()
+                    with _phase(report, "read_back_and_check"):
+                        saved = {name: spark.read.parquet(str(path)) for name, path in table_paths.items()}
+                        counts = {
+                            "bronze_rows": bronze_marker["rows"],
+                            "bronze_recordings": bronze_marker["files"],
+                            "silver_observation_rows": saved["silver_observations"].count(),
+                            "silver_recordings": saved["silver_observations"].select(*RECORDING_KEY).distinct().count(),
+                            "instance_quality_rows": saved["instance_quality"].count(),
+                            "sensor_availability_rows": saved["sensor_availability"].count(),
+                        }
+                        report["reconcile"]["counts"] = counts
+                        for name, key in (
+                            ("silver_observations", "silver_observation_rows"),
+                            ("instance_quality", "instance_quality_rows"),
+                            ("sensor_availability", "sensor_availability_rows"),
+                        ):
+                            report["tables"][name]["rows"] = counts[key]
+                            report["tables"][name]["parquet_bytes"] = sum(
+                                path.stat().st_size for path in table_paths[name].rglob("*.parquet")
+                            )
+                        _require_checks(
+                            report,
+                            output_checks(
+                                bronze,
+                                bronze_counts,
+                                manifest_rows,
+                                saved["silver_observations"],
+                                saved["instance_quality"],
+                                saved["sensor_availability"],
+                            ),
+                        )
+                finally:
+                    bronze_counts.unpersist()
+            with _phase(report, "publish"):
+                if read_bronze_ready_marker(cfg) != bronze_marker:
+                    raise RuntimeError("Bronze ready marker changed during the Silver run.")
+                report["reconcile"]["checks"]["bronze_marker_unchanged"] = True
+                report["reconcile"]["passed"] = True
+                report["status"], report["published"] = "SUCCESS", True
+                report["finished_at"] = datetime.now(UTC).isoformat()
+                report["duration_seconds"] = round(time.monotonic() - started, 3)
+                _write_json_atomically(report_path, report)
+                marker = {
+                    "run_id": run_id,
+                    "published_at": datetime.now(UTC).isoformat(),
+                    "env": cfg.env,
+                    "source": report["source"],
+                    "tables": report["tables"],
+                    "reconcile": report["reconcile"],
+                    "report": str(report_path),
+                }
+                _write_json_atomically(ready_path, marker)
+        except BaseException as exc:
+            report["status"] = "SKIPPED" if isinstance(exc, LockHeld) else "FAILED"
+            report["published"] = False
+            report["reconcile"]["passed"] = False
+            report["error"] = {"type": type(exc).__name__, "message": str(exc), "phase": report["phase"]}
+            raise
+        finally:
+            report["finished_at"] = datetime.now(UTC).isoformat()
+            report["duration_seconds"] = round(time.monotonic() - started, 3)
+            if report["status"] != "SUCCESS":
+                _write_json_atomically(report_path, report)
+    print(
+        f"Silver run: {run_id}; {counts['silver_observation_rows']:,} observations, {counts['instance_quality_rows']:,} recording summaries, {counts['sensor_availability_rows']:,} sensor summaries"
+    )
+    print(f"Reconciliation: all {len(report['reconcile']['checks'])} checks passed")
+    print(f"Ready marker: {ready_path}")
     return marker
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--env", choices=("dev",), required=True)
+    parser.add_argument("--env", choices=("dev", "prod"), required=True)
+    parser.add_argument("--output-root", type=Path, help="isolated Silver destination (required for production input)")
     args = parser.parse_args(argv)
-    run_silver(load_config(args.env))
+    try:
+        run_silver(load_config(args.env), output_root=args.output_root)
+    except LockHeld as exc:
+        print(f"Silver skipped: {exc}", file=sys.stderr)
+        return 0
+    except Exception:
+        logging.getLogger(__name__).exception("Silver failed")
+        return 1
     return 0
 
 

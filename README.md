@@ -10,6 +10,11 @@ and [`docs/dataset_notes.md`](docs/dataset_notes.md) for measured facts about th
 To build on Bronze, start with [`docs/SILVER_HANDOVER.md`](docs/SILVER_HANDOVER.md); every detail is in
 [`docs/BRONZE_REFERENCE.md`](docs/BRONZE_REFERENCE.md).
 
+Silver progress is documented in the [milestone report](docs/SILVER_MILESTONE_REPORT.md).
+See the [functional review](docs/SILVER_REVIEW.md) for verified results and remaining fixes,
+and the [Silver contract](docs/SILVER_CONTRACT.md) for table definitions.
+The [Silver run guide](docs/SILVER_RUN_GUIDE.md) covers commands, failures and a consumer query.
+
 All pipeline dates and times are UTC.
 
 ## Layout
@@ -18,6 +23,7 @@ All pipeline dates and times are UTC.
 src/threew/          Python package (named threew because package names can't start with a digit)
   source/            reading the pinned dataset from Hugging Face
   bronze/            Bronze ingestion job
+  silver/            Silver profiling, transformations, quality summaries and dev runner
 tests/               tests, run against the installed package
 conf/                dev / prod configuration
 scripts/             one-off scripts, e.g. publish_to_hf.py

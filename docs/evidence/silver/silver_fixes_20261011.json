@@ -1,0 +1,417 @@
+{
+  "verified_at_utc": "2026-10-11T12:12:33.320072+00:00",
+  "scope": "Local WSL development sample; no full-scale VM run",
+  "previous_run_id": "20261010T220723945276Z-8b1e9fe7",
+  "first_run": {
+    "run_id": "20261011T121236187557Z-8777ac57",
+    "published_at": "2026-10-11T12:14:24.322358+00:00",
+    "env": "dev",
+    "source": {
+      "bronze_run_id": "20261010T134325Z-54db46",
+      "repo_id": "Yahya2491/3w-pipeline",
+      "revision": "c1a7e8d0cfefc0875974ea079d11349a37fa0c56"
+    },
+    "tables": {
+      "silver_observations": {
+        "path": "/home/ohass/threew-silver-linux/data/dev/silver/runs/20261011T121236187557Z-8777ac57/silver_observations",
+        "rows": 1931052,
+        "parquet_bytes": 71046419
+      },
+      "instance_quality": {
+        "path": "/home/ohass/threew-silver-linux/data/dev/silver/runs/20261011T121236187557Z-8777ac57/instance_quality",
+        "rows": 30,
+        "parquet_bytes": 27861
+      },
+      "sensor_availability": {
+        "path": "/home/ohass/threew-silver-linux/data/dev/silver/runs/20261011T121236187557Z-8777ac57/sensor_availability",
+        "rows": 810,
+        "parquet_bytes": 22684
+      }
+    },
+    "reconcile": {
+      "passed": true,
+      "checks": {
+        "bronze_rows_match_ready_marker": true,
+        "bronze_recordings_match_ready_marker": true,
+        "bronze_recording_counts_match_manifest": true,
+        "silver_schema_matches_contract": true,
+        "instance_quality_schema_matches_contract": true,
+        "sensor_availability_schema_matches_contract": true,
+        "silver_required_fields_are_non_null": true,
+        "bronze_observation_keys_are_unique_and_non_null": true,
+        "silver_observation_keys_are_unique_and_non_null": true,
+        "silver_observation_keys_match_bronze": true,
+        "silver_observation_rows_match_bronze": true,
+        "silver_observation_row_counts_match_per_recording": true,
+        "silver_preserved_values_match_bronze": true,
+        "silver_recording_and_event_details_match": true,
+        "instance_quality_has_one_matching_row_per_recording": true,
+        "sensor_availability_has_27_unique_sensors_per_recording": true,
+        "instance_quality_values_match_observations": true,
+        "sensor_availability_values_match_observations": true,
+        "bronze_marker_unchanged": true
+      },
+      "counts": {
+        "bronze_rows": 1931052,
+        "bronze_recordings": 30,
+        "silver_observation_rows": 1931052,
+        "silver_recordings": 30,
+        "instance_quality_rows": 30,
+        "sensor_availability_rows": 810
+      }
+    },
+    "report": "/home/ohass/threew-silver-linux/data/dev/silver/_runs/20261011T121236187557Z-8777ac57.json"
+  },
+  "second_run": {
+    "run_id": "20261011T121424323167Z-b985c426",
+    "published_at": "2026-10-11T12:15:57.219090+00:00",
+    "env": "dev",
+    "source": {
+      "bronze_run_id": "20261010T134325Z-54db46",
+      "repo_id": "Yahya2491/3w-pipeline",
+      "revision": "c1a7e8d0cfefc0875974ea079d11349a37fa0c56"
+    },
+    "tables": {
+      "silver_observations": {
+        "path": "/home/ohass/threew-silver-linux/data/dev/silver/runs/20261011T121424323167Z-b985c426/silver_observations",
+        "rows": 1931052,
+        "parquet_bytes": 71046419
+      },
+      "instance_quality": {
+        "path": "/home/ohass/threew-silver-linux/data/dev/silver/runs/20261011T121424323167Z-b985c426/instance_quality",
+        "rows": 30,
+        "parquet_bytes": 27861
+      },
+      "sensor_availability": {
+        "path": "/home/ohass/threew-silver-linux/data/dev/silver/runs/20261011T121424323167Z-b985c426/sensor_availability",
+        "rows": 810,
+        "parquet_bytes": 22684
+      }
+    },
+    "reconcile": {
+      "passed": true,
+      "checks": {
+        "bronze_rows_match_ready_marker": true,
+        "bronze_recordings_match_ready_marker": true,
+        "bronze_recording_counts_match_manifest": true,
+        "silver_schema_matches_contract": true,
+        "instance_quality_schema_matches_contract": true,
+        "sensor_availability_schema_matches_contract": true,
+        "silver_required_fields_are_non_null": true,
+        "bronze_observation_keys_are_unique_and_non_null": true,
+        "silver_observation_keys_are_unique_and_non_null": true,
+        "silver_observation_keys_match_bronze": true,
+        "silver_observation_rows_match_bronze": true,
+        "silver_observation_row_counts_match_per_recording": true,
+        "silver_preserved_values_match_bronze": true,
+        "silver_recording_and_event_details_match": true,
+        "instance_quality_has_one_matching_row_per_recording": true,
+        "sensor_availability_has_27_unique_sensors_per_recording": true,
+        "instance_quality_values_match_observations": true,
+        "sensor_availability_values_match_observations": true,
+        "bronze_marker_unchanged": true
+      },
+      "counts": {
+        "bronze_rows": 1931052,
+        "bronze_recordings": 30,
+        "silver_observation_rows": 1931052,
+        "silver_recordings": 30,
+        "instance_quality_rows": 30,
+        "sensor_availability_rows": 810
+      }
+    },
+    "report": "/home/ohass/threew-silver-linux/data/dev/silver/_runs/20261011T121424323167Z-b985c426.json"
+  },
+  "repeat_equal": {
+    "silver_observations": true,
+    "instance_quality": true,
+    "sensor_availability": true
+  },
+  "schemas_equal": {
+    "silver_observations": true,
+    "instance_quality": true,
+    "sensor_availability": true
+  },
+  "matches_previous_run_values": {
+    "silver_observations": true,
+    "instance_quality": true,
+    "sensor_availability": true
+  },
+  "bronze_marker_unchanged": true,
+  "all_runs_retained": true,
+  "run_reports": {
+    "20261011T121236187557Z-8777ac57": {
+      "code": {
+        "commit": "8651bf834ff3a34d4fa09ae2798eda4d3fa79ae5",
+        "dirty": true,
+        "packages": {
+          "huggingface_hub": "2.2.0",
+          "pyarrow": "25.0.1",
+          "pyspark": "3.5.0",
+          "threew": "0.1.0"
+        },
+        "python": "3.11.17"
+      },
+      "config": {
+        "env": "dev",
+        "ingest": {
+          "max_retries": 3,
+          "retry_backoff_seconds": 5,
+          "sample_per_class": 3,
+          "workers": 4
+        },
+        "schema": {
+          "contract": "/home/ohass/threew-silver-linux/conf/contracts/3w_v2.yaml",
+          "fail_on_drift": false
+        },
+        "source": {
+          "include": [
+            "data/[0-9]/*.parquet"
+          ],
+          "repo_id": "Yahya2491/3w-pipeline",
+          "repo_type": "dataset",
+          "revision": "c1a7e8d0cfefc0875974ea079d11349a37fa0c56",
+          "revision_label": "v2.0.0"
+        },
+        "spark": {
+          "app_name": "3w-bronze",
+          "driver_memory": "2g",
+          "master": "local[2]",
+          "shuffle_partitions": 8
+        },
+        "storage": {
+          "bronze": "/home/ohass/threew-silver-linux/data/dev/bronze/3w_observations",
+          "bronze_ready": "/home/ohass/threew-silver-linux/data/dev/bronze/bronze_ready.json",
+          "landing": "/home/ohass/threew-silver-linux/data/dev/landing/3w",
+          "root": "/home/ohass/threew-silver-linux/data/dev",
+          "runs": "/home/ohass/threew-silver-linux/data/dev/bronze/_runs",
+          "silver": "/home/ohass/threew-silver-linux/data/dev/silver",
+          "silver_ready": "/home/ohass/threew-silver-linux/data/dev/silver/silver_ready.json",
+          "silver_runs": "/home/ohass/threew-silver-linux/data/dev/silver/_runs",
+          "staging": "/home/ohass/threew-silver-linux/data/dev/_staging",
+          "state": "/home/ohass/threew-silver-linux/data/dev/bronze/_state"
+        }
+      },
+      "config_sha256": "d0c63c304a2678e8a72b89dbb8ac3f692b3effe359ed0192d1b1f079b0e1aa4c",
+      "contract": {
+        "sha256": "e69959c9f1965ea78b7b4d763e33c2a77428100e5441b5a3b5a0818e5d91a3db",
+        "version": 1
+      },
+      "duration_seconds": 113.9,
+      "env": "dev",
+      "error": null,
+      "finished_at": "2026-10-11T12:14:24.321209+00:00",
+      "output_root": "/home/ohass/threew-silver-linux/data/dev/silver",
+      "phase": "publish",
+      "phase_seconds": {
+        "input": 0.045,
+        "input_checks": 4.467,
+        "lock": 0.001,
+        "read_back_and_check": 75.29,
+        "transform_and_write": 31.367
+      },
+      "published": true,
+      "reconcile": {
+        "checks": {
+          "bronze_marker_unchanged": true,
+          "bronze_observation_keys_are_unique_and_non_null": true,
+          "bronze_recording_counts_match_manifest": true,
+          "bronze_recordings_match_ready_marker": true,
+          "bronze_rows_match_ready_marker": true,
+          "instance_quality_has_one_matching_row_per_recording": true,
+          "instance_quality_schema_matches_contract": true,
+          "instance_quality_values_match_observations": true,
+          "sensor_availability_has_27_unique_sensors_per_recording": true,
+          "sensor_availability_schema_matches_contract": true,
+          "sensor_availability_values_match_observations": true,
+          "silver_observation_keys_are_unique_and_non_null": true,
+          "silver_observation_keys_match_bronze": true,
+          "silver_observation_row_counts_match_per_recording": true,
+          "silver_observation_rows_match_bronze": true,
+          "silver_preserved_values_match_bronze": true,
+          "silver_recording_and_event_details_match": true,
+          "silver_required_fields_are_non_null": true,
+          "silver_schema_matches_contract": true
+        },
+        "counts": {
+          "bronze_recordings": 30,
+          "bronze_rows": 1931052,
+          "instance_quality_rows": 30,
+          "sensor_availability_rows": 810,
+          "silver_observation_rows": 1931052,
+          "silver_recordings": 30
+        },
+        "passed": true
+      },
+      "run_id": "20261011T121236187557Z-8777ac57",
+      "source": {
+        "bronze_run_id": "20261010T134325Z-54db46",
+        "repo_id": "Yahya2491/3w-pipeline",
+        "revision": "c1a7e8d0cfefc0875974ea079d11349a37fa0c56"
+      },
+      "started_at": "2026-10-11T12:12:36.187557+00:00",
+      "status": "SUCCESS",
+      "tables": {
+        "instance_quality": {
+          "parquet_bytes": 27861,
+          "path": "/home/ohass/threew-silver-linux/data/dev/silver/runs/20261011T121236187557Z-8777ac57/instance_quality",
+          "rows": 30
+        },
+        "sensor_availability": {
+          "parquet_bytes": 22684,
+          "path": "/home/ohass/threew-silver-linux/data/dev/silver/runs/20261011T121236187557Z-8777ac57/sensor_availability",
+          "rows": 810
+        },
+        "silver_observations": {
+          "parquet_bytes": 71046419,
+          "path": "/home/ohass/threew-silver-linux/data/dev/silver/runs/20261011T121236187557Z-8777ac57/silver_observations",
+          "rows": 1931052
+        }
+      }
+    },
+    "20261011T121424323167Z-b985c426": {
+      "code": {
+        "commit": "8651bf834ff3a34d4fa09ae2798eda4d3fa79ae5",
+        "dirty": true,
+        "packages": {
+          "huggingface_hub": "2.2.0",
+          "pyarrow": "25.0.1",
+          "pyspark": "3.5.0",
+          "threew": "0.1.0"
+        },
+        "python": "3.11.17"
+      },
+      "config": {
+        "env": "dev",
+        "ingest": {
+          "max_retries": 3,
+          "retry_backoff_seconds": 5,
+          "sample_per_class": 3,
+          "workers": 4
+        },
+        "schema": {
+          "contract": "/home/ohass/threew-silver-linux/conf/contracts/3w_v2.yaml",
+          "fail_on_drift": false
+        },
+        "source": {
+          "include": [
+            "data/[0-9]/*.parquet"
+          ],
+          "repo_id": "Yahya2491/3w-pipeline",
+          "repo_type": "dataset",
+          "revision": "c1a7e8d0cfefc0875974ea079d11349a37fa0c56",
+          "revision_label": "v2.0.0"
+        },
+        "spark": {
+          "app_name": "3w-bronze",
+          "driver_memory": "2g",
+          "master": "local[2]",
+          "shuffle_partitions": 8
+        },
+        "storage": {
+          "bronze": "/home/ohass/threew-silver-linux/data/dev/bronze/3w_observations",
+          "bronze_ready": "/home/ohass/threew-silver-linux/data/dev/bronze/bronze_ready.json",
+          "landing": "/home/ohass/threew-silver-linux/data/dev/landing/3w",
+          "root": "/home/ohass/threew-silver-linux/data/dev",
+          "runs": "/home/ohass/threew-silver-linux/data/dev/bronze/_runs",
+          "silver": "/home/ohass/threew-silver-linux/data/dev/silver",
+          "silver_ready": "/home/ohass/threew-silver-linux/data/dev/silver/silver_ready.json",
+          "silver_runs": "/home/ohass/threew-silver-linux/data/dev/silver/_runs",
+          "staging": "/home/ohass/threew-silver-linux/data/dev/_staging",
+          "state": "/home/ohass/threew-silver-linux/data/dev/bronze/_state"
+        }
+      },
+      "config_sha256": "d0c63c304a2678e8a72b89dbb8ac3f692b3effe359ed0192d1b1f079b0e1aa4c",
+      "contract": {
+        "sha256": "e69959c9f1965ea78b7b4d763e33c2a77428100e5441b5a3b5a0818e5d91a3db",
+        "version": 1
+      },
+      "duration_seconds": 97.494,
+      "env": "dev",
+      "error": null,
+      "finished_at": "2026-10-11T12:15:57.218458+00:00",
+      "output_root": "/home/ohass/threew-silver-linux/data/dev/silver",
+      "phase": "publish",
+      "phase_seconds": {
+        "input": 0.016,
+        "input_checks": 1.243,
+        "lock": 0.0,
+        "read_back_and_check": 69.109,
+        "transform_and_write": 27.003
+      },
+      "published": true,
+      "reconcile": {
+        "checks": {
+          "bronze_marker_unchanged": true,
+          "bronze_observation_keys_are_unique_and_non_null": true,
+          "bronze_recording_counts_match_manifest": true,
+          "bronze_recordings_match_ready_marker": true,
+          "bronze_rows_match_ready_marker": true,
+          "instance_quality_has_one_matching_row_per_recording": true,
+          "instance_quality_schema_matches_contract": true,
+          "instance_quality_values_match_observations": true,
+          "sensor_availability_has_27_unique_sensors_per_recording": true,
+          "sensor_availability_schema_matches_contract": true,
+          "sensor_availability_values_match_observations": true,
+          "silver_observation_keys_are_unique_and_non_null": true,
+          "silver_observation_keys_match_bronze": true,
+          "silver_observation_row_counts_match_per_recording": true,
+          "silver_observation_rows_match_bronze": true,
+          "silver_preserved_values_match_bronze": true,
+          "silver_recording_and_event_details_match": true,
+          "silver_required_fields_are_non_null": true,
+          "silver_schema_matches_contract": true
+        },
+        "counts": {
+          "bronze_recordings": 30,
+          "bronze_rows": 1931052,
+          "instance_quality_rows": 30,
+          "sensor_availability_rows": 810,
+          "silver_observation_rows": 1931052,
+          "silver_recordings": 30
+        },
+        "passed": true
+      },
+      "run_id": "20261011T121424323167Z-b985c426",
+      "source": {
+        "bronze_run_id": "20261010T134325Z-54db46",
+        "repo_id": "Yahya2491/3w-pipeline",
+        "revision": "c1a7e8d0cfefc0875974ea079d11349a37fa0c56"
+      },
+      "started_at": "2026-10-11T12:14:24.323167+00:00",
+      "status": "SUCCESS",
+      "tables": {
+        "instance_quality": {
+          "parquet_bytes": 27861,
+          "path": "/home/ohass/threew-silver-linux/data/dev/silver/runs/20261011T121424323167Z-b985c426/instance_quality",
+          "rows": 30
+        },
+        "sensor_availability": {
+          "parquet_bytes": 22684,
+          "path": "/home/ohass/threew-silver-linux/data/dev/silver/runs/20261011T121424323167Z-b985c426/sensor_availability",
+          "rows": 810
+        },
+        "silver_observations": {
+          "parquet_bytes": 71046419,
+          "path": "/home/ohass/threew-silver-linux/data/dev/silver/runs/20261011T121424323167Z-b985c426/silver_observations",
+          "rows": 1931052
+        }
+      }
+    }
+  },
+  "code_files_sha256": {
+    "src/threew/silver/__init__.py": "cfa7bd92f926776d80b15261b38592386dd15bfa78db2f63f7a25453a2a343cb",
+    "src/threew/silver/input.py": "d05acfa85a2bd41b9a5bb453ad3e70e5bc4098bfb37fbea504b6edf872415b11",
+    "src/threew/silver/quality.py": "bffb3542bbb9dd1d880fefeef71af3581145c36364c2482afeb9ddcce49cae3e",
+    "src/threew/silver/transform.py": "bbe86ad940d732bff28b7685e012c2680dd3cea798b0a9f1e9be8a77ab94dee2",
+    "src/threew/silver/profile.py": "0dcc4d5b587946f1ff3173188350552838ab62441dc219adc9f1b24d3b8c2abc",
+    "src/threew/silver/reconcile.py": "c19d908d59de10813f105d6fdf2f0e0a26d9f346370751ce5adba4bf5deddab7",
+    "src/threew/silver/run.py": "12d170623df318c461a7de1d372c7787cbf0ff799299dd36f57ba6f364bc64b1"
+  },
+  "passed": true,
+  "validation": {
+    "pytest_offline": "227 passed in 195.87s (0:03:15)",
+    "ruff_check": "passed",
+    "ruff_format_check": "72 files already formatted"
+  }
+}

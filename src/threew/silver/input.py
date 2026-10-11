@@ -25,6 +25,16 @@ def read_bronze_ready_marker(cfg: Config) -> dict[str, Any]:
     reconcile = marker.get("reconcile")
     if not isinstance(reconcile, dict) or reconcile.get("passed") is not True:
         raise ValueError("Bronze ready marker does not report a successful reconciliation.")
+    if not isinstance(marker.get("run_id"), str) or not marker["run_id"]:
+        raise ValueError("Bronze marker has no run ID.")
+    source = marker.get("source")
+    if not isinstance(source, dict) or any(
+        not isinstance(source.get(name), str) or not source[name] for name in ("repo_id", "revision")
+    ):
+        raise ValueError("Bronze marker has no source repository or revision.")
+    for name in ("files", "rows"):
+        if type(marker.get(name)) is not int or marker[name] < 0:
+            raise ValueError(f"Bronze marker has no valid {name} count.")
     return marker
 
 
@@ -80,3 +90,18 @@ def current_manifest_rows(cfg: Config) -> list[dict[str, Any]]:
     read_bronze_ready_marker(cfg)
     current = Manifest(cfg.storage.state).current().to_pylist()
     return _silver_rows_from_manifest_records(current, cfg.storage.root)
+
+
+def current_manifest_counts(cfg: Config) -> list[dict[str, Any]]:
+    """Expected row counts for every current schema-approved source-file version."""
+    records = [r for r in Manifest(cfg.storage.state).current().to_pylist() if r.get("schema_ok") is True]
+    metadata = _silver_rows_from_manifest_records(records, cfg.storage.root)
+    counts = []
+    for record, row in zip(records, metadata, strict=True):
+        num_rows = record.get("num_rows")
+        if type(num_rows) is not int or num_rows < 0:
+            raise ValueError(f"Manifest record {row['_source_path']!r} has no valid observation count.")
+        counts.append(
+            {"_source_path": row["_source_path"], "_file_sha256": row["_file_sha256"], "bronze_rows": num_rows}
+        )
+    return counts

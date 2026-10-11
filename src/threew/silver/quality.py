@@ -51,14 +51,14 @@ def _recording_metrics(silver: DataFrame) -> DataFrame:
 
     ordered = Window.partitionBy("_source_path", "_file_sha256").orderBy("_row_in_file")
     timed = (
-        silver.withColumn("_quality_timestamp_seconds", F.unix_timestamp(F.col("timestamp").cast("string")))
+        silver.withColumn("_quality_timestamp", F.col("timestamp"))
         .withColumn(
-            "_quality_previous_seconds",
-            F.lag("_quality_timestamp_seconds").over(ordered),
+            "_quality_previous_timestamp",
+            F.lag("_quality_timestamp").over(ordered),
         )
         .withColumn(
             "_quality_interval_seconds",
-            F.col("_quality_timestamp_seconds") - F.col("_quality_previous_seconds"),
+            (F.col("_quality_timestamp") - F.col("_quality_previous_timestamp")).cast("decimal(20,6)").cast("double"),
         )
     )
 
