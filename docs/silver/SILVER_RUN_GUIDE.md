@@ -8,7 +8,7 @@ If the dev Bronze sample is not already there, run:
 python -m threew.bronze.run --env dev
 ```
 
-Bronze downloads 30 original Parquet files, checks them, and prepares a Spark-readable table under `data/dev/bronze/3w_observations/`. 
+Bronze downloads 30 original Parquet files, checks them, and prepares a Spark-readable table under `data/dev/bronze/3w_observations/`.
 
 Prepare the sample once and reuse it while developing Silver to compare changes against the same input.
 

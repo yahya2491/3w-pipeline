@@ -1,6 +1,6 @@
 # Dataset notes
 
-Measured facts about the 3W dataset 2.0.0 as pinned in [`source.md`](source.md) (HF commit `c1a7e8d0…`, upstream
+Measured facts about the 3W dataset 2.0.0 as pinned in [`source.md`](../source.md) (HF commit `c1a7e8d0…`, upstream
 `d57c058a…`). Each fact says where it was measured. Facts that constrain Silver or Gold say so.
 
 ## Files

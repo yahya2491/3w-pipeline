@@ -78,14 +78,15 @@ print("Silver input run:", ready["run_id"])
 print("Source:", ready["source"])
 print("Quality:", ready["quality_summary"]["by_rule"])
 with spark_session(cfg) as spark:
-    tables = {
-        name: spark.read.parquet(details["path"])
-        for name, details in ready["tables"].items()
-    }
+    tables = {name: spark.read.parquet(details["path"]) for name, details in ready["tables"].items()}
     observations = tables["silver_observations"]
     observations.select(
-        "instance_id", "timestamp", "instance_label", "class_code",
-        "row_event_phase", "downhole_pdg_pressure_pa",
+        "instance_id",
+        "timestamp",
+        "instance_label",
+        "class_code",
+        "row_event_phase",
+        "downhole_pdg_pressure_pa",
     ).show(5, truncate=False)
     # Build your Gold calculations here, while the Spark session is open.
 ```
@@ -121,12 +122,12 @@ sensor = "downhole_pdg_pressure_pa"
 bad_sensor = (
     tables["quality_quarantine"]
     .filter((F.col("affected_use") == "sensor_measurement") & (F.col("field_name") == sensor))
-    .select(*key).distinct()
+    .select(*key)
+    .distinct()
 )
 value = F.col(sensor)
 sensor_rows = observations.filter(
-    value.isNotNull() & ~F.isnan(value)
-    & (value != float("inf")) & (value != float("-inf"))
+    value.isNotNull() & ~F.isnan(value) & (value != float("inf")) & (value != float("-inf"))
 ).join(bad_sensor, on=key, how="left_anti")
 ```
 

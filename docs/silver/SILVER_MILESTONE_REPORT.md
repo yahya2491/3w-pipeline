@@ -280,7 +280,13 @@ outputs defined in Milestone 6.
 python -m threew.silver.run --env dev
 ```
 
-Two recorded builds passed all 19 Silver checks on the 30-file dev sample. Each contained 1,931,052 observations, 30 recording summaries, and 810 sensor summaries. The saved tables had the same contents both times. See the [validation record](../evidence/silver/silver_fixes_20261011.json).
+Two recorded builds passed all 19 Silver checks on the 30-file dev sample. Each contained 1,931,052 observations, 30 recording summaries, and 810 sensor summaries. The saved tables had the same contents both times. 
+
+See the [dev validation record](../evidence/silver/old_evidence/silver_fixes_20261011.json)
+and the [earlier Silver review](../evidence/silver/old_evidence/silver_review_20261011.json).
+
+These record the earlier development checks. The later full-dataset runs
+and seven-table comparison are documented in Milestone 10.
 
 ## Milestone 8 - Explain quality problems and publish shared definitions
 
