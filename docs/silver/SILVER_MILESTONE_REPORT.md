@@ -162,8 +162,8 @@ So in this milestone we created two quality summaries to avoid repeating recordi
 
 The observation table keeps every reading. Instead of repeating recording-wide facts on millions of rows, Silver puts them in two smaller tables:
 
-- `instance_quality`: one row per recording. It counts missing labels, timestamp problems, and how many sensors have usable readings.
-- `sensor_availability`: one row per recording and sensor. It shows how many readings for that sensor can be used.
+- `instance_quality`: one row per recording. It counts missing labels, timestamp problems, and how many sensors have usable readings. 1 file = 1 row. 2,228 recordings = 2,228 rows in the full dataset.
+- `sensor_availability`: one row per recording and sensor. It shows how many readings for that sensor can be used. 1 file x 27 sesnsors = 27 rows per recording. 2,228 recordings x 27 sensors = 60,156 rows in the full dataset.
 
 Instance quality:
 | Column | Meaning |
@@ -268,9 +268,70 @@ python -m threew.silver.run --env dev
 
 Two recorded builds passed all 19 Silver checks on the 30-file dev sample. Each contained 1,931,052 observations, 30 recording summaries, and 810 sensor summaries. The saved tables had the same contents both times. See the [validation record](../evidence/silver/silver_fixes_20261011.json).
 
-## Milestone 8 - Final changes
+## Milestone 8 - Explain quality problems and publish shared definitions
+
+This step makes the quality checks useful to someone reading Silver. We still keep every original observation. We now show exactly where a problem occurred, explain what it affects, and tell the reader what to do with it.
 
 
+
+### Preserve timestamps and define duplicates
+
+We wrote down and enforced these rules:
+
+| Situation | What Silver does |
+|---|---|
+| Time moves backward | Keeps the original timestamp and row position; identifies the affected row for sequence review. |
+| Different observations share a timestamp | Keeps all readings and flags every affected row. A repeated time does not prove that a row was copied. |
+| A time is missing, or the interval is shorter/longer than one second | Reports the affected row. Fractional timestamps stay unchanged; gaps are not filled. |
+| The same source path, file hash and original row position appear twice | Stops the run before writing output, whether the copies are identical or conflicting. No arbitrary winner is chosen. |
+| A source file is corrected and has a new hash | Uses the file version selected by Bronze's current catalogue. This is different from a duplicate observation. |
+
+Firs tthe first 2 rows of the table above, the timestamp problems, we ensure that we dont modify the timestamps or the data directly since we cant gurantee that the timestamps are correct, or if there is an internal error, so we just keep it as is and report the affected rows for manual review.
+
+### Add issue reasons and a quarantine list
+
+[issues.py](../../src/threew/silver/issues.py) creates two additional Parquet tables:
+
+- `quality_issues`: one entry for each affected observation, field and quality rule. It contains the original row key, the field name, an issue code, a severity, a readable reason, the affected use, a suggested action, and the supplied value as text.
+- `quality_quarantine`: the error entries from that list, kept separately for inspection. It identifies questionable fields; it does not remove the complete observation or declare every other measurement in the row unusable. Join its source path, file hash and row position to `silver_observations` to inspect the complete source reading.
+
+An observation can have more than one issue. The quarantine table therefore contains issue entries, not necessarily one entry per observation.
+
+| Problem | Severity and how to use the data |
+|---|---|
+| Missing class | Warning: keep the sensor readings, but do not use this label for work requiring a known class. |
+| Unsupported class or class that conflicts with the recording category | Error affecting labelled analysis: inspect the label; other readings remain available. |
+| Missing, repeated or backward timestamp | Error affecting time-sequence analysis: inspect the sequence before using it. |
+| Interval shorter or longer than the expected one second | Warning: keep the actual interval visible and account for it in analysis. |
+| NaN or positive/negative infinity in a sensor | Error affecting that sensor measurement: exclude that value from numeric analysis and inspect it. |
+| Valve code outside its documented values, or opening percentage outside 0–100 | Error affecting that sensor measurement: inspect it without rounding or clipping. |
+| No finite reading in any of the 27 sensors in an observation | Error affecting sensor analysis: retain the row and labels; it cannot supply a sensor measurement. |
+
+**Build the development project folder:**
+
+```bash
+python -m threew.silver.run --env dev
+```
+
+To see the quality result and paths of the new outputs without starting Spark again:
+
+```bash
+python - <<'PY'
+import json
+from pathlib import Path
+
+ready = json.loads(Path("data/dev/silver/silver_ready.json").read_text())
+summary = ready["quality_summary"]
+print("Observations:", summary["observation_rows"])
+print("Observations with quarantine issues:", summary["rows_with_quarantine_issues"])
+for rule in summary["by_rule"]:
+    print(rule["issue_code"], rule["severity"], rule["count"])
+for name in ("quality_issues", "quality_quarantine", "event_reference", "sensor_reference"):
+    print(name, ready["tables"][name]["path"])
+PY
+```
+
+After the Silver run completes, this read-only Python command reads silver_ready.json and prints a brief quality summary. It shows the number of observations, the number with quarantine issues, the issue types and severities detected, and the paths to the quality_issues, quality_quarantine, event_reference, and sensor_reference Parquet tables. It does not start Spark, rebuild Silver, or modify any data. It is a quick way to inspect and verify the reported quality results without opening the Parquet output tables individually. 
 
 ## Milestone 9 - Make runs save and Test good runs
 

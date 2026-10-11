@@ -3,11 +3,14 @@
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from pyspark import StorageLevel
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.types import IntegerType, StringType, TimestampNTZType
 
+from threew.silver.issues import ISSUE_KEY, build_quality_issues, quarantine_issues
 from threew.silver.quality import SENSOR_FIELDS, build_quality_summaries
+from threew.silver.reference import build_reference_tables
 from threew.silver.transform import BRONZE_TYPES, SENSOR_RENAMES, build_silver_observations
 
 RECORDING_KEY = ("_source_path", "_file_sha256")
@@ -81,10 +84,12 @@ def output_checks(
     observations: DataFrame,
     quality: DataFrame,
     sensors: DataFrame,
+    additional: Mapping[str, DataFrame] | None = None,
 ) -> dict[str, bool]:
     """Validate saved tables against Bronze, the contract and freshly computed summaries."""
     expected = build_silver_observations(bronze, manifest_rows)
     summaries = build_quality_summaries(expected)
+    issues = None
     try:
         # Summary types come from the independent expected calculation, not the
         # saved/candidate tables. Parquet does not retain required-field nullability.
@@ -141,6 +146,23 @@ def output_checks(
                 "sensor_availability_values_match_observations": same_rows(summaries.sensor_availability, sensors),
             }
         )
+        if additional is not None:
+            issues = build_quality_issues(expected).persist(StorageLevel.MEMORY_AND_DISK)
+            expected_additional = {
+                "quality_issues": issues,
+                "quality_quarantine": quarantine_issues(issues),
+                **build_reference_tables(bronze.sparkSession),
+            }
+            for name, reference in expected_additional.items():
+                candidate = additional[name]
+                correct_schema = schema_matches(candidate, {f.name: f.dataType for f in reference.schema})
+                checks[f"{name}_schema_matches"] = correct_schema
+                checks[f"{name}_values_match"] = correct_schema and same_rows(reference, candidate)
+            checks["quality_issue_keys_are_unique_and_non_null"] = checks[
+                "quality_issues_schema_matches"
+            ] and unique_non_null_keys(additional["quality_issues"], ISSUE_KEY)
         return checks
     finally:
+        if issues is not None:
+            issues.unpersist()
         summaries.unpersist()

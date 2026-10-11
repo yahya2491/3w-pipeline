@@ -204,6 +204,8 @@ def test_transform_fails_if_manifest_source_type_disagrees(spark):
     bronze = _bronze_fixture(spark)
     rows = _manifest_rows()
     rows[0]["_manifest_source_type"] = "SIMULATED"
+    rows[0]["well_id"] = None
+    rows[0]["instance_start"] = None
 
     with pytest.raises(ValueError, match="source_type does not match"):
         build_silver_observations(bronze, rows)
@@ -252,3 +254,24 @@ def test_recording_specific_class_rules_flag_normal_class_for_event_3(spark):
     assert rows[0]["class_label_status"] == "inconsistent"
     assert rows[1]["row_event_phase"] == "transient"
     assert rows[1]["class_label_status"] == "inconsistent"
+
+
+@pytest.mark.parametrize("field,value", [("_manifest_source_type", "UNKNOWN"), ("_manifest_label", 10)])
+def test_milestone8_rejects_unsupported_recording_domains(spark, field, value):
+    rows = _manifest_rows()
+    rows[0][field] = value
+    with pytest.raises(ValueError, match="unsupported"):
+        build_silver_observations(_bronze_fixture(spark), rows)
+
+
+def test_milestone8_reports_new_bronze_columns_instead_of_silently_dropping(spark):
+    bronze = _bronze_fixture(spark).withColumn("new_sensor", F.lit(1.0))
+    with pytest.raises(ValueError, match="unexpected columns.*new_sensor"):
+        build_silver_observations(bronze, _manifest_rows())
+
+
+def test_milestone8_rejects_real_well_details_on_synthetic_recording(spark):
+    rows = _manifest_rows()
+    rows[1]["well_id"] = 1
+    with pytest.raises(ValueError, match="Synthetic.*real well"):
+        build_silver_observations(_bronze_fixture(spark), rows)

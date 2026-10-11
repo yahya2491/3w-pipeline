@@ -16,50 +16,13 @@ from pyspark.sql.types import (
     TimestampNTZType,
 )
 
-SENSOR_RENAMES = {
-    "ABER-CKGL": "gas_lift_choke_opening_pct",
-    "ABER-CKP": "production_choke_opening_pct",
-    "ESTADO-DHSV": "downhole_safety_valve_state",
-    "ESTADO-M1": "production_master_valve_state",
-    "ESTADO-M2": "annulus_master_valve_state",
-    "ESTADO-PXO": "pig_crossover_valve_state",
-    "ESTADO-SDV-GL": "gas_lift_shutdown_valve_state",
-    "ESTADO-SDV-P": "production_shutdown_valve_state",
-    "ESTADO-W1": "production_wing_valve_state",
-    "ESTADO-W2": "annulus_wing_valve_state",
-    "ESTADO-XO": "crossover_valve_state",
-    "P-ANULAR": "annulus_pressure_pa",
-    "P-JUS-BS": "service_pump_downstream_pressure_pa",
-    "P-JUS-CKGL": "gas_lift_choke_downstream_pressure_pa",
-    "P-JUS-CKP": "production_choke_downstream_pressure_pa",
-    "P-MON-CKGL": "gas_lift_choke_upstream_pressure_pa",
-    "P-MON-CKP": "production_choke_upstream_pressure_pa",
-    "P-MON-SDV-P": "production_shutdown_valve_upstream_pressure_pa",
-    "P-PDG": "downhole_pdg_pressure_pa",
-    "PT-P": "subsea_production_line_pressure_pa",
-    "P-TPT": "subsea_tree_tpt_pressure_pa",
-    "QBS": "service_pump_flow_rate_m3_s",
-    "QGL": "gas_lift_flow_rate_m3_s",
-    "T-JUS-CKP": "production_choke_downstream_temperature_c",
-    "T-MON-CKP": "production_choke_upstream_temperature_c",
-    "T-PDG": "downhole_pdg_temperature_c",
-    "T-TPT": "subsea_tree_tpt_temperature_c",
-}
-
-
-EVENT_NAMES = {
-    0: "Normal Operation",
-    1: "Abrupt Increase of BSW",
-    2: "Spurious Closure of DHSV",
-    3: "Severe Slugging",
-    4: "Flow Instability",
-    5: "Rapid Productivity Loss",
-    6: "Quick Restriction in PCK",
-    7: "Scaling in PCK",
-    8: "Hydrate in Production Line",
-    9: "Hydrate in Service Line",
-}
-TRANSIENT_LABELS = (1, 2, 5, 6, 7, 8, 9)
+from threew.silver.reference import (
+    EVENT_NAMES,
+    NORMAL_LABELS,
+    SENSOR_RENAMES,
+    SOURCE_TYPES,
+    TRANSIENT_LABELS,
+)
 
 MANIFEST_SCHEMA = StructType(
     [
@@ -106,6 +69,14 @@ def _validate_manifest_rows(rows: Sequence[Mapping[str, Any]]) -> None:
             raise ValueError(f"Manifest row {source_path!r} has no file hash.")
         if not isinstance(row["_manifest_source_type"], str) or not row["_manifest_source_type"]:
             raise ValueError(f"Manifest row {source_path!r} has no source type.")
+        if row["_manifest_source_type"] not in SOURCE_TYPES:
+            raise ValueError(f"Manifest row {source_path!r} has an unsupported source type.")
+        if type(row["_manifest_label"]) is not int or row["_manifest_label"] not in EVENT_NAMES:
+            raise ValueError(f"Manifest row {source_path!r} has an unsupported event label.")
+        if row["_manifest_source_type"] != "REAL" and (
+            row.get("well_id") is not None or row.get("instance_start") is not None
+        ):
+            raise ValueError(f"Synthetic manifest row {source_path!r} must not have real well/start details.")
         if not isinstance(row["instance_id"], str) or not row["instance_id"]:
             raise ValueError(f"Manifest row {source_path!r} has no instance ID.")
 
@@ -120,6 +91,10 @@ def build_silver_observations(bronze: DataFrame, manifest_rows: Sequence[Mapping
     missing = set(BRONZE_TYPES) - set(bronze.columns)
     if missing:
         raise ValueError(f"Bronze table is missing required columns: {', '.join(sorted(missing))}")
+
+    extra = set(bronze.columns) - set(BRONZE_TYPES)
+    if extra:
+        raise ValueError(f"Bronze table has unexpected columns: {', '.join(sorted(extra))}")
 
     actual_types = {field.name: field.dataType for field in bronze.schema.fields}
     wrong_types = [
@@ -174,7 +149,7 @@ def build_silver_observations(bronze: DataFrame, manifest_rows: Sequence[Mapping
         .otherwise(F.lit(None).cast(IntegerType()))
     )
 
-    valid_normal_period = instance_label.isin(0, 1, 2, 5, 6, 7, 8, 9) & (class_code == 0)
+    valid_normal_period = instance_label.isin(*NORMAL_LABELS) & (class_code == 0)
     valid_steady_event = instance_label.between(1, 9) & (class_code == instance_label)
     valid_transient_event = instance_label.isin(*TRANSIENT_LABELS) & (class_code == instance_label + F.lit(100))
     class_matches_recording = valid_normal_period | valid_steady_event | valid_transient_event

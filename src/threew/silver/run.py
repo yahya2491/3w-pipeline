@@ -27,8 +27,10 @@ from threew.bronze.report import code_info
 from threew.config import REPO_ROOT, Config, load_config
 from threew.lock import LockHeld, run_lock
 from threew.silver.input import current_manifest_counts, current_manifest_rows, read_bronze_ready_marker
+from threew.silver.issues import USAGE_POLICY, build_quality_issues, quarantine_issues, summarize_quality
 from threew.silver.quality import build_quality_summaries
-from threew.silver.reconcile import RECORDING_KEY, input_checks, output_checks
+from threew.silver.reconcile import OBSERVATION_KEY, RECORDING_KEY, input_checks, output_checks, unique_non_null_keys
+from threew.silver.reference import REFERENCE_VERSION, build_reference_tables
 from threew.silver.transform import build_silver_observations
 from threew.spark import get_spark
 
@@ -108,8 +110,19 @@ def run_silver(
     run_root = silver_root / "runs" / run_id
     report_path = silver_root / "_runs" / f"{run_id}.json"
     ready_path = silver_root / "silver_ready.json"
-    table_paths = {name: run_root / name for name in ("silver_observations", "instance_quality", "sensor_availability")}
-    contract = REPO_ROOT / "docs" / "SILVER_CONTRACT.md"
+    table_paths = {
+        name: run_root / name
+        for name in (
+            "silver_observations",
+            "instance_quality",
+            "sensor_availability",
+            "quality_issues",
+            "quality_quarantine",
+            "event_reference",
+            "sensor_reference",
+        )
+    }
+    contract = REPO_ROOT / "docs" / "silver" / "SILVER_CONTRACT.md"
     config = cfg.to_dict()
     report = {
         "run_id": run_id,
@@ -125,6 +138,9 @@ def run_silver(
         "contract": {"version": 1, "sha256": hashlib.sha256(contract.read_bytes()).hexdigest()},
         "output_root": str(silver_root),
         "source": None,
+        "quality_summary": None,
+        "usage_policy": USAGE_POLICY,
+        "reference_version": REFERENCE_VERSION,
         "tables": {name: {"path": str(path), "rows": None} for name, path in table_paths.items()},
         "reconcile": {"passed": False, "checks": {}, "counts": {}},
         "published": False,
@@ -153,9 +169,28 @@ def run_silver(
                 try:
                     with _phase(report, "input_checks"):
                         _require_checks(report, input_checks(spark, bronze_counts, bronze_marker, manifest_counts))
+                        # Reject duplicate identities before windows, joins or writes can hide ambiguity.
+                        _require_checks(
+                            report,
+                            {
+                                "bronze_observation_keys_are_unique_and_non_null": unique_non_null_keys(
+                                    bronze, OBSERVATION_KEY
+                                ),
+                                "bronze_row_positions_are_non_negative": bronze.filter("_row_in_file < 0")
+                                .limit(1)
+                                .count()
+                                == 0,
+                            },
+                        )
                     with _phase(report, "transform_and_write"):
                         silver = build_silver_observations(bronze, manifest_rows)
                         summaries = build_quality_summaries(silver)
+                        issues = build_quality_issues(silver).persist(StorageLevel.MEMORY_AND_DISK)
+                        additional = {
+                            "quality_issues": issues,
+                            "quality_quarantine": quarantine_issues(issues),
+                            **build_reference_tables(spark),
+                        }
                         try:
                             silver.write.mode("errorifexists").parquet(str(table_paths["silver_observations"]))
                             summaries.instance_quality.write.mode("errorifexists").parquet(
@@ -164,7 +199,10 @@ def run_silver(
                             summaries.sensor_availability.write.mode("errorifexists").parquet(
                                 str(table_paths["sensor_availability"])
                             )
+                            for name, table in additional.items():
+                                table.write.mode("errorifexists").parquet(str(table_paths[name]))
                         finally:
+                            issues.unpersist()
                             summaries.unpersist()
                     with _phase(report, "read_back_and_check"):
                         saved = {name: spark.read.parquet(str(path)) for name, path in table_paths.items()}
@@ -176,11 +214,22 @@ def run_silver(
                             "instance_quality_rows": saved["instance_quality"].count(),
                             "sensor_availability_rows": saved["sensor_availability"].count(),
                         }
+                        for name in ("quality_issues", "quality_quarantine", "event_reference", "sensor_reference"):
+                            counts[f"{name}_rows"] = saved[name].count()
                         report["reconcile"]["counts"] = counts
                         for name, key in (
                             ("silver_observations", "silver_observation_rows"),
                             ("instance_quality", "instance_quality_rows"),
                             ("sensor_availability", "sensor_availability_rows"),
+                            *[
+                                (name, f"{name}_rows")
+                                for name in (
+                                    "quality_issues",
+                                    "quality_quarantine",
+                                    "event_reference",
+                                    "sensor_reference",
+                                )
+                            ],
                         ):
                             report["tables"][name]["rows"] = counts[key]
                             report["tables"][name]["parquet_bytes"] = sum(
@@ -195,7 +244,22 @@ def run_silver(
                                 saved["silver_observations"],
                                 saved["instance_quality"],
                                 saved["sensor_availability"],
+                                {
+                                    name: saved[name]
+                                    for name in (
+                                        "quality_issues",
+                                        "quality_quarantine",
+                                        "event_reference",
+                                        "sensor_reference",
+                                    )
+                                },
                             ),
+                        )
+                        report["quality_summary"] = summarize_quality(
+                            saved["quality_issues"],
+                            saved["instance_quality"],
+                            saved["sensor_availability"],
+                            counts["silver_observation_rows"],
                         )
                 finally:
                     bronze_counts.unpersist()
@@ -216,6 +280,9 @@ def run_silver(
                     "tables": report["tables"],
                     "reconcile": report["reconcile"],
                     "report": str(report_path),
+                    "quality_summary": report["quality_summary"],
+                    "usage_policy": report["usage_policy"],
+                    "reference_version": report["reference_version"],
                 }
                 _write_json_atomically(ready_path, marker)
         except BaseException as exc:

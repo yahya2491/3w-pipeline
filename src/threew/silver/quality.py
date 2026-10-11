@@ -34,6 +34,22 @@ class QualitySummaries(NamedTuple):
         self.recording_metrics.unpersist()
 
 
+def with_timestamp_intervals(silver: DataFrame) -> DataFrame:
+    """Compare source-order neighbors without changing original timestamps or rows."""
+    ordered = Window.partitionBy("_source_path", "_file_sha256").orderBy("_row_in_file")
+    return (
+        silver.withColumn("_quality_timestamp", F.col("timestamp"))
+        .withColumn(
+            "_quality_previous_timestamp",
+            F.lag("_quality_timestamp").over(ordered),
+        )
+        .withColumn(
+            "_quality_interval_seconds",
+            (F.col("_quality_timestamp") - F.col("_quality_previous_timestamp")).cast("decimal(20,6)").cast("double"),
+        )
+    )
+
+
 def _recording_metrics(silver: DataFrame) -> DataFrame:
     required = {
         *RECORDING_FIELDS,
@@ -49,18 +65,7 @@ def _recording_metrics(silver: DataFrame) -> DataFrame:
     if missing_columns:
         raise ValueError(f"Silver table is missing columns: {', '.join(sorted(missing_columns))}")
 
-    ordered = Window.partitionBy("_source_path", "_file_sha256").orderBy("_row_in_file")
-    timed = (
-        silver.withColumn("_quality_timestamp", F.col("timestamp"))
-        .withColumn(
-            "_quality_previous_timestamp",
-            F.lag("_quality_timestamp").over(ordered),
-        )
-        .withColumn(
-            "_quality_interval_seconds",
-            (F.col("_quality_timestamp") - F.col("_quality_previous_timestamp")).cast("decimal(20,6)").cast("double"),
-        )
-    )
+    timed = with_timestamp_intervals(silver)
 
     sensor_metrics = []
     for index, name in enumerate(SENSOR_FIELDS):

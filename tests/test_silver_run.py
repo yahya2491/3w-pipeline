@@ -111,7 +111,19 @@ def test_run_silver_reconciles_all_outputs_and_repeat_run_is_identical(spark, si
         "silver_recordings": 3,
         "instance_quality_rows": 3,
         "sensor_availability_rows": 81,
+        "quality_issues_rows": 60,
+        "quality_quarantine_rows": 57,
+        "event_reference_rows": 10,
+        "sensor_reference_rows": 27,
     }
+    summary = second["quality_summary"]
+    assert summary["rows_with_issues"] == 6
+    assert summary["rows_with_quarantine_issues"] == 6
+    assert summary["quarantine_row_percent"] == 100.0
+    assert summary["issue_entries"] == 60
+    assert summary["recording_totals"]["unlabeled_rows"] == 3
+    assert len(summary["sensor_availability"]) == 27
+    assert second["usage_policy"]["duplicate_identity"].startswith("Stop")
     for name in first["tables"]:
         left = spark.read.parquet(first["tables"][name]["path"])
         right = spark.read.parquet(second["tables"][name]["path"])
@@ -333,3 +345,67 @@ def test_ready_marker_write_failure_is_reported_and_keeps_previous_marker(spark,
     assert report["reconcile"]["passed"] is False
     assert report["published"] is False
     assert cfg.storage.silver_ready.read_text() == previous
+
+
+@pytest.mark.parametrize(
+    "table", ["event_reference", "sensor_reference", "quality_issues", "quality_quarantine", "quality_issues_schema"]
+)
+def test_milestone8_corrupted_additional_output_cannot_be_published(spark, silver_input, monkeypatch, table):
+    from threew.silver.issues import build_quality_issues, quarantine_issues
+    from threew.silver.reference import build_reference_tables
+
+    cfg = silver_input
+    previous = _prior_marker(cfg)
+    if table in ("event_reference", "sensor_reference"):
+
+        def broken_references(session):
+            tables = build_reference_tables(session)
+            field = "event_name" if table == "event_reference" else "unit"
+            tables[table] = tables[table].withColumn(field, F.lit("wrong"))
+            return tables
+
+        monkeypatch.setattr("threew.silver.run.build_reference_tables", broken_references)
+    elif table.startswith("quality_issues"):
+
+        def broken_issues(observations):
+            issues = build_quality_issues(observations)
+            if table == "quality_issues_schema":
+                return issues.drop("field_name")
+            return issues.withColumn("reason", F.lit("wrong"))
+
+        monkeypatch.setattr("threew.silver.run.build_quality_issues", broken_issues)
+    else:
+
+        def broken_quarantine(issues):
+            return quarantine_issues(issues).filter("false")
+
+        monkeypatch.setattr("threew.silver.run.quarantine_issues", broken_quarantine)
+    failed_check = "quality_issues_schema_matches" if table == "quality_issues_schema" else f"{table}_values_match"
+    with pytest.raises(RuntimeError, match=failed_check):
+        _run(cfg, spark)
+    assert cfg.storage.silver_ready.read_text() == previous
+
+
+@pytest.mark.parametrize("conflicting", [False, True])
+def test_milestone8_duplicate_source_identity_stops_before_writing(spark, silver_input, conflicting):
+    cfg = silver_input
+    original = spark.read.parquet(str(cfg.storage.bronze))
+    rows = original.collect()
+    duplicate = rows[0]
+    copy = duplicate.asDict()
+    if conflicting:
+        copy["P-PDG"] = -123.0
+    duplicate_rows = rows + [copy]
+    spark.createDataFrame(duplicate_rows, original.schema).write.mode("overwrite").parquet(str(cfg.storage.bronze))
+    marker = json.loads(cfg.storage.bronze_ready.read_text())
+    marker["rows"] += 1
+    cfg.storage.bronze_ready.write_text(json.dumps(marker))
+    # Match the manifest count so the identity guard, rather than a count guard, is tested.
+    records = Manifest(cfg.storage.state).current().to_pylist()
+    changed = next(row for row in records if row["path"] == duplicate["_source_path"])
+    changed["num_rows"] += 1
+    changed["recorded_at"] = datetime.now(UTC)
+    Manifest(cfg.storage.state).append([changed])
+    with pytest.raises(RuntimeError, match="bronze_observation_keys_are_unique_and_non_null"):
+        _run(cfg, spark)
+    assert not (cfg.storage.silver / "runs").exists()
