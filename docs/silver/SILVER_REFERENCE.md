@@ -18,6 +18,35 @@ Prepared Bronze observations + recording catalogue
 
 Silver does not download the original dataset. It keeps every Bronze observation, original reading, timestamp, and missing value. It does not fill, clip, or automatically repair values. Gold can then make summaries and answer specific questions using the quality guidance.
 
+### What changed from Bronze
+
+Bronze has the prepared source readings and original column names. Silver keeps the same observation grain and values, then adds an easier-to-use structure and quality information. For example (illustrative values):
+
+| Bronze | Silver | What changed |
+|---|---|---|
+| `P-PDG = 250000` | `downhole_pdg_pressure_pa = 250000` | Clearer name; same reading and unit. |
+| `label = 1` | `instance_label = 1`, `instance_event_name = Abrupt Increase of BSW` | Retain the recording category and explain it. |
+| `class = 101` | `class_code = 101`, `row_event_phase = transient` | Retain the row code and explain the phase. |
+| Recording details in the catalogue | `instance_id`, `well_id`, and `instance_start` where available | Match details by source path and file fingerprint. |
+| Missing readings or questionable values | Original values plus separate issue entries | Preserve evidence and make limitations explicit. |
+
+All recording categories 0–9 are in `silver_observations`. The seven output folders separate observations, summaries, issues, and references; they are not event folders. For example, filtering `instance_label = 8` retrieves the recording category originally labelled 8 in Bronze.
+
+### How we built it
+
+| Work | Result and reason |
+|---|---|
+| Set up dev and profile Bronze | Used the same 30-file sample during development, then profiled the full dataset instead of assuming the sample described all recordings. |
+| Define the contract and row identity | One observation per original row; source path, fingerprint, and row position identify it. Strict types and catalogue matches avoid ambiguous records. |
+| Standardise and explain fields | Renamed 27 Portuguese/abbreviated sensor names and three label/state fields; added recording details, event names, phases, and class-consistency status. |
+| Check time and sensor coverage | Checked adjacent timestamps in original order and made recording/sensor summaries instead of repeating recording-wide counts on millions of rows. |
+| Publish quality and references | Added readable reasons, affected-use guidance, an error-only quarantine, and shared event/sensor definitions. |
+| Make runs safe | Added input/output locks, separate run folders, saved-table checks, reports, and final ready-marker publication. |
+| Validate dev and full outputs | Tested expected values and failure cases; ran all 2,228 recordings twice and compared all seven saved tables. |
+| Review the flagged data | Inspected missing-class/no-finite-sensor examples and opening ranges; retained the source values and existing flags. Gold must apply the relevant usage filters. |
+
+The small dev sample is for ongoing checks, not the final dataset. [The milestone report](SILVER_MILESTONE_REPORT.md) records the steps; sections below describe the final behaviour.
+
 ## 2. Where the data is
 
 | Item | Dev | VM full-dataset test |
@@ -251,9 +280,44 @@ ls -lt /home/ubuntu/3w-data/silver-oh/comparisons/
 
 The complete log is saved in the repo as [comparison.log](../evidence/silver/comparison.log), alongside the two run reports. It records both run IDs, matching code commits, and all seven `MATCH` results. The comparison reads the saved tables; it does not build another Silver result.
 
-The repeatability check passed. Milestone 11 still needs to review the quality findings and design against the lecture infographic, including the opening-range errors.
+The repeatability check passed. The quality inspection below records the later opening-value findings and usage decisions. These do not alter either saved full-run result; peer review of the implementation and handover is the next PR step.
 
 Run evidence: [run 1 report](../evidence/silver/run1/silver_run_1_,metrics.json), [run 2 report](../evidence/silver/run2/silver_run_2_,metrics.json). The Parquet data remains on the VM.
+
+### Quality inspection on 12 October 2026
+
+The VM review read `quality_issues` directly, displayed examples for each issue type, and grouped the opening-range entries by sensor. It did not rebuild Silver or modify observations. The supplied review output showed:
+
+| Finding | Result | Decision |
+|---|---|---|
+| Missing class | Examples contain null `class_code`; full-run total is 4,028,400. | Keep readings, keep class missing, and exclude the label from tasks requiring known row classes. |
+| No finite sensors | Consecutive examples at original rows 2552–2571 in `data/3/WELL-00014_20170917140000.parquet`; full-run total is 5,193. | Keep the source rows/labels and exclude them from tasks needing a sensor measurement. |
+| Production-choke opening | 161,872 entries: 161,538 below 0 and 334 above 100. Minimum −99.99; maximum 100.4375. No other opening sensor appeared in the supplied range summary. | Keep the 0–100 percent rule and flag these measurements; do not clip or guess replacements. |
+
+The opening examples include repeated `-99.99` at the start of `data/8/WELL-00030_20141108012623.parquet`. This does **not** establish that every negative reading equals −99.99 or that it is a documented missing-value marker. Its source meaning remains unconfirmed.
+
+The inspection found source limitations already covered by the current checks. It did not demonstrate a transformation bug or justify a new cleaning rule. The detailed review was supplied as terminal output; it was not saved as a new committed review log. The two original run reports and comparison log remain the build/repeatability evidence.
+
+### Why flagged readings stay in the main table
+
+Keeping a questionable measurement preserves what arrived. An issue entry identifies its row, field, reason, and affected use. Quarantine is the error-level issue list; it does not move observations out of the main table. This follows the lecture's instruction to flag problems and keep evidence.
+
+A user who reads only `silver_observations` will still see `-99.99` and other flagged values. Gold must select valid inputs for its question using the issue keys and affected fields. A missing class should not remove a valid pressure reading from a pressure-only calculation, and an invalid opening should not remove every other sensor from that row. `sensor_availability` describes finite presence, not a guarantee that all present values pass their domain checks.
+
+[The Gold handover](../gold/GOLD_HANDOVER.md) shows how to apply sensor-specific filters without multiplying observations when several issues share a row, and recommends initial Gold outputs.
+
+### How the implementation follows the Silver lecture
+
+| Lecture method | What we implemented |
+|---|---|
+| Shape | Clear sensor names, explicit checked types, original units, and a fixed observation grain. |
+| Identity | Stable source-version/row keys, current catalogue versions, and failure on repeated identities instead of choosing an arbitrary copy. |
+| Trust | Label, time, non-finite, and documented domain checks; reasons and field/use-specific quarantine while preserving original rows. |
+| Conformity | Shared event and sensor reference tables with definitions and reference version; source and event codes remain available. |
+| Time and safe reruns | Original clock values/order retained; whole-snapshot run folders, locks, saved-content checks, and an atomic pointer to the latest successful result. |
+| Operate as a product | Source/code/config/contract lineage, counts, timings, sizes, quality summaries, and measured repeated-run equality. |
+
+This is a batch dataset, so we use verified snapshot outputs rather than implement streaming or incremental MERGE logic. Recording/sensor summaries describe input quality; task-specific KPIs and modelling datasets belong in Gold. We do not claim to detect every possible physical or sensor fault: frozen sensors and undocumented physical bounds are outside the implemented checks. The convenience of inline event names is a design choice alongside the shared references, and quality filters are not automatically applied by the main-table reader.
 
 ## 11. Files and commands
 

@@ -193,3 +193,64 @@ A passing comparison prints seven `MATCH` results followed by `All seven tables 
 The script prints both code commits; it does not automatically check that they are equal. If they differ, review what changed before describing this as a repeat using unchanged code. Matching tables still shows that those two runs produced the same output.
 
 Two successful Silver runs alone are not enough to claim reproducibility. The comparison must also pass.
+
+## Review the quality issues
+
+```bash
+cd ~/3w-pipeline
+source .venv/bin/activate
+set -o pipefail
+mkdir -p /home/ubuntu/3w-data/silver-oh/reviews/
+
+python -u - <<'PY' 2>&1 | tee /home/ubuntu/3w-data/silver-oh/reviews/quality-$(date +%Y%m%d-%H%M%S).log
+import json
+from pathlib import Path
+
+from pyspark.sql import functions as F
+from threew.config import load_config
+from threew.silver.run import spark_session
+
+root = Path("/home/ubuntu/3w-data/silver-oh")
+ready = json.loads((root / "silver_ready.json").read_text())
+print("Silver run:", ready["run_id"], flush=True)
+
+with spark_session(load_config("prod")) as spark:
+    issues = spark.read.parquet(ready["tables"]["quality_issues"]["path"])
+
+    counts = (
+        issues.groupBy("issue_code", "severity")
+        .count()
+        .orderBy("issue_code")
+        .collect()
+    )
+
+    print("\nISSUE TOTALS", flush=True)
+    for row in counts:
+        print(f"{row['issue_code']}: {row['count']:,} ({row['severity']})")
+
+    for row in counts:
+        code = row["issue_code"]
+        print(f"\nFIVE EXAMPLES: {code}", flush=True)
+        issues.filter(F.col("issue_code") == code).select(
+            "_source_path",
+            "_row_in_file",
+            "field_name",
+            "observed_value",
+            "reason",
+            "recommended_action",
+        ).show(5, truncate=False)
+
+    print("\nFLAGGED OPENING VALUES: COUNTS AND RANGES", flush=True)
+    openings = issues.filter(
+        F.col("issue_code") == "opening_out_of_range"
+    ).withColumn("value", F.col("observed_value").cast("double"))
+
+    openings.groupBy("field_name").agg(
+        F.count("*").alias("flagged_readings"),
+        F.min("value").alias("lowest_value"),
+        F.max("value").alias("highest_value"),
+        F.sum((F.col("value") < 0).cast("long")).alias("below_zero"),
+        F.sum((F.col("value") > 100).cast("long")).alias("above_100"),
+    ).show(truncate=False)
+PY
+```

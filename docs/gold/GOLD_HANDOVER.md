@@ -8,9 +8,9 @@ Silver is implemented and has completed two successful full-dataset runs. Both p
 
 The compared runs are `20261011T182624613993Z-1a810002` and `20261011T201028142426Z-7a99e5c0`. The saved [comparison log](../evidence/silver/comparison.log) records the same code commit for both runs, seven `MATCH` results, and `All seven tables match.` The original VM log is under `/home/ubuntu/3w-data/silver-oh/comparisons/`; a copy is now kept in the repo with the run evidence.
 
-The Milestone 11 quality/design review is still pending, including review of the opening-range errors.
+The quality inspection on 12 October confirmed missing labels, rows without finite sensors, and out-of-range openings. We kept the existing rules and original values; the findings and usage decisions are below. The source meaning of `-99.99` has not been established, so we have not automatically converted it to missing.
 
-You can start developing Gold against a successful Silver result. Treat the current output as a test result until the Milestone 11 review and the Silver PR are finished.
+You can start developing Gold against a successful Silver result. The current VM output remains in the separate `silver-oh` test destination; the Silver PR is the next review step.
 
 ## What Silver gives you
 
@@ -18,15 +18,19 @@ Bronze prepares the original files. Silver gives the columns clearer names, adds
 
 One observation row contains the timestamp, row/recording labels, all 27 sensor readings, and source details. Its key is source path + file fingerprint + original row position. Recording summaries use source path + file fingerprint. Do not join using `instance_id` alone.
 
-| Table | Use it for |
-|---|---|
-| `silver_observations` | The actual observations, renamed sensors, recording details, and event/phase fields. |
-| `instance_quality` | Quality and coverage for each recording. |
-| `sensor_availability` | Checking which sensors have readings in each recording. |
-| `quality_issues` | Understanding problems and their effect on your intended analysis. |
-| `quality_quarantine` | Finding error-level fields that need review. It contains issue entries, not full observation copies. |
-| `event_reference` | Reusing the 10 event names and supported phases. |
-| `sensor_reference` | Reusing the 27 sensor names, meanings, units, and value rules. |
+Each of the seven folders holds a different table. **All events 0–9 remain together in `silver_observations`; the seven folders do not represent seven events.** Gold can select the tables its question needs.
+
+| Folder/table | What it contains | How Gold can use it |
+|---|---|---|
+| `silver_observations` | Every original observation, all 27 renamed sensor columns, labels, recording details, and source keys. | Read measurements, choose source/event/phase, and calculate results after applying the relevant quality rules. |
+| `instance_quality` | One quality summary per recording. | Check recording length, missing labels, time problems, and sensor coverage. Join on source path + file fingerprint. |
+| `sensor_availability` | One row per recording and sensor, counting finite readings. | Choose sensors with enough coverage for the question. Join on recording key + sensor name; do not join all 27 entries to every observation before counting rows. |
+| `quality_issues` | Every detected issue, including warnings, with its field, reason, affected use, and suggested action. | Explain exclusions, identify missing classes, and report quality limitations. Use distinct observation keys when selecting affected rows. |
+| `quality_quarantine` | The error-level subset of the issue list. | Exclude a sensor's flagged measurements or review timing/label errors. Match on the observation key and restrict to the relevant field/use. |
+| `event_reference` | The 10 event definitions and supported phases. | Give outputs consistent event names and explain valid phases. Join recording labels to `event_code`; a transient row class needs its event code derived before joining. |
+| `sensor_reference` | The 27 sensor definitions, units, names, and documented bounds/codes. | Label results correctly and use one shared sensor vocabulary. Join a result's `sensor_name` to the reference's `sensor_name`. |
+
+The main observation table contains flagged values as well as ordinary readings. Silver's reusable output is the observations **and** their quality information; reading the main table alone does not automatically exclude errors.
 
 The full result has 76,587,318 observations, 2,228 recording summaries, and 60,156 sensor summaries. The [contract](../silver/SILVER_CONTRACT.md) lists the observation fields and all renamed sensors.
 
@@ -99,7 +103,7 @@ This reads the saved tables and shows five examples. It does not rebuild Silver.
 
 - 4,028,400 missing class labels, about 5.26% of observations. These readings can still be used for work that does not need a row class.
 - 5,193 observations with no finite sensor readings.
-- 161,872 opening-range errors under the current 0–100 percent rule. These still need review against the source.
+- 161,872 production-choke opening errors: 161,538 readings below 0 and 334 above 100, with an overall flagged range of −99.99 to 100.4375. Repeated −99.99 values were observed, but their source meaning is unconfirmed. Keep the current flags and exclude those opening measurements from calculations; do not clip or guess replacements.
 - No missing/duplicate timestamps, backward intervals, gaps over one second, or class/recording mismatches under the implemented checks.
 
 Four sensors have no finite readings anywhere: `service_pump_downstream_pressure_pa`, `production_shutdown_valve_upstream_pressure_pa`, `subsea_production_line_pressure_pa`, and `service_pump_flow_rate_m3_s`. Other sensors have different coverage across recordings. Check `sensor_availability` before choosing inputs.
@@ -112,13 +116,13 @@ For a Gold result:
 - Do not discard a complete observation simply because another sensor or its class has an issue. Filter according to the fields your result actually needs, and record how many observations were excluded.
 - Do not join observations directly to every issue and then aggregate: several issues for one observation can multiply its contribution. Select distinct affected observation keys first, or use an existence/anti join.
 
-For example, to exclude errors affecting a particular sensor, use this **inside the Spark block above**:
+For example, to calculate with production-choke openings while excluding their error entries, use this **inside the Spark block above**. It reads the saved quarantine; it does not repeat Silver's detection rules:
 
 ```python
 from pyspark.sql import functions as F
 
 key = ["_source_path", "_file_sha256", "_row_in_file"]
-sensor = "downhole_pdg_pressure_pa"
+sensor = "production_choke_opening_pct"
 bad_sensor = (
     tables["quality_quarantine"]
     .filter((F.col("affected_use") == "sensor_measurement") & (F.col("field_name") == sensor))
@@ -132,6 +136,62 @@ sensor_rows = observations.filter(
 ```
 
 This keeps other rows even if they have an unrelated problem. Add label or time checks only when the Gold calculation needs them. There is no built-in reader that automatically applies all usage rules for you.
+
+To summarise that sensor for each recording, continue inside the same Spark block:
+
+```python
+recording_key = ["_source_path", "_file_sha256"]
+recording_openings = (
+    sensor_rows.groupBy(*recording_key, "source_type", "instance_label")
+    .agg(
+        F.count("*").alias("included_readings"),
+        F.avg(sensor).alias("mean_opening_pct"),
+        F.min(sensor).alias("minimum_opening_pct"),
+        F.max(sensor).alias("maximum_opening_pct"),
+    )
+    .withColumn("silver_run_id", F.lit(ready["run_id"]))
+)
+recording_openings.show(5, truncate=False)
+```
+
+This is a reading/aggregation example, not a Gold writer. Recordings with no eligible readings will be absent from this result. For a complete recording catalogue, left-join the aggregates to `instance_quality`, show zero included readings, and leave measurements missing rather than inventing zero means.
+
+### What to exclude for each kind of question
+
+| Gold question | Required checks | What can still be kept |
+|---|---|---|
+| Average pressure in each recording | Finite pressure and no error for that pressure field. | Rows with missing classes or errors in an unrelated opening sensor. |
+| Compare openings by event phase | Finite, unflagged opening plus `class_label_status = "consistent"`. | Other valid fields from observations whose opening was excluded can support separate results. |
+| Calculate a time-based rate or window | Relevant sensor checks and review of timestamp issues/spacing. | Original row positions and actual gaps; do not infer regular timing just from row counts. |
+| Summarise missing labels and sensor coverage | Existing summaries and issue counts with the right denominator. | Missing/flagged records must remain visible in the quality result. |
+
+Use `instance_label` for a recording's event category and `class_code`/`row_event_phase` for its condition at an observation. A normal period within an Event 1 recording is not automatically a recording of Event 0.
+
+**Never replace every missing or bad measurement with zero.** If several sensors are needed, define eligibility for those sensors. Keep counts of total, included, and excluded observations so the report shows how much data supported the answer.
+
+## Recommended first Gold outputs
+
+Start with these two outputs, then add a phase comparison if it answers the project question. These are recommendations for the next layer; they have not been implemented.
+
+| Proposed output | What one row means | Inputs and purpose |
+|---|---|---|
+| `recording_sensor_statistics` | One recording and sensor. | Use observations, sensor-specific quarantine filters, and availability/reference definitions. Save total/finite/included counts plus mean, minimum, maximum, and units. Answer which sensors are available and what their readings look like. |
+| `event_quality_overview` | One source type and recording event. | Aggregate `instance_quality`, sensor coverage, and distinct affected observation keys from issues. Show recording/observation totals, missing-label rate, and error-affected row rate. Make the limitations visible in the project report. |
+| `event_phase_sensor_statistics` | One source type, recording event, row phase, and sensor. | Use class-consistent observations and eligible sensor readings. Compare normal, transient, and steady phases where supported by `event_reference`. |
+
+For averages across recordings, choose whether each observation or each recording gets equal weight. Longer recordings dominate an average over all observations. Report that choice rather than silently mixing the two meanings.
+
+Recommended working order:
+
+1. Pick the questions and a small set of sensors with useful coverage. Avoid the four completely unavailable sensors for measurement results.
+2. Build the recording-level statistics on the 30-file dev sample. Apply quality filters for each selected sensor and record exclusion counts.
+3. Build the event quality overview so readers can see what was missing or excluded. Do not sum issue entries and call them distinct bad observations.
+4. Add a phase comparison if needed, keeping `REAL`, `SIMULATED`, and `DRAWN` separate by default.
+5. Check tiny examples with known expected results, run on the VM into a separate Gold output root, and compare repeated outputs.
+
+If preparing machine-learning data later, split by recording rather than individual observation; consider well groups for real recordings. Decide separately whether synthetic scenarios belong in training or evaluation. Do not use synthetic clock dates as real calendar dates.
+
+Save the selected Silver run ID, reference version, chosen sensors, quality/inclusion rules, and output counts in the Gold report. No extra dependencies are needed for the Spark examples here.
 
 ## What to decide before writing Gold
 
