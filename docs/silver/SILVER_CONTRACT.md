@@ -214,3 +214,72 @@ python -m threew.silver.run --env prod --output-root /home/ubuntu/3w-data/silver
 Production input requires an explicit separate output root. The official production Silver folder is protected by the current runner.
 
 For reproducibility, run twice with the same code, input, configuration, contract, and references. Compare the columns/types and complete contents of all seven tables, including repeated rows and missing values. Different row or file ordering is acceptable; matching counts alone is not enough. See [the run guide](SILVER_RUN_GUIDE.md) for the comparison command.
+
+## New columns added in Silver
+
+### Columns based on existing labels
+
+These four columns are strings. We create them using the existing event codes and fixed rules.
+
+| New column | How we create it | What it describes |
+|---|---|---|
+| `instance_event_name` | Look up the event name using `instance_label`. For example, label `1` becomes `Abrupt Increase of BSW`. | The event category for the whole recording. This name stays the same throughout the recording, including rows labelled normal. |
+| `row_event_name` | Look up the event using `class_code`. Code `0` means normal operation, codes `1–9` identify the event directly, and codes `101–109` identify the event after subtracting `100`. Missing or unrecognized classes give a null name. | The event described by the individual row's class. This can differ from the recording's event name. |
+| `row_event_phase` | Map class `0` to `normal`, classes `1–9` to `steady`, and classes `101–109` to `transient`. A missing class gives `unknown`; any other code gives `unrecognized`. | The phase described by the existing class code. |
+| `class_label_status` | Compare `class_code` with the supported combinations for `instance_label`. A missing class gives `unlabeled`, a supported combination gives `consistent`, and any other combination gives `inconsistent`. | Whether the row's class agrees with the recording label and its supported phases. |
+
+## Calculations in the summary tables
+
+We calculate quality summaries from `silver_observations` in `quality.py`. The results are saved in two separate tables: `instance_quality` and `sensor_availability`. These calculations describe the data's quality and availability without changing the original readings.
+
+### Recording summaries: `instance_quality`
+
+We save one summary row per recording. The recording is identified by its source path and file fingerprint.
+
+| Summary column | How we calculate it |
+|---|---|
+| `recording_rows` | Count every observation in the recording. |
+| `unlabeled_rows` | Count observations where `class_code` is null. |
+| `null_state_rows` | Count observations where `state_code` is null. |
+| `null_timestamp_rows` | Count observations where `timestamp` is null. |
+| `duplicate_timestamp_rows` | Subtract the number of distinct non-null timestamps from the total number of non-null timestamps. Three rows sharing one timestamp therefore count as two extra occurrences. |
+| `timestamp_intervals_compared` | Count neighbouring row pairs where both timestamps are available, allowing us to calculate their time difference. |
+| `one_second_intervals` | Count time differences equal to exactly one second. |
+| `repeated_adjacent_timestamps` | Count time differences equal to zero. This checks neighbouring rows only, while `duplicate_timestamp_rows` includes duplicates anywhere in the recording. |
+| `backward_intervals` | Count time differences below zero, meaning the timestamp moves backwards in the original row order. |
+| `gaps_over_one_second` | Count time differences greater than one second. |
+| `largest_gap_seconds` | Find the largest time difference greater than one second. The result is null when no such gap exists. |
+| `inconsistent_class_rows` | Count observations where `class_label_status` is `inconsistent`. |
+| `unrecognized_class_rows` | Count observations where `row_event_phase` is `unrecognized`. These rows can also be counted as inconsistent, so the two counts overlap. |
+| `sensors_present` | Count how many of the 27 sensors have at least one finite reading anywhere in the recording. |
+| `sensors_missing_entire_recording` | Calculate `27 - sensors_present`. This includes sensors containing only null, NaN, or infinite values. |
+| `no_sensors_present` | Set to `true` when `sensors_present` is zero; otherwise set to `false`. This describes the entire recording, rather than an individual row without measurements. |
+
+`interval_seconds = current_timestamp - previous_timestamp`
+
+The difference is expressed in seconds. The first row has no preceding timestamp, so it has no interval. A pair containing a missing timestamp also has no interval.
+
+We use the original row order because sorting by timestamp before checking would hide backward movement. The temporary interval columns are used during processing and are not saved in `silver_observations`.
+
+### Sensor summaries: `sensor_availability`
+
+We save one summary row per sensor per recording, giving 27 summary rows for each recording.
+
+A finite reading is a value that is not null, NaN, positive infinity, or negative infinity. Zero counts as finite.
+
+| Summary column | How we calculate it |
+|---|---|
+| `recording_rows` | Reuse the total number of observations in the recording. This is the denominator for the coverage percentage. |
+| `rows_with_finite_values` | Count observations where this particular sensor has a finite reading. |
+| `rows_without_finite_values` | Calculate `recording_rows - rows_with_finite_values`. |
+| `percent_rows_with_finite_values` | Calculate `100 × rows_with_finite_values / recording_rows`, rounded to two decimal places. |
+| `has_finite_values` | Set to `true` when `rows_with_finite_values` is greater than zero; otherwise set to `false`. |
+
+For example, if a recording contains 10 rows and a sensor has finite readings in 8 of them, its summary contains:
+
+- `rows_with_finite_values = 8`
+- `rows_without_finite_values = 2`
+- `percent_rows_with_finite_values = 80.00`
+- `has_finite_values = true`
+
+These calculations measure availability. A choke opening of 120 percent counts as finite but still fails the opening-range check. Similarly, missing measurements can reflect a sensor being unavailable by design; the availability summary alone does not establish an error.
