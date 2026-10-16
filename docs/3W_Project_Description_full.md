@@ -2,6 +2,8 @@
 
 ## 1 Project statement
 
+`To what extent is the oil-well sensor data complete and suitable for anomaly analysis, and how can our layers identify its quality limitations?`
+
 We build a batch data pipeline on Spark that turns the raw Petrobras 3W dataset (v2.0.0) into trusted, analysis-ready data for detecting and classifying undesirable events in offshore oil wells. The pipeline follows the Medallion architecture (Bronze, Silver, Gold) and runs end to end through GitHub Actions on our UiS OpenStack VM.
 
 The final output is a labelled, window-level feature table that an anomaly detection model consumes directly. Silver also serves as a reusable cleaned dataset for other analyses.
