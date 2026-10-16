@@ -1,6 +1,8 @@
 # Silver layer handover
 
-This is what you need to start on the Silver layer. A second, much longer file (`docs/BRONZE_REFERENCE.md`) has every detail, and is written so your AI agent can look things up in it. Read this one first.
+This is the original Bronze-to-Silver handover, kept as background. Its suggestions describe Silver before it was built. For the current implementation, use the [Silver reference](SILVER_REFERENCE.md); to start Gold, use the [Gold handover](../gold/GOLD_HANDOVER.md).
+
+This is what you need to start on the Silver layer. A second, much longer file (`docs/bronze/BRONZE_REFERENCE.md`) has every detail, and is written so your AI agent can look things up in it. Read this one first.
 
 ## Background in short
 
@@ -129,4 +131,4 @@ The same patterns as Bronze will make the report consistent:
 - **Write output under `/home/ubuntu/3w-data/silver/`,** with its own run report, lock and ready marker.
 - **Measure quality before and after** (missing, invalid, rejected, accepted counts). The guideline weights Silver most heavily, and wants that evidence.
 - **Profile before tuning.** From Bronze we know the VM is disk-bound (about 24% I/O wait) and the table is 2,228 small files. Compacting files, or zstd instead of Snappy, are hypotheses to test, not decisions.
-- **Reach for Bronze evidence and design notes** in `docs/evidence/bronze/README.md` and `docs/dataset_notes.md`.
+- **Reach for Bronze evidence and design notes** in `docs/evidence/bronze/README.md` and `docs/bronze/dataset_notes.md`.

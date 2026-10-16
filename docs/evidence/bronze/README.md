@@ -13,7 +13,7 @@ Source: `Yahya2491/3w-pipeline` @ `c1a7e8d0cfefc0875974ea079d11349a37fa0c56` (`v
 
 - **rows_total = 76,587,318.** Part D must reconcile against this exactly. It also equals the sum measured directly
   on the upstream files (40,748,658 simulated + 32,872,250 real + 2,966,410 drawn, see
-  [`dataset_notes.md`](../../dataset_notes.md)).
+  [`dataset_notes.md`](../../bronze/dataset_notes.md)).
 - **Duration:** 720.8 s for the whole run, 717.96 s of it downloading (4 workers); landing and inspecting
   2,228 files took 1.8 s.
 - **Throughput:** 2.609 MB/s overall, with a read-only token.

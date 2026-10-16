@@ -19,6 +19,9 @@ def test_env_loads_with_absolute_paths(env):
         cfg.storage.runs,
         cfg.storage.staging,
         cfg.storage.bronze_ready,
+        cfg.storage.silver,
+        cfg.storage.silver_runs,
+        cfg.storage.silver_ready,
     ):
         assert path.is_absolute()
 
@@ -44,6 +47,9 @@ def test_derived_paths():
     assert storage.runs == storage.root / "bronze" / "_runs"
     assert storage.staging == storage.root / "_staging"  # inside the root, never /tmp
     assert storage.bronze_ready == storage.root / "bronze" / "bronze_ready.json"  # beside the table, not in it
+    assert storage.silver == storage.root / "silver"
+    assert storage.silver_runs == storage.root / "silver" / "_runs"
+    assert storage.silver_ready == storage.root / "silver" / "silver_ready.json"
 
 
 def test_dev_root_is_resolved_against_repo_root():
