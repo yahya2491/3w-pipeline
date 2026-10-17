@@ -42,9 +42,10 @@ several minutes for the 30-file sample; the rolling features are substantially h
 than the original rename-and-profile pipeline. A 2 GB driver exhausted its Java heap
 while writing this sample during validation, so use the updated configuration.
 
-The completed Milestone 12 run took about 17 minutes on this development setup and passed
-all 30 saved-output checks. Its [evidence record](../evidence/silver/milestone12/README.md)
-includes counts, storage size and the masked-reading experiment. Runtime varies by machine.
+The earlier Milestone 12 run took about 17 minutes on this development setup and passed
+all 30 saved-output checks before the feature-column reductions. Its [evidence record](../evidence/silver/milestone12/README.md)
+does not validate the current schema. Rerun the dev sample to record current checks and
+storage size; runtime varies by machine.
 
 Use `--rules /absolute/path/to/rules.yaml` only for a deliberately documented alternative.
 

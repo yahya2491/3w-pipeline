@@ -111,55 +111,31 @@ def prepare_observations(observations: DataFrame, rules: QualityRules) -> DataFr
     usable = F.col("sequence_usable")
     short, long = rules.short_window_seconds, rules.long_window_seconds
     feature_columns = []
-    for name in (*rules.sensors, PRESSURE_DROP):
-        value = F.col(name if name == PRESSURE_DROP else f"{name}_clean")
-        previous_value = F.lag(value).over(segment)
-        delta = F.when(usable, value - previous_value)
-        columns = [delta.alias(f"{name}_delta"), (delta / F.col("_prep_step")).alias(f"{name}_rate_per_second")]
-        if name != PRESSURE_DROP:
-            short_frame = timed.rangeBetween(-short * 1_000_000 + 1, 0)
-            long_frame = timed.rangeBetween(-long * 1_000_000 + 1, 0)
-            past_frame = timed.rangeBetween(-short * 1_000_000, -1)
-            observed = F.when(F.col(f"{name}_is_valid") & usable, 1)
-            short_count = F.count(observed).over(short_frame)
-            long_count = F.count(observed).over(long_frame)
-            past_count = F.count(observed).over(past_frame)
-            short_ok = usable & (short_count >= rules.minimum_count(short))
-            long_ok = usable & (long_count >= rules.minimum_count(long))
-            mean_short = F.when(short_ok, F.avg(value).over(short_frame))
-            mean_long = F.when(long_ok, F.avg(value).over(long_frame))
-            last_valid_us = F.last(
-                F.when(F.col(f"{name}_is_valid") & usable, F.col("_prep_us")), ignorenulls=True
-            ).over(history)
-            invalid_duration = F.when(
-                usable,
-                F.when(F.col(f"{name}_is_valid"), F.lit(0.0)).otherwise(
-                    F.when(last_valid_us.isNotNull(), (F.col("_prep_us") - last_valid_us) / 1_000_000.0).otherwise(
-                        (F.col("_prep_us") - F.col("_prep_start_us")) / 1_000_000.0 + rules.expected_interval_seconds
-                    )
+    for name in rules.sensors:
+        value = F.col(f"{name}_clean")
+        short_frame = timed.rangeBetween(-short * 1_000_000 + 1, 0)
+        long_frame = timed.rangeBetween(-long * 1_000_000 + 1, 0)
+        past_frame = timed.rangeBetween(-short * 1_000_000, -1)
+        observed = F.when(F.col(f"{name}_is_valid") & usable, 1)
+        short_count = F.count(observed).over(short_frame)
+        long_count = F.count(observed).over(long_frame)
+        past_count = F.count(observed).over(past_frame)
+        short_ok = usable & (short_count >= rules.minimum_count(short))
+        long_ok = usable & (long_count >= rules.minimum_count(long))
+        mean_short = F.when(short_ok, F.avg(value).over(short_frame))
+        mean_long = F.when(long_ok, F.avg(value).over(long_frame))
+        feature_columns.extend(
+            [
+                mean_short.alias(f"{name}_mean_{short}s"),
+                F.when(short_ok & (short_count >= 2), F.stddev_samp(value).over(short_frame)).alias(
+                    f"{name}_stddev_{short}s"
                 ),
-            )
-            columns.extend(
-                [
-                    F.when(usable, short_count).alias(f"{name}_observed_count_{short}s"),
-                    F.when(usable, long_count).alias(f"{name}_observed_count_{long}s"),
-                    F.when(usable, short_count / F.lit(short / rules.expected_interval_seconds)).alias(
-                        f"{name}_coverage_{short}s"
-                    ),
-                    F.when(usable, F.count(value).over(short_frame)).alias(f"{name}_prepared_count_{short}s"),
-                    mean_short.alias(f"{name}_mean_{short}s"),
-                    F.when(short_ok & (short_count >= 2), F.stddev_samp(value).over(short_frame)).alias(
-                        f"{name}_stddev_{short}s"
-                    ),
-                    mean_long.alias(f"{name}_mean_{long}s"),
-                    F.when(
-                        usable & (past_count >= rules.minimum_count(short)), value - F.avg(value).over(past_frame)
-                    ).alias(f"{name}_deviation_{short}s"),
-                    (mean_short - mean_long).alias(f"{name}_trend_{short}s_{long}s"),
-                    invalid_duration.alias(f"{name}_invalid_duration_seconds"),
-                ]
-            )
-        feature_columns.extend(columns)
+                mean_long.alias(f"{name}_mean_{long}s"),
+                F.when(
+                    usable & (past_count >= rules.minimum_count(short)), value - F.avg(value).over(past_frame)
+                ).alias(f"{name}_deviation_{short}s"),
+            ]
+        )
     # Extract all compatible windows together, avoiding per-sensor row/time re-sorts.
     df = df.select("*", *feature_columns)
     return df.select(

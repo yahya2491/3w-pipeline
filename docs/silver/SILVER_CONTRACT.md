@@ -18,15 +18,15 @@ Silver writes seven Parquet tables:
 
 Silver keeps one row for each Bronze observation. It does not turn the sensors into separate rows or remove observations with missing or invalid values.
 
-## The 193 columns in `silver_observations`
+## The 135 columns in `silver_observations`
 
-Each row in `silver_observations` is still one original sensor reading. That row now has 193 columns: 36 fields carried over from Bronze (some renamed), 3 recording fields matched from Bronze's catalogue, and 154 fields Silver calculates. The rows are not the same schema as Bronze, and Silver has not made extra rows for the new fields. Some values can be null.
+Each row in `silver_observations` is still one original sensor reading. That row now has 135 columns: 36 fields carried over from Bronze (some renamed), 3 recording fields matched from Bronze's catalogue, and 96 fields Silver calculates. The rows are not the same schema as Bronze, and Silver has not made extra rows for the new fields. Some values can be null.
 
 | Where the columns come from | Count | What they contain |
 |---|---:|---|
 | Bronze | 36 | 9 non-sensor fields and the 27 original sensor readings. Silver gives some of these clearer names. |
 | Bronze catalogue | 3 | `instance_id`, `well_id`, and `instance_start`, matched to the observation's source file. |
-| Added by Silver | 154 | Event descriptions, sensor validity and clean values, choke-repair details, sequence and evidence fields, and time-series features. The next tables explain them. |
+| Added by Silver | 96 | Event descriptions, sensor validity and clean values, choke-repair details, sequence and evidence fields, and time-series features. The next tables explain them. |
 
 The nine non-sensor Bronze fields are `source_type`, `label` (Silver calls it `instance_label`), `class` (`class_code`), `state` (`state_code`), `timestamp`, `_source_path`, `_file_sha256`, `_ingest_run_id`, and `_row_in_file`. The 27 sensor fields are renamed as shown below. Catalogue `instance_id` is required; `well_id` and `instance_start` can be null.
 
@@ -34,9 +34,9 @@ The observation key is the combination of `_source_path`, `_file_sha256`, and `_
 
 ## Why Silver adds these columns
 
-Silver adds prepared columns for two reasons. First, it marks each of the 27 sensor readings as valid or invalid and puts usable values in a clean column. Invalid values are null in that column, except that a finite out-of-range choke opening can use the most recent original valid opening from within 3 seconds; Silver flags this estimate. This does not fill missing readings or detect general abnormal pressure, temperature, or flow values, and the original readings stay unchanged. Second, the time-based columns (changes, averages, deviations, trends, and time since a valid reading) are prepared for future anomaly detection in Gold. A Spark model can use them to look for unusual sensor behavior linked to undesirable well events. The Gold model is planned work and has not yet been built or evaluated. The same Silver data can also support CNN experiments in the other course.
+Silver adds prepared columns for two reasons. First, it marks each of the 27 sensor readings as valid or invalid and puts usable values in a clean column. Invalid values are null in that column, except that a finite out-of-range choke opening can use the most recent original valid opening from within 3 seconds; Silver flags this estimate. This does not fill missing readings or detect general abnormal pressure, temperature, or flow values, and the original readings stay unchanged. Second, it adds rolling averages, variation, and deviation from recent behavior as useful prepared features for Gold anomaly detection. Simple rates and rolling coverage can be calculated from the clean values, validity flags, timestamps, and sequence segments, so Silver leaves those out. The Gold model is planned work and has not yet been built or evaluated. The same Silver data can also support CNN experiments in the other course.
 
-## The 154 columns Silver adds
+## The 96 columns Silver adds
 
 ### Event descriptions: 4 columns
 
@@ -81,32 +81,23 @@ These columns are added for the two choke openings only: `gas_lift_choke_opening
 | `prepared_sensor_count` | Number of non-null clean sensor values on this row, including any permitted opening repair. | Shows how many prepared sensor values are available. This may be larger than the observed count. |
 | `has_observed_sensor_evidence` | `true` when at least one original sensor reading on the row is valid. | A quick check for rows with any original sensor evidence. It is not a full model eligibility rule. |
 
-### Time-series features: 84 columns
+### Time-series features: 28 columns
 
-These 12 columns are added for each of seven selected sensors: `downhole_pdg_pressure_pa`, `subsea_tree_tpt_pressure_pa`, `production_choke_upstream_pressure_pa`, `production_choke_downstream_pressure_pa`, `production_choke_downstream_temperature_c`, `gas_lift_flow_rate_m3_s`, and `production_choke_opening_pct`. In the table below, replace `<sensor>` with one of those names. The feature values are doubles; the two observed-count fields and prepared-count field are bigints.
+These 4 columns are added for each of seven selected sensors: `downhole_pdg_pressure_pa`, `subsea_tree_tpt_pressure_pa`, `production_choke_upstream_pressure_pa`, `production_choke_downstream_pressure_pa`, `production_choke_downstream_temperature_c`, `gas_lift_flow_rate_m3_s`, and `production_choke_opening_pct`. In the table below, replace `<sensor>` with one of those names. They are doubles. Silver leaves out simple rates and rolling coverage because Gold can calculate them from clean readings, validity flags, timestamps, and sequence segments. Separate counts and time-since-valid fields are also left out. The difference between the two means can be calculated as needed.
 
 | New column pattern | What it means | What it is useful for |
 |---|---|---|
-| `<sensor>_delta` | Current clean value minus the previous clean value in the same segment. | Shows how much the sensor changed since the previous reading. |
-| `<sensor>_rate_per_second` | The delta divided by the actual time between readings. | Shows how quickly the sensor changed, accounting for uneven intervals. |
-| `<sensor>_observed_count_120s` / `<sensor>_observed_count_300s` | Number of original valid readings in the 120- or 300-second window `(t-W, t]`. Repairs are not counted. | Shows how much original data supports the window. |
-| `<sensor>_coverage_120s` | Original valid readings in the 120-second window divided by 120 expected one-second readings. | Shows how complete the short window is. |
-| `<sensor>_prepared_count_120s` | Number of non-null clean values in the short window, including permitted repairs. | Shows how many prepared values are available for the short-window statistics. |
 | `<sensor>_mean_120s` / `<sensor>_mean_300s` | Average clean value in the short or long window. | Summarizes the sensor's recent and longer-term level. |
 | `<sensor>_stddev_120s` | Sample standard deviation of clean values in the short window. | Shows how much the sensor varied recently. |
 | `<sensor>_deviation_120s` | Current clean value minus the mean of the preceding 120 seconds `[t-120s, t)`. The current value is excluded from that mean. | Shows whether the current reading differs from its recent baseline. |
-| `<sensor>_trend_120s_300s` | The 120-second clean mean minus the 300-second clean mean. | Shows whether the short-term level has shifted from the longer-term level. |
-| `<sensor>_invalid_duration_seconds` | Seconds since the last original valid reading. If there has not been one in this segment, the count starts at the segment's first sample and includes the current sample. | Shows how long the sensor has gone without a valid original reading. |
 
 The configured minimum coverage is 50% of the expected readings: 60 original valid readings for 120 seconds and 150 for 300 seconds. Statistics are null below the required coverage; standard deviation also needs at least two valid readings. Temporal features do not cross sequence segments. These are candidate model inputs, not a proven best feature set.
 
-### Choke pressure relationship: 3 columns
+### Choke pressure relationship: 1 column
 
 | New column | What it means | What it is useful for |
 |---|---|---|
 | `production_choke_pressure_drop_pa` | Clean production-choke upstream pressure minus clean downstream pressure. | Shows the pressure difference across the choke. Negative results are kept for review. |
-| `production_choke_pressure_drop_pa_delta` | Current pressure difference minus the previous one in the same segment. | Shows how the pressure difference changed. |
-| `production_choke_pressure_drop_pa_rate_per_second` | The pressure-difference change divided by elapsed seconds. | Shows how quickly that difference changed. |
 
 ## Sensor names
 

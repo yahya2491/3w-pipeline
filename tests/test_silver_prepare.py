@@ -68,7 +68,7 @@ def test_choke_repair_uses_original_anchor_for_at_most_three_seconds(spark):
     assert rows[3][f"{CHOKE}_is_valid"] is False
     assert rows[3]["prepared_sensor_count"] == 27
     assert rows[3]["observed_valid_sensor_count"] == 26
-    assert rows[4][f"{CHOKE}_invalid_duration_seconds"] == 4.0
+    assert f"{CHOKE}_invalid_duration_seconds" not in rows[4].asDict()
     summary = summarize_preparation(prepared, rules)
     assert summary[f"{CHOKE}_repaired"] == 3
     assert summary[f"{CHOKE}_unresolved"] == 3  # stale opening, NaN and infinity
@@ -84,13 +84,13 @@ def test_time_breaks_and_recordings_reset_repairs_and_empty_rows_remain(spark):
     assert all(r[f"{CHOKE}_clean"] is None for r in rows[2:])
     for index in (3, 5, 7):
         assert rows[index]["sequence_usable"] is False
-        assert rows[index][f"{CHOKE}_observed_count_120s"] is None
+    assert f"{CHOKE}_coverage_120s" not in rows[3].asDict()
     assert rows[-1]["has_observed_sensor_evidence"] is False
     assert rows[-1]["prepared_sensor_count"] == 0
-    assert rows[2][f"{CHOKE}_delta"] is None
+    assert f"{CHOKE}_delta" not in rows[2].asDict()
 
 
-def test_elapsed_windows_coverage_deltas_and_pressure_relationship(spark):
+def test_elapsed_windows_and_pressure_relationship(spark):
     rules = replace(load_rules(), sensors=(PDG,))
     overrides = {
         i: {
@@ -103,22 +103,22 @@ def test_elapsed_windows_coverage_deltas_and_pressure_relationship(spark):
     rows = prepare_observations(readings(spark, range(321), overrides), rules).orderBy("_row_in_file").collect()
     assert rows[58][f"{PDG}_mean_120s"] is None
     assert rows[59][f"{PDG}_mean_120s"] == 29.5
-    assert rows[59][f"{PDG}_coverage_120s"] == 0.5
+    assert f"{PDG}_coverage_120s" not in rows[59].asDict()
     expected = [float(i) for i in range(1, 121) if i != 100]
     assert rows[120][f"{PDG}_mean_120s"] == pytest.approx(sum(expected) / len(expected))
     assert rows[120][f"{PDG}_stddev_120s"] == pytest.approx(stdev(expected))
-    assert rows[120][f"{PDG}_observed_count_120s"] == 119
+    assert f"{PDG}_coverage_120s" not in rows[120].asDict()
     previous = [float(i) for i in range(120) if i != 100]
     assert rows[120][f"{PDG}_deviation_120s"] == pytest.approx(120 - sum(previous) / len(previous))
-    assert rows[100][f"{PDG}_delta"] is None
-    assert rows[101][f"{PDG}_delta"] is None
-    assert rows[102][f"{PDG}_rate_per_second"] == 1.0
+    assert f"{PDG}_delta" not in rows[120].asDict()
+    assert f"{PDG}_rate_per_second" not in rows[102].asDict()
     assert rows[149][f"{PDG}_mean_300s"] is None
     expected_long = [float(i) for i in range(1, 301) if i != 100]
     assert rows[300][f"{PDG}_mean_300s"] == pytest.approx(sum(expected_long) / len(expected_long))
-    assert rows[300][f"{PDG}_trend_120s_300s"] == pytest.approx(240.5 - sum(expected_long) / len(expected_long))
+    assert f"{PDG}_trend_120s_300s" not in rows[300].asDict()
     assert rows[120][PRESSURE_DROP] == 620.0
-    assert rows[120][f"{PRESSURE_DROP}_delta"] == 1.0
+    assert f"{PRESSURE_DROP}_rate_per_second" not in rows[120].asDict()
+    assert f"{PRESSURE_DROP}_delta" not in rows[120].asDict()
     assert rows[120]["timestamp"].microsecond == 500000
 
 
@@ -184,9 +184,10 @@ def test_rolling_statistics_use_clean_values_without_counting_repairs_as_observa
     overrides[120] = {"downhole_safety_valve_state": 0.75}
     source = readings(spark, range(121), overrides)
     row = prepare_observations(source, rules).filter("_row_in_file = 120").first()
-    assert row[f"{CHOKE}_observed_count_120s"] == 116
-    assert row[f"{CHOKE}_prepared_count_120s"] == 119
-    assert row[f"{CHOKE}_coverage_120s"] == pytest.approx(116 / 120)
+    assert f"{CHOKE}_prepared_count_120s" not in row.asDict()
+    assert f"{CHOKE}_coverage_120s" not in row.asDict()
+    assert f"{CHOKE}_observed_count_120s" not in row.asDict()
+    assert f"{CHOKE}_observed_count_300s" not in row.asDict()
     assert row[f"{CHOKE}_mean_120s"] == 50.0
     assert row[f"{CHOKE}_stddev_120s"] == 0.0
     assert row["downhole_safety_valve_state"] == 0.75

@@ -11,9 +11,10 @@ The [comparison log](../evidence/silver/comparison.log) and reports linked from 
 Gold has not been implemented. The current full Silver result is in the separate VM test destination, `/home/ubuntu/3w-data/silver-oh/`.
 
 The local 30-recording v2 development build passed all 30 checks with 1,931,052 observations
-and 193 columns. Its [validation evidence](../evidence/silver/milestone12/README.md) includes
-the actual feature coverage and a masked-reading repair experiment. The sample contained
-no actual invalid openings; full v2 VM validation remains to be run.
+and 193 columns before the feature-column reduction. Its [validation evidence](../evidence/silver/milestone12/README.md) includes
+the feature coverage and a masked-reading repair experiment. The sample contained
+no actual invalid openings. Rerun the dev sample to validate the current 135-column contract;
+full VM validation remains to be run.
 
 ## The seven folders and how Gold can use them
 
@@ -35,7 +36,7 @@ The observations also identify the source as `REAL`, `SIMULATED`, or `DRAWN` in 
 
 ## How to use the saved quality tables with observations
 
-**Use the prepared columns explicitly.** `<sensor>_clean` and the causal features coexist with the original columns. Opening replacements carry `_was_imputed` and `_source_age_seconds`; observed coverage excludes estimates. Raw quality issues remain even after a repair, so do not automatically reject a permitted clean replacement just because its raw measurement is quarantined. Conversely, a repair does not make the original measurement valid. Review sequence timing, feature coverage and target eligibility for the chosen task.
+**Use the prepared columns explicitly.** `<sensor>_clean` and the rolling features coexist with the original columns. Opening replacements carry `_was_imputed` and `_source_age_seconds`. Raw quality issues remain even after a repair, so do not automatically reject a permitted clean replacement just because its raw measurement is quarantined. Conversely, a repair does not make the original measurement valid. Review sequence timing, sensor availability and target eligibility for the chosen task.
 
 Gold can read the existing `quality_issues` or `quality_quarantine` Parquet table alongside `silver_observations`. It does not need to rerun Silver or rediscover the same problems.
 
@@ -68,7 +69,7 @@ The project description says Gold should produce labelled, fixed-window features
 
 Build one Gold row per fixed time window, such as five minutes. The exact window size and the minimum amount of usable data need to be set before building the table. Derive the target from supported `class_code` values in that same window: class 0 represents normal operation; supported nonzero classes represent an event and its phase. Exclude windows with missing or inconsistent labels from supervised evaluation rather than guessing their class. Keep label fields and event-derived metadata out of the model's predictor columns.
 
-Use Silver's `<sensor>_clean` readings and row-level changes, rates, rolling means, deviations, trends, and coverage fields to build window features. The Silver quality tables have a different job: `instance_quality` and `sensor_availability` show whether a recording or sensor has enough usable data; `quality_issues` and `quality_quarantine` identify affected fields and rows. Use these tables to set and explain inclusion rules, then report how many rows or windows were kept and excluded. Do not pass recording-level summary counts or quality outcomes into the model as predictors, because they could reveal the answer or duplicate the same recording-level information across many windows.
+Use Silver's `<sensor>_clean` readings and rolling mean, variation, and deviation features to build window features. Gold can calculate simple rates and coverage from the clean readings, validity flags, timestamps, and sequence segments if useful. The Silver quality tables have a different job: `instance_quality` and `sensor_availability` show whether a recording or sensor has enough usable data; `quality_issues` and `quality_quarantine` identify affected fields and rows. Use these tables to set and explain inclusion rules, then report how many rows or windows were kept and excluded. Do not pass recording-level summary counts or quality outcomes into the model as predictors, because they could reveal the answer or duplicate the same recording-level information across many windows.
 
 Evaluate on recordings that were not used for training; consider grouping real recordings by well. Fit any learned preprocessing on the training set only. Report a confusion matrix, per-class precision and recall, and macro F1 so performance on rare events is visible. Compare results with a simple majority-class baseline. This demonstrates whether the Silver features and Gold model can detect the labelled undesirable events; it does not establish that they can predict an event before it begins.
 
