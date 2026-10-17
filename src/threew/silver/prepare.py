@@ -6,12 +6,12 @@ from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 from pyspark.sql.window import Window
 
+from threew.silver.features import OPENINGS, add_sensor_features
 from threew.silver.issues import is_finite
 from threew.silver.reference import SENSOR_RENAMES
 from threew.silver.rules import QualityRules
 
 RECORDING = ("_source_path", "_file_sha256")
-OPENINGS = tuple(target for source, target in SENSOR_RENAMES.items() if source.startswith("ABER-"))
 
 
 def observed_valid(name, rules):
@@ -25,7 +25,7 @@ def observed_valid(name, rules):
 
 
 def prepare_observations(observations: DataFrame, rules: QualityRules) -> DataFrame:
-    """Retain source columns/rows; add clean values and repair provenance."""
+    """Retain source rows; add clean values, repair provenance and 30 sensor features."""
     original = observations.columns
     ordered = Window.partitionBy(*RECORDING).orderBy("_row_in_file")
     prefix = ordered.rowsBetween(Window.unboundedPreceding, Window.currentRow)
@@ -90,9 +90,10 @@ def prepare_observations(observations: DataFrame, rules: QualityRules) -> DataFr
             cleaned = cleaned.when(repair, F.col(f"{anchor_name}.value"))
         clean_columns.append(cleaned.cast("double").alias(f"{name}_clean"))
     df = df.select("*", *clean_columns)
-    return df.select(
+    cleaned = df.select(
         *original, *[name for name in df.columns if name not in original and not name.startswith("_prep_")]
     )
+    return add_sensor_features(cleaned, rules)
 
 
 def summarize_preparation(observations: DataFrame, rules: QualityRules) -> dict:
@@ -113,5 +114,11 @@ def summarize_preparation(observations: DataFrame, rules: QualityRules) -> dict:
                     f"{name}_unresolved"
                 ),
             ]
+        )
+    for name in rules.feature_sensors:
+        expressions.append(
+            F.count(F.when(F.col(f"{name}_count_120s") == rules.feature_window_seconds, 1)).alias(
+                f"{name}_complete_120s_rows"
+            )
         )
     return observations.agg(*expressions).first().asDict()

@@ -6,8 +6,9 @@ This report describes the work completed in each commit milestone. The [contract
 
 Milestones 1–11 describe the original preservation/quality implementation. Milestone 12
 added cleaning and experimental model-window features. Milestone 13 keeps the reusable
-cleaning and quality work in Silver and moves model-window aggregates to Gold. Earlier
-run counts and timings are historical evidence, not validation of contract v2.
+cleaning and quality work in Silver and moves model-window aggregates to Gold. Milestone 14
+reduces temporary storage; Milestone 15 adds a focused set of sensor features. Earlier run
+counts and timings are historical evidence, not validation of the current 106-column schema.
 
 ## Pipeline
 
@@ -15,7 +16,7 @@ run counts and timings are historical evidence, not validation of contract v2.
 Original dataset files
     -> Bronze: download, verify, preserve observations and source identifiers
     -> Silver: rename fields, attach recording details, explain event codes
-         -> v2: clean readings, bounded choke repairs, row-level quality and sequence facts
+         -> v2: clean readings, bounded choke repairs, quality/sequence facts and 120-second features
          -> silver_observations: one row per original observation
          -> instance_quality: one summary per recording
          -> sensor_availability: one summary per recording and sensor
@@ -26,7 +27,7 @@ Original dataset files
     -> Gold / analysis: a consumer of these checked tables
 ```
 
-Silver keeps original readings, timestamps and labels. Contract v2 adds clean sensor values, explicitly marked choke estimates, readable event descriptions, and sequence details. Quality tables explain flagged source values. Gold builds the model-specific windows and statistics.
+Silver keeps original readings, timestamps and labels. Contract v2 adds clean sensor values, explicitly marked choke estimates, readable event descriptions, sequence details and 30 sensor-behaviour features. Quality tables explain flagged source values. Gold chooses labelled examples and trains/evaluates its model.
 
 ## Milestone 1 - Read Bronze and produce a first profile
 
@@ -446,7 +447,7 @@ scratch files remained after the run. Counts, quality totals, preparation totals
 rules matched the previous unbatched dev result. All 59 focused tests passed, including an
 exact seven-table comparison between single-batch and three-batch fixture runs and a failure
 in a later batch. The final catalogue guards also passed six targeted tests; lint and formatting
-passed. The optional choke evaluator now reads v2 clean columns without removed validity flags.
+passed. At that milestone, the optional choke evaluator read clean columns without the removed validity flags.
 
 The dev run took 400.6 seconds locally while regression tests were also running; this is not a
 controlled speed comparison. Smaller batches add startup and repeated-check overhead. The
@@ -455,4 +456,47 @@ retains its own output, and a recording larger than the batch target runs alone.
 
 See [the saved measurements](../evidence/silver/v2/storage_fix_dev.json) and the
 [VM command](SILVER_RUN_GUIDE.md#run-on-the-full-dataset-on-the-vm).
+
+## Milestone 15 - Add focused sensor features and remove diagnostic scripts
+
+The 76-column version handled cleaning and storage reliably, but it left all temporal feature
+preparation to Gold. We add 30 selected columns so Silver also prepares useful model inputs:
+120-second mean, sample standard deviation, previous-reading change and usable count for
+seven pressure, temperature and gas-lift-flow sensors, plus invalid-duration fields for both
+original choke openings. The schema is **106 columns: 36 Bronze + 3 catalogue + 67 derived**.
+The contract label remains **v2**, and the same seven tables are written.
+
+The seven sensors have recorded coverage in the dataset and represent operating conditions
+relevant to the intended model. This is a justified candidate set, not a claim of measured
+feature importance. Gold must compare it with a clean-reading baseline.
+
+The implementation uses DataFrame expressions and Spark SQL windows. The trailing range is
+`(time - 120 seconds, time]`; it never crosses a recording or sequence break. Means skip null
+clean readings, counts expose incomplete history, and sample standard deviation needs two
+values. Changes remain null when either adjacent clean reading is missing. Invalid-opening
+duration uses the original readings, so an estimated clean repair does not hide a continuing
+raw fault. The [contract](SILVER_CONTRACT.md) defines the exact fields and reset behaviour.
+
+The one-million-row recording batches, direct Parquet writes and exact comparisons from
+Milestone 14 remain. The rules file now records the feature history and sensor list. Temporary
+Python benchmarks/probes and the optional choke-evaluation script were removed; historical
+JSON results remain. Correctness checks stay in the normal `tests/` suite.
+
+Unit checks cover the exact time boundary, missing readings, segment resets, invalid-duration
+resets and future-data isolation. All **279 offline regression tests passed**; lint and formatting
+passed. The normal Silver CLI processed all **30 recordings / 1,931,052 observations** in
+three batches and passed **32 reconciliation checks**. Independent Parquet footer checks
+confirmed all seven totals and 106 columns in every observation file. Raw quality totals and
+the existing cleaning counts matched the 76-column result.
+
+The run saved about **235 MB of Parquet**. Sampled temporary-plus-output storage peaked at
+**544 MB**, and scratch usage was zero after completion. The 302 MB peak in Milestone 14
+belongs to the 76-column build. These values exclude Bronze and older retained outputs.
+Local runtime was about **13 minutes**, while regression tests ran concurrently; it is not
+a controlled speed comparison. Adding temporal features increases computation and saved
+storage, while recording batches keep temporary work bounded.
+
+See [the current dev evidence](../evidence/silver/v2/features_106_dev.json). Simple row scaling
+suggests about 9.3 GB of saved Parquet for the full dataset, plus working space. Full VM
+storage/runtime and the features' contribution to Gold classification remain to be evaluated.
 

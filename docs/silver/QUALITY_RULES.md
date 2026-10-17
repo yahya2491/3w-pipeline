@@ -11,6 +11,9 @@
 | Missing sensors | `preserve_missing` | Keeps missing original readings missing. |
 | Other invalid prepared sensor values | `null_in_clean_column` | Preserves the source value and leaves its clean value null. |
 | Expected interval | 1 second | Defines continuity for sequence segments. |
+| Feature history | 120 seconds | Uses current and earlier clean readings within one sequence segment. |
+| Feature sensors | Seven named pressure, temperature, and gas-lift-flow sensors | Adds mean, sample standard deviation, previous-reading change, and usable count for each. Exact names are in the YAML and contract. |
+| Invalid-opening duration | Both original choke openings | Measures elapsed consecutive finite-invalid time; resets on valid, missing/non-finite readings or a sequence break. |
 
-Silver does not set model-window lengths or calculate rolling statistics. Gold owns those choices.
+The current contract supports the documented seven sensors, 120-second history, and one-second cadence. The rules loader rejects unsupported settings. The resolved rules and fingerprint are saved with each run. Gold chooses its labelled examples, predictor columns, model, and evaluation; Silver does not change labels or fit model parameters.
 

@@ -76,7 +76,7 @@ We preserve original readings in `silver_observations` and add one `_clean` valu
 
 For a finite choke opening outside the documented range of 0–100%, Silver can use the most recent original valid reading from the same uninterrupted sequence, if it is no more than three seconds old. The repaired value is flagged and its source age is recorded. Missing, NaN, infinite, long-gap, and sequence-boundary values are not repaired. If there is no eligible earlier reading, the clean value stays null. The original value is kept unchanged; Silver does not clip an opening such as 120% to 100%.
 
-Silver keeps observation-level facts and quality information rather than model-specific time-window aggregates. Gold will build labelled windows and calculate the sensor statistics needed by the Random Forest from Silver's clean readings, timestamps, labels, and sequence markers. This keeps Silver reusable if the model or window size changes.
+Silver keeps one observation per original row and now stores 106 columns: 36 Bronze fields, 3 catalogue fields, and 67 added fields. These include 120-second means, sample standard deviations, previous-reading changes and usable counts for seven pressure, temperature and gas-lift-flow sensors, plus two durations describing consecutive invalid original choke readings. Features use current and earlier clean values within the same sequence segment. Gold will select labelled examples and use these prepared features with the Random Forest; it can calculate additional statistics if its design requires them.
 
 **`instance_quality`: quality of each recording**
 
@@ -128,17 +128,8 @@ The distinction is therefore:
 - `quality_issues` identifies individual warnings and errors.
 - `quality_quarantine` provides the error-only selection.
 
-### Validation and measured results
 
-The current Silver v2 development run processed 30 recordings and 1,931,052 observations in three batches, passed all 32 checks, and took 400.6 seconds locally. Sampled temporary-plus-output storage peaked at 302 MB, compared with 951 MB for the cached runner on the same sample. The 59 focused tests passed. See [the dev evidence](evidence/silver/v2/storage_fix_dev.json); the full VM run is still needed to validate production storage and runtime.
 
-The development sample had no naturally occurring out-of-range choke openings, so it did not demonstrate repairs on real invalid values. A separate masked-reading evaluation measures how well the bounded repair reconstructs hidden valid readings.
-
-### Spark processing and future scaling
-
-We implement Silver with PySpark DataFrames, Spark SQL functions, and window functions for sequence checks and bounded choke repair. The runner processes complete recordings in batches targeting one million observations, checks each batch, and stops its Spark context to release temporary files before continuing. It no longer caches the complete prepared observations on disk. Partition and source-path filters limit each batch's input; exact row comparisons use one signed-count aggregation. The writer keeps 32 MiB row groups. These choices address the VM's disk failures; a full VM run is still needed to measure production usage.
-
-The next steps are to complete a full v2 Silver run on the VM and build and evaluate the planned Gold model.
 
 ## 5 Gold layer
 
@@ -158,4 +149,4 @@ Another engineer can clone the repository and use `README.md` for setup and pipe
 
 During development we use a 30-recording sample; production configuration processes the full dataset on the UiS OpenStack VM. Changes are reviewed through pull requests before promotion to `main`. A self-hosted VM runner executes the scheduled Bronze workflow. The current simpler Silver contract has passed the local dev run; its full production-scale test in an isolated output folder is still pending.
 
-We treat 3W as a fixed batch dataset and use its documented definitions for validation. We leave missing labels unknown and report uneven sensor coverage. Gold will use Silver's clean readings to build labelled windows and model features for a Spark MLlib Random Forest that detects and classifies undesirable events. We will hold out recordings for evaluation and report per-class precision and recall, macro F1, and a majority-class baseline. Gold and the complete scheduled Bronze-to-Gold workflow are planned work; CNN development is for another course.
+We treat 3W as a fixed batch dataset and use its documented definitions for validation. We leave missing labels unknown and report uneven sensor coverage. Gold will use Silver's clean readings and 120-second features to build labelled examples for a Spark MLlib Random Forest that detects and classifies undesirable events. We will hold out recordings for evaluation and report per-class precision and recall, macro F1, and a majority-class baseline. Gold and the complete scheduled Bronze-to-Gold workflow are planned work; CNN development is for another course.

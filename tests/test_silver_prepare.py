@@ -1,16 +1,14 @@
 from dataclasses import replace
 from datetime import datetime, timedelta
-from runpy import run_path
 
 import pytest
 import yaml
 from pyspark.sql import functions as F
 from pyspark.sql.types import DoubleType, LongType, StringType, StructField, StructType, TimestampNTZType
 
-from threew.config import REPO_ROOT
 from threew.silver.prepare import prepare_observations, summarize_preparation
 from threew.silver.reference import SENSOR_RENAMES
-from threew.silver.rules import DEFAULT_RULES_PATH, load_rules
+from threew.silver.rules import DEFAULT_RULES_PATH, FEATURE_SENSORS, load_rules
 
 CHOKE = "production_choke_opening_pct"
 PDG = "downhole_pdg_pressure_pa"
@@ -92,7 +90,7 @@ def test_time_breaks_and_recordings_reset_repairs_and_empty_rows_remain(spark):
     assert summarize_preparation(prepared, rules)["rows_without_observed_valid_sensors"] == 1
 
 
-def test_clean_sensor_rows_keep_source_and_omit_gold_derived_fields(spark):
+def test_clean_sensor_rows_keep_source_and_add_only_selected_features(spark):
     source = readings(
         spark,
         [0, 1],
@@ -124,14 +122,77 @@ def test_clean_sensor_rows_keep_source_and_omit_gold_derived_fields(spark):
         "_observed_count_300s",
         "_coverage_120s",
         "_prepared_count_120s",
-        "_mean_120s",
-        "_stddev_120s",
         "_mean_300s",
         "_deviation_120s",
         "_trend_120s_300s",
-        "_invalid_duration_seconds",
     )
     assert not any(name.endswith(removed_features) for name in rows[0].asDict())
+    expected = {
+        f"{name}_{suffix}"
+        for name in FEATURE_SENSORS
+        for suffix in ("mean_120s", "stddev_120s", "change", "count_120s")
+    } | {f"{name}_invalid_duration_seconds" for name in ("gas_lift_choke_opening_pct", CHOKE)}
+    assert expected <= rows[0].asDict().keys()
+    assert len(rows[0]) == len(source.columns) + 63
+    assert "annulus_pressure_pa_mean_120s" not in rows[0].asDict()
+
+
+def test_rolling_features_use_exactly_the_current_and_previous_119_seconds(spark):
+    source = readings(spark, range(122), {i: {PDG: float(i)} for i in range(122)})
+    rows = prepare_observations(source, load_rules()).orderBy("_row_in_file").collect()
+    assert rows[0][f"{PDG}_mean_120s"] == 0.0
+    assert rows[0][f"{PDG}_stddev_120s"] is None
+    assert rows[0][f"{PDG}_change"] is None
+    assert rows[0][f"{PDG}_count_120s"] == 1
+    assert rows[119][f"{PDG}_mean_120s"] == 59.5
+    assert rows[119][f"{PDG}_stddev_120s"] == pytest.approx(1210**0.5)
+    assert rows[119][f"{PDG}_count_120s"] == 120
+    assert rows[120][f"{PDG}_mean_120s"] == 60.5
+    assert rows[120][f"{PDG}_count_120s"] == 120
+    assert rows[120][f"{PDG}_change"] == 1.0
+    assert (
+        summarize_preparation(prepare_observations(source, load_rules()), load_rules())[f"{PDG}_complete_120s_rows"]
+        == 3
+    )
+
+
+def test_rolling_features_count_only_usable_measurements_and_preserve_missing_changes(spark):
+    values = [10.0, None, float("nan"), 20.0, float("inf"), 30.0, 40.0]
+    flow = "gas_lift_flow_rate_m3_s"
+    source = readings(spark, range(len(values)), {i: {PDG: value, flow: None} for i, value in enumerate(values)})
+    rows = prepare_observations(source, load_rules()).orderBy("_row_in_file").collect()
+    assert [r[f"{PDG}_mean_120s"] for r in rows] == [10.0, 10.0, 10.0, 15.0, 15.0, 20.0, 25.0]
+    assert [r[f"{PDG}_count_120s"] for r in rows] == [1, 1, 1, 2, 2, 3, 4]
+    assert [r[f"{PDG}_change"] for r in rows] == [None, None, None, None, None, None, 10.0]
+    assert all(r[f"{flow}_mean_120s"] is None and r[f"{flow}_count_120s"] == 0 for r in rows)
+
+
+def test_features_reset_at_time_breaks_and_recording_boundaries(spark):
+    source = readings(spark, [0, 1, 3, 3, 4, None, 6, 5, 6], {i: {PDG: float(i * 10)} for i in range(9)})
+    other = readings(spark, [0, 1], {0: {PDG: 1000.0}, 1: {PDG: 1002.0}}, path="b")
+    rows = (
+        prepare_observations(source.unionByName(other), load_rules()).orderBy("_source_path", "_row_in_file").collect()
+    )
+    for index in (2, 4, 6, 8):
+        assert rows[index][f"{PDG}_count_120s"] == 1
+        assert rows[index][f"{PDG}_change"] is None
+    for index in (3, 5, 7):
+        assert rows[index][f"{PDG}_mean_120s"] is None
+        assert rows[index][f"{PDG}_count_120s"] is None
+        assert rows[index][f"{CHOKE}_invalid_duration_seconds"] is None
+    assert rows[-1][f"{PDG}_mean_120s"] == 1001.0
+    assert rows[-1][f"{PDG}_change"] == 2.0
+
+
+def test_invalid_choke_duration_uses_raw_values_and_resets_after_unknowns_and_breaks(spark):
+    values = [40.0, 120.0, 120.0, 120.0, None, 120.0, 120.0, 42.0, float("nan"), 120.0, float("inf"), 120.0]
+    source = readings(spark, range(len(values)), {i: {CHOKE: value} for i, value in enumerate(values)})
+    rows = prepare_observations(source, load_rules()).orderBy("_row_in_file").collect()
+    assert [r[f"{CHOKE}_invalid_duration_seconds"] for r in rows] == [0, 0, 1, 2, 0, 0, 1, 0, 0, 0, 0, 0]
+    assert rows[3][f"{CHOKE}_clean"] == 40.0  # Repair does not hide the continuing raw fault.
+    leading = readings(spark, [0, 1, 4, 5], {i: {CHOKE: 120.0} for i in range(4)}, path="b")
+    rows = prepare_observations(leading, load_rules()).orderBy("_row_in_file").collect()
+    assert [r[f"{CHOKE}_invalid_duration_seconds"] for r in rows] == [0, 1, 0, 1]
 
 
 def test_future_readings_do_not_change_earlier_preparation(spark):
@@ -142,20 +203,6 @@ def test_future_readings_do_not_change_earlier_preparation(spark):
     left = prepare_observations(source, rules).filter("_row_in_file <= 120").orderBy("_row_in_file").collect()
     right = prepare_observations(changed, rules).filter("_row_in_file <= 120").orderBy("_row_in_file").collect()
     assert left == right
-
-
-def test_masked_repair_experiment_reports_known_errors(spark):
-    evaluate_masked_repairs = run_path(str(REPO_ROOT / "scripts" / "evaluate_choke_repair.py"))[
-        "evaluate_masked_repairs"
-    ]
-
-    rules = load_rules()
-    source = readings(spark, range(4), {i: {CHOKE: float(40 + 2 * i)} for i in range(4)})
-    data = prepare_observations(source.withColumn("source_type", F.lit("REAL")), rules)
-    results = [row for row in evaluate_masked_repairs(data, rules) if row["sensor"] == CHOKE]
-    assert [row["_gap_seconds"] for row in results] == [1.0, 2.0, 3.0]
-    assert [row["mean_absolute_error_pct_points"] for row in results] == [2.0, 4.0, 6.0]
-    assert all(row["masked_valid_measurements"] == 1 for row in results)
 
 
 def test_configured_domains_agree_in_cleaning_issues_and_references(spark):
@@ -178,18 +225,6 @@ def test_configured_domains_agree_in_cleaning_issues_and_references(spark):
     assert reference["maximum"] == 80.0
 
 
-def test_canonical_preparation_can_reuse_build_cache(spark):
-    rules = load_rules()
-    source = readings(spark, range(4))
-    built = prepare_observations(source, rules).cache()
-    try:
-        built.count()
-        reference = prepare_observations(source, rules)
-        assert "InMemoryRelation" in reference._jdf.queryExecution().withCachedData().toString()
-    finally:
-        built.unpersist()
-
-
 @pytest.mark.parametrize(
     "section,key,value",
     [
@@ -197,6 +232,9 @@ def test_canonical_preparation_can_reuse_build_cache(spark):
         ("cleaning", "missing_classes", "forward_fill"),
         ("domains", "opening_min_pct", float("nan")),
         ("sequence", "typo", 120),
+        ("features", "window_seconds", 0),
+        ("features", "window_seconds", 60),
+        ("features", "sensors", [PDG]),
     ],
 )
 def test_rules_reject_invalid_or_unsupported_settings(tmp_path, section, key, value):

@@ -30,37 +30,31 @@ python -m threew.silver.run --env dev
 
 The current Silver contract is version 2. The command loads `conf/quality/silver_rules.yaml`,
 adds clean sensor readings, limited three-second choke repairs, sequence checks, and row-level
-quality details. It saves resolved rules plus a preparation summary. Silver does not build
-model-window statistics; those belong in Gold. There are still seven tables.
+quality details. The 106-column observations also contain 120-second means, sample standard
+deviations, previous-reading changes and usable counts for seven sensors, plus invalid-opening
+durations for both chokes. It saves resolved rules and preparation counts, including how many
+rows have all 120 sensor readings. There are still seven tables. Gold selects labelled examples
+and trains/evaluates the model.
 
 The development configuration uses two local cores and a 4 GB Spark driver. The runner works
 in batches targeting **1,000,000 observations**, keeping each recording intact. A recording
 larger than the target runs alone. It writes and checks each batch, then stops its Spark context
 to release temporary cache and shuffle files before starting the next one. All batches feed
 the same seven tables; no batch column is added. The ready marker is published only after
-every batch passes. Model inputs and cleaning rules are unchanged.
+every batch passes. Recording boundaries and the cleaning rules are preserved.
 
 The complete prepared observations are no longer cached on disk. The observation writer
 still uses 32 MiB Parquet row groups and 256 KiB pages to limit column buffers. Keep the
 current driver configuration. To use smaller batches on a constrained machine, add
 `--batch-rows 500000`; recordings are never split, so this is a target rather than a hard limit.
 
-The earlier expanded v2 run took about 17 minutes but used a different schema. The current simplified v2 runner
-has now passed all 32 checks on the 30-recording dev sample in three batches. Its measured
-temporary-plus-output peak was about 302 MB; see the [dev evidence](../evidence/silver/v2/storage_fix_dev.json).
-The full VM run is still needed. Local timings and storage measurements are not VM guarantees.
+The 106-column runner passed all 32 checks on the full 30-recording dev sample. It saved
+about 235 MB of Parquet and reached a sampled temporary-plus-output peak of 544 MB.
+All 279 offline tests passed. See the [current evidence](../evidence/silver/v2/features_106_dev.json)
+and Milestone 15 in the [milestone report](SILVER_MILESTONE_REPORT.md). The full VM run is
+still needed; local results are not VM guarantees.
 
 Use `--rules /absolute/path/to/rules.yaml` only for a deliberately documented alternative.
-
-After a successful v2 run, assess short choke estimates on deliberately hidden valid readings:
-
-```bash
-python scripts/evaluate_choke_repair.py --env dev --output output/choke_repair.json
-```
-
-This reports errors for one-, two- and three-second masked stretches by sensor/source type.
-It does not establish the true values of actual faulty readings or tune settings on held-out
-test data. For a separate Silver destination, add `--silver-root /absolute/path/to/silver-root`.
 
 This command:
 
@@ -71,7 +65,7 @@ This command:
 5. Builds separate summaries for each recording and each sensor in each recording.
 6. Checks labels, timestamps, and sensor values, recording quality problems and reasons for reviewing them.
 7. Creates shared event and sensor reference tables.
-8. Adds clean readings, repair details, and sequence checks. Gold can calculate row-level counts and pressure differences if needed.
+8. Adds clean readings, repair details, sequence checks, and the 30 documented sensor features.
 9. Saves all seven tables, reads them back, and checks source preservation and derived contents before marking the result ready.
 
 For the dev sample, expect 1,931,052 observations, 30 recording summaries, 810 sensor summaries, 10 event references, and 27 sensor references. Quality issue counts depend on the input and rules.
@@ -112,7 +106,8 @@ print("Rules:", ready.get("quality_rules", {}).get("sha256"))
 PY
 ```
 
-An old marker has no preparation summary; rebuild Silver to produce contract v2.
+Earlier v2 builds had different column sets. Rebuild to obtain the current 106-column
+schema; the version number alone does not establish that the 30 feature fields are present.
 
 ## Check the code changes
 
@@ -169,6 +164,11 @@ Use the updated checkout: commit `d3f70f1` still has the old full-observation di
 Batch progress is printed during the run. The batch design limits temporary work, but the
 complete output still needs disk space and each new run keeps its own copy. Check available
 space during the first full VM run; local dev success alone does not establish its peak usage.
+
+The 106-column dev run saved about 235 MB on the 30-file sample. Simple row scaling
+suggests roughly 9.3 GB for one full output; this is not a VM measurement and does not include
+working space. With about 15 GB free, do not budget for two retained full outputs at once.
+Existing runs are not deleted automatically. The full-run report records actual output sizes.
 
 ## Read and save the full-run report
 

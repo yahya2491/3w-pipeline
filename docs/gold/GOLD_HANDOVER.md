@@ -1,19 +1,17 @@
 # Gold layer handover
 
-This explains what Silver gives Gold and recommends a concrete Gold anomaly-detection baseline that matches the [project description](../3W_Project_Description_full.md). Gold has not been implemented yet. For Silver column definitions and implementation details, use the [Silver reference](../silver/SILVER_REFERENCE.md) and [contract](../silver/SILVER_CONTRACT.md).
+This explains what Silver gives Gold and recommends a concrete Gold anomaly-detection baseline that matches the [project description](../3W_Project_Description_full.md). Gold has not been implemented yet. For definitions and implementation details, use the [contract](../silver/SILVER_CONTRACT.md) and [milestone report](../silver/SILVER_MILESTONE_REPORT.md).
 
 ## Where we are
 
-Silver contract v2 keeps cleaned readings, bounded choke repair and row-level quality details. Gold owns model-specific window statistics. Read [Silver assumptions](../silver/SILVER_ASSUMPTIONS.md) for the cleaning choices and executable rules. Two historical full-dataset runs of contract v1 passed all 29 checks and matched across seven tables, with 76,587,318 observations from 2,228 recordings; those results do not validate v2. Rebuild Silver to obtain the current contract.
+Silver contract v2 has 106 observation columns. Alongside clean readings, bounded choke repair and quality details, it stores 120-second mean, sample standard deviation, change and usable-count features for seven sensors, plus two invalid-choke durations. Gold chooses labelled examples and model inputs, then trains and evaluates its classifier. Read [Silver assumptions](../silver/SILVER_ASSUMPTIONS.md) for the limitations. The historical full-dataset v1 runs do not validate this schema.
 
-The [comparison log](../evidence/silver/comparison.log) and reports linked from the [Silver reference](../silver/SILVER_REFERENCE.md) contain the evidence. The quality inspection on 12 October confirmed missing labels, observations without finite sensor readings, and out-of-range openings. We kept the existing rules and original values.
+The [comparison log](../evidence/silver/comparison.log) and [milestone report](../silver/SILVER_MILESTONE_REPORT.md) record earlier evidence. The historical quality inspection found missing labels, observations without finite sensor readings, and out-of-range openings. Originals remain available.
 
 Gold has not been implemented. The historical full-dataset Silver v1 output is in `/home/ubuntu/3w-data/silver-oh/`; it does not match the current contract. Use the separate `/home/ubuntu/3w-data/silver-v2/` destination for a future v2 full-dataset test.
 
-The local 30-recording v2 development build passed all 30 checks with 1,931,052 observations
-and 193 columns before the simplification. Its [validation evidence](../evidence/silver/milestone12/README.md)
-includes a masked-reading repair experiment. The sample contained no actual invalid openings.
-Rerun the dev sample to validate the current 76-column contract; full VM validation remains to be run.
+The earlier 193-column and 76-column dev runs used different schemas. Current 106-column
+validation is recorded in Milestone 15 of the milestone report. Full VM validation remains pending.
 
 ## The seven folders and how Gold can use them
 
@@ -21,7 +19,7 @@ Each folder holds a Parquet table. **All event categories 0–9 remain together 
 
 | Folder/table | What it contains | Possible use in Gold |
 |---|---|---|
-| `silver_observations` | Original observations and 27 renamed sensors, plus clean values, repair details, sequence fields, metadata and source keys. | Build model-specific window statistics in Gold; retain raw readings for audit and ordered segments for CNNs. |
+| `silver_observations` | Original observations, 27 clean sensors, 30 sensor-behaviour features, repair/sequence details, metadata and source keys. | Select labelled model examples from prepared features; retain ordered clean sequences for CNNs. |
 | `instance_quality` | One summary per recording: observation count, missing labels/state, time problems, and sensor coverage. | Check recording quality and length; summarise limitations by source type or event. |
 | `sensor_availability` | One row per recording and sensor, showing finite-reading counts and percentages. | Choose sensors and recordings with useful coverage. Finite presence does not guarantee that every value passes a domain rule. |
 | `quality_issues` | All detected warnings and errors, with row keys, affected fields/uses, observed values, reasons, and suggested actions. | Match problems to observations, decide which fields are suitable for the calculation, and explain exclusions. |
@@ -64,11 +62,13 @@ Repeated −99.99 values appeared in the historical opening examples, but their 
 
 ## Planned Gold anomaly-detection model
 
-The project description says Gold should produce labelled, fixed-window features for an anomaly-detection model. A practical first model is a Spark MLlib `RandomForestClassifier`. It can classify each eligible window as normal or as an undesirable event, using statistics calculated in Gold from Silver's cleaned sensor readings. If the event classes have enough examples, Gold can also test classifying the event type. Save the window features, true label, model prediction, and evaluation results as Gold outputs.
+A practical first model is a Spark MLlib `RandomForestClassifier`, using Silver's prepared sensor features to classify eligible examples as normal or as an undesirable event. If enough examples exist, also evaluate event-type classification. Save the selected features, true label, prediction and evaluation results as Gold outputs. Compare against a baseline using clean sensor levels to test whether the added temporal features help.
 
-Build one Gold row per fixed time window, such as five minutes. The exact window size and the minimum amount of usable data need to be set before building the table. Derive the target from supported `class_code` values in that same window: class 0 represents normal operation; supported nonzero classes represent an event and its phase. Exclude windows with missing or inconsistent labels from supervised evaluation rather than guessing their class. Keep label fields and event-derived metadata out of the model's predictor columns.
+One option is one Gold example at each chosen 120-second interval endpoint, using that observation's trailing features. Agree the sampling frequency, required history and coverage before training. If the label describes an interval, derive it from supported `class_code` values in that same interval and document the rule. Class 0 means normal; supported nonzero classes describe events/phases. Exclude unknown or inconsistent targets from supervised evaluation. Keep labels and event-derived metadata out of predictor columns.
 
-Use Silver's `<sensor>_clean` readings to build labelled windows and calculate the statistics needed by the model. The Silver quality tables have a different job: `instance_quality` and `sensor_availability` show whether a recording or sensor has enough usable data; `quality_issues` and `quality_quarantine` identify affected fields and rows. Use these tables to set and explain inclusion rules, then report how many rows or windows were kept and excluded. Do not pass recording-level summary counts or quality outcomes into the model as predictors, because they could reveal the answer or duplicate the same recording-level information across many windows.
+Read `<sensor>_mean_120s`, `_stddev_120s`, `_change` and `_count_120s` from Silver. Partial history and missing sensors remain visible through the counts; a count of 120 means that sensor has a full history. Features are null at unusable times and restart at segment boundaries. The choke-duration fields are candidate quality indicators, not confirmed well-event labels. Gold must decide whether they help its task. Fit any missing-feature treatment on training data only.
+
+Use `instance_quality` and `sensor_availability` to assess recordings, and `quality_issues`/`quality_quarantine` to inspect affected fields and rows. Explain inclusion rules and report kept/excluded examples. Keep recording-level summaries and event metadata out of predictors. Gold may calculate additional statistics from clean readings when its design needs them.
 
 Evaluate on recordings that were not used for training; consider grouping real recordings by well. Fit any learned preprocessing on the training set only. Report a confusion matrix, per-class precision and recall, and macro F1 so performance on rare events is visible. Compare results with a simple majority-class baseline. This demonstrates whether the Gold model can detect the labelled undesirable events using Silver's prepared records; it does not establish that it can predict an event before it begins.
 
@@ -120,10 +120,14 @@ Keep `REAL`, `SIMULATED`, and `DRAWN` separate by default unless combining them 
 
 Read the ready marker once at the beginning, check that it describes a successful result for the chosen environment and contract, and use its table paths throughout the Gold run. Do not read the whole `runs` directory or combine tables from different Silver runs. The default configured Silver path is `silver/`; it does not automatically change to the isolated test destination `silver-v2/`.
 
+Earlier v2 builds used different column sets. Check that the required feature columns are
+present in the 106-column table, and that the saved rules describe the 120-second history;
+the version number alone is not sufficient.
+
 Develop on the 30-file dev sample, which contains 1,931,052 observations. Use the repo's locked Python 3.11/PySpark 3.5.0 environment and Java 8 or 17. Use your own VM checkout because the VM account is shared. Setup, sample preparation, and checking commands are in the [Silver run guide](../silver/SILVER_RUN_GUIDE.md).
 
 Use small offline test inputs with known expected results. Check that quality matching does not duplicate contributions, excluded values do not enter calculations, and missing results are represented honestly. Then test the agreed Gold design on the VM in its own output destination.
 
 Record the selected Silver run ID, source, reference version, chosen inputs, inclusion rules, and output counts. Check repeated results by their contents, not just equal counts. Work on a short-lived branch and use a PR with the repo's lint/test checks.
 
-Gold still needs its own runner, storage configuration, and agreed output definitions. The [Silver reference](../silver/SILVER_REFERENCE.md) contains the existing schemas, design decisions, and full-run evidence.
+Gold still needs its own runner, storage configuration, and agreed output definitions. The [Silver contract](../silver/SILVER_CONTRACT.md) defines the saved fields; the [milestone report](../silver/SILVER_MILESTONE_REPORT.md) records validation.

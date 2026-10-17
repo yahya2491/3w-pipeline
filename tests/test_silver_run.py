@@ -139,6 +139,7 @@ def test_run_silver_reconciles_all_outputs_and_repeat_run_is_identical(spark, si
         right = spark.read.parquet(second["tables"][name]["path"])
         assert same_rows(left, right)
     saved = spark.read.parquet(second["tables"]["silver_observations"]["path"])
+    assert len(saved.columns) == 106
     assert saved.filter("source_type = 'REAL' AND _row_in_file = 0").first()["timestamp"].microsecond == 500000
     assert saved.filter("source_type = 'REAL' AND _row_in_file = 0").first()["gas_lift_choke_opening_pct"] == 0.0
     for report in _reports(cfg.storage.silver):
@@ -189,13 +190,14 @@ def test_corrupted_observations_cannot_be_published(spark, silver_input, monkeyp
     assert report["error"]["phase"] == "read_back_and_check"
 
 
-def test_corrupted_clean_reading_prevents_publication(spark, silver_input, monkeypatch):
+@pytest.mark.parametrize("column", ["downhole_pdg_pressure_pa_clean", "downhole_pdg_pressure_pa_mean_120s"])
+def test_corrupted_clean_reading_or_feature_prevents_publication(spark, silver_input, monkeypatch, column):
     from threew.silver.prepare import prepare_observations
 
     previous = _prior_marker(silver_input)
 
     def broken(observations, rules):
-        return prepare_observations(observations, rules).withColumn("downhole_pdg_pressure_pa_clean", F.lit(999.0))
+        return prepare_observations(observations, rules).withColumn(column, F.lit(999.0))
 
     monkeypatch.setattr("threew.silver.run.prepare_observations", broken)
     with pytest.raises(RuntimeError, match="silver_prepared_values_match_rules"):

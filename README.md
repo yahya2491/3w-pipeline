@@ -15,7 +15,8 @@ The [Silver run guide](docs/silver/SILVER_RUN_GUIDE.md) covers commands, failure
 
 Silver contract v2 standardizes observations, adds cleaned sensor columns and three-second bounded
 repairs of finite invalid choke openings, and records quality, event references and sensor references.
-Gold builds model-specific windows and statistics from those reusable observations. Read
+Its 106 observation columns include 120-second sensor features and invalid-choke durations.
+Gold selects labelled examples and trains/evaluates its Spark model from those prepared values. Read
 [Silver assumptions](docs/silver/SILVER_ASSUMPTIONS.md) and
 [quality rules](docs/silver/QUALITY_RULES.md). Original measurements and all seven tables remain.
 With Bronze ready, run `python -m threew.silver.run --env dev` in the locked Linux environment.

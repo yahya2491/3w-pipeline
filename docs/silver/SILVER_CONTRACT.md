@@ -18,15 +18,15 @@ Silver writes seven Parquet tables:
 
 Silver keeps one row for each Bronze observation. It does not turn the sensors into separate rows or remove observations with missing or invalid values.
 
-## The 76 columns in `silver_observations`
+## The 106 columns in `silver_observations`
 
-Each row in `silver_observations` is still one original sensor reading. It has 76 columns: 36 fields carried over from Bronze (some renamed), 3 recording fields matched from Bronze's catalogue, and 37 fields Silver adds. The rows are not the same schema as Bronze, and Silver has not made extra rows for the new fields. Some values can be null.
+Each row in `silver_observations` is still one original timestamped observation. It has 106 columns: 36 fields carried over from Bronze (some renamed), 3 recording fields matched from Bronze's catalogue, and 67 fields Silver adds. The new columns are explained below. They do not create extra rows, and some values can be null.
 
 | Where the columns come from | Count | What they contain |
 |---|---:|---|
 | Bronze | 36 | 9 non-sensor fields and the 27 original sensor readings. Silver gives some of these clearer names. |
 | Bronze catalogue | 3 | `instance_id`, `well_id`, and `instance_start`, matched to the observation's source file. |
-| Added by Silver | 37 | Event descriptions, clean sensor values, choke-repair details, and sequence fields. The next tables explain them. |
+| Added by Silver | 67 | 4 event descriptions, 27 clean readings, 4 repair details, 2 sequence fields, 28 sensor features, and 2 invalid-opening durations. |
 
 The nine non-sensor Bronze fields are `source_type`, `label` (Silver calls it `instance_label`), `class` (`class_code`), `state` (`state_code`), `timestamp`, `_source_path`, `_file_sha256`, `_ingest_run_id`, and `_row_in_file`. The 27 sensor fields are renamed as shown below. Catalogue `instance_id` is required; `well_id` and `instance_start` can be null.
 
@@ -34,9 +34,9 @@ The observation key is the combination of `_source_path`, `_file_sha256`, and `_
 
 ## Why Silver adds these columns
 
-Silver adds columns that make observations easier to trust and reuse: readable event labels, prepared sensor values, choke-repair details, and sequence checks. It keeps the original readings and flags estimated choke values. Silver does not add per-row sensor counts or model-window statistics; Gold can calculate those from the reusable observations. The Gold model is planned work and has not yet been built or evaluated. The same Silver data can also support CNN experiments in the other course.
+Silver fixes selected invalid choke readings where the documented rule allows it, keeps usable sensor values in consistent clean columns, and explains remaining quality problems. Its 120-second features describe recent levels, variation, changes, and available readings so Gold can use them as model inputs. The invalid-opening durations describe persistent faults in the original readings. Gold will choose labelled examples, train a Spark model, and evaluate its predictions. The original readings remain available for audit and CNN experiments.
 
-## The 37 columns Silver adds
+## The 67 columns Silver adds
 
 ### Event descriptions: 4 columns
 
@@ -77,7 +77,38 @@ These columns are added for the two choke openings only: `gas_lift_choke_opening
 | `sequence_usable` | `true` when this row has a timestamp and is later than the previous row in source order, or is the first timed row. | Flags rows whose time cannot be safely used in an ordered sequence. |
 | `sequence_segment_id` | The ID of the uninterrupted time segment containing this row. Silver starts a new segment after a missing/bad time, a cadence break, or a break in row positions. | Keeps choke repairs within a continuous sequence and helps consumers identify gaps. |
 
-These two fields describe time continuity. Sensor counts and pressure differences are not stored as extra columns; Gold can calculate them when its question needs them.
+These two fields describe time continuity and reset repairs and features at sequence breaks.
+
+### Recent sensor behaviour: 28 columns
+
+Each of these **seven sensors** gets the four fields in the following table:
+
+- `downhole_pdg_pressure_pa`
+- `subsea_tree_tpt_pressure_pa`
+- `production_choke_upstream_pressure_pa`
+- `gas_lift_choke_downstream_pressure_pa`
+- `subsea_tree_tpt_temperature_c`
+- `production_choke_downstream_temperature_c`
+- `gas_lift_flow_rate_m3_s`
+
+| New column pattern | What it means | What it is useful for |
+|---|---|---|
+| `<sensor>_mean_120s` | Average of the available clean readings during the trailing 120 seconds. Nullable double. | Describes the recent operating level. |
+| `<sensor>_stddev_120s` | Sample standard deviation of those readings; null with fewer than two values. Nullable double. | Describes recent variation. |
+| `<sensor>_change` | Current clean value minus the previous row's clean value in the same segment. Null when either value is missing or this is the segment's first row. Nullable double. | Shows sudden changes. |
+| `<sensor>_count_120s` | Number of non-null clean readings supporting the trailing statistics. Nullable long, from 0 to 120. | Lets Gold reject examples with insufficient sensor coverage. |
+
+The time range is **after `current time - 120 seconds`, through the current time**. At the documented one-second cadence, it holds at most 120 observations. Early rows use the available history; they do not wait for a full window. A missing current reading can still have a recent mean. A window with no usable readings has count 0 and null mean/standard deviation. All four fields are null when the row's time is unusable.
+
+These fields use only current and earlier readings within the same recording and sequence segment. They do not cross gaps, use future values, fill sensors, or create new window rows. Gold decides which observations become labelled model examples.
+
+### Persistent invalid choke readings: 2 columns
+
+| New column pattern | What it means | What it is useful for |
+|---|---|---|
+| `<opening>_invalid_duration_seconds` | Elapsed time in the current consecutive run of finite out-of-range **original** openings. Added for both choke-opening sensors. Nullable long. | Describes a persistent problem with the reported opening, even while a short clean repair is available. |
+
+The first invalid reading has duration 0; further consecutive invalid readings have 1, 2, and so on seconds. A valid, missing, NaN, or infinite reading resets the run to 0. A recording/sequence boundary also resets it, and unusable time gives null. For example, `40, 120, 120, 120, null, 120` gives durations `0, 0, 1, 2, 0, 0`. This column describes sensor reporting; it is not a confirmed undesirable well-event label.
 
 ## Sensor names
 
