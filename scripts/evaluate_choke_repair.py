@@ -11,7 +11,7 @@ from pyspark.sql import functions as F
 from pyspark.sql.window import Window
 
 from threew.config import load_config
-from threew.silver.prepare import OPENINGS
+from threew.silver.prepare import OPENINGS, observed_valid
 from threew.silver.rules import QualityRules
 from threew.spark import get_spark
 
@@ -26,7 +26,8 @@ def evaluate_masked_repairs(observations, rules: QualityRules):
     )
     results = []
     for name in OPENINGS:
-        block_start = (F.col("_row_in_file") % period == 0) & F.col(f"{name}_is_valid") & F.col("sequence_usable")
+        valid = observed_valid(name, rules)
+        block_start = (F.col("_row_in_file") % period == 0) & valid & F.col("sequence_usable")
         df = observations.withColumn(
             "_anchor",
             F.last(
@@ -37,7 +38,7 @@ def evaluate_masked_repairs(observations, rules: QualityRules):
         age = (F.col("timestamp") - F.col("_anchor.time")).cast("decimal(20,6)").cast("double")
         df = df.withColumn("_gap_seconds", age).filter(
             F.col("sequence_usable")
-            & F.col(f"{name}_is_valid")
+            & valid
             & (F.col("_row_in_file") % period).between(1, rules.choke_forward_fill_max_seconds)
             & (F.col("_gap_seconds") == F.col("_row_in_file") % period)
         )

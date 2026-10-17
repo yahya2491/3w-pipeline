@@ -43,8 +43,16 @@ REQUIRED_OBSERVATION_FIELDS = (
 
 def same_rows(left: DataFrame, right: DataFrame) -> bool:
     """Exact logical equality, including duplicates and nulls, regardless of row order."""
-    right = right.select(*left.columns)
-    return left.exceptAll(right).limit(1).count() == 0 and right.exceptAll(left).limit(1).count() == 0
+    weight = "__threew_row_weight"
+    while weight in left.columns:
+        weight += "_"
+    balance = weight + "_balance"
+    while balance in left.columns:
+        balance += "_"
+    # Cancel equal row multiplicities in one comparison instead of two EXCEPT ALL jobs.
+    signed = left.withColumn(weight, F.lit(1)).unionByName(right.select(*left.columns).withColumn(weight, F.lit(-1)))
+    differences = signed.groupBy(*left.columns).agg(F.sum(weight).alias(balance))
+    return differences.filter(F.col(balance) != 0).limit(1).count() == 0
 
 
 def schema_matches(df: DataFrame, types: Mapping[str, Any]) -> bool:
@@ -96,7 +104,6 @@ def output_checks(
         expected = prepare_observations(expected, rules)
     summaries = build_quality_summaries(expected)
     issues = None
-    prepared_expected = None
     try:
         # Summary types come from the independent expected calculation, not the
         # saved/candidate tables. Parquet does not retain required-field nullability.
@@ -158,13 +165,10 @@ def output_checks(
         if rules is not None:
             derived = [name for name in expected.columns if name not in OBSERVATION_TYPES]
             if preparation_source is not None:
-                # Same validated base plan as the build: Spark can reuse its cached
-                # preparation. A producer with changed expressions does not match
-                # this canonical plan, so corrupt feature output is still rejected.
+                # Recompute with the canonical rules, independently of saved clean values.
                 reference = prepare_observations(preparation_source, rules).select(*OBSERVATION_KEY, *derived)
             else:
-                prepared_expected = expected.select(*OBSERVATION_KEY, *derived).persist(StorageLevel.MEMORY_AND_DISK)
-                reference = prepared_expected
+                reference = expected.select(*OBSERVATION_KEY, *derived)
             checks["silver_prepared_values_match_rules"] = same_rows(
                 reference, observations.select(*OBSERVATION_KEY, *derived)
             )
@@ -185,8 +189,6 @@ def output_checks(
             ] and unique_non_null_keys(additional["quality_issues"], ISSUE_KEY)
         return checks
     finally:
-        if prepared_expected is not None:
-            cleanup_spark(prepared_expected.unpersist, "release expected preparation")
         if issues is not None:
             cleanup_spark(issues.unpersist, "release expected issues")
         cleanup_spark(summaries.unpersist, "release expected summaries")

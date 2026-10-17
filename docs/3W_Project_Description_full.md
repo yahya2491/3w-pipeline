@@ -130,15 +130,15 @@ The distinction is therefore:
 
 ### Validation and measured results
 
-The earlier Silver v2 development run processed 30 recordings and 1,931,052 observations, passed all 30 saved-output checks, and took about 17 minutes. It predates the current simpler Silver contract and does not validate it. Rerun the dev sample, then complete the full run on the VM.
+The current Silver v2 development run processed 30 recordings and 1,931,052 observations in three batches, passed all 32 checks, and took 400.6 seconds locally. Sampled temporary-plus-output storage peaked at 302 MB, compared with 951 MB for the cached runner on the same sample. The 59 focused tests passed. See [the dev evidence](evidence/silver/v2/storage_fix_dev.json); the full VM run is still needed to validate production storage and runtime.
 
 The development sample had no naturally occurring out-of-range choke openings, so it did not demonstrate repairs on real invalid values. A separate masked-reading evaluation measures how well the bounded repair reconstructs hidden valid readings.
 
 ### Spark processing and future scaling
 
-We implement Silver with PySpark DataFrames, Spark SQL functions, and window functions for sequence checks and bounded choke repair. Disk-only persistence and 32 MiB output row groups were used after a 2 GiB driver attempt ran out of memory. The earlier 17-minute development run tested a more complex Silver version; the current contract needs a new dev run, and these settings have not been benchmarked as optimal.
+We implement Silver with PySpark DataFrames, Spark SQL functions, and window functions for sequence checks and bounded choke repair. The runner processes complete recordings in batches targeting one million observations, checks each batch, and stops its Spark context to release temporary files before continuing. It no longer caches the complete prepared observations on disk. Partition and source-path filters limit each batch's input; exact row comparisons use one signed-count aggregation. The writer keeps 32 MiB row groups. These choices address the VM's disk failures; a full VM run is still needed to measure production usage.
 
-The next steps are to rerun the v3 dev sample, complete a full v3 Silver run, and build and evaluate the planned Gold model.
+The next steps are to complete a full v2 Silver run on the VM and build and evaluate the planned Gold model.
 
 ## 5 Gold layer
 
@@ -156,6 +156,6 @@ The next steps are to rerun the v3 dev sample, complete a full v3 Silver run, an
 
 Another engineer can clone the repository and use `README.md` for setup and pipeline instructions, with `docs/silver/SILVER_RUN_GUIDE.md` for Silver-specific commands. The project uses Python 3.11, PySpark 3.5.0, and the pinned `requirements.lock` and `requirements-dev.lock` files. It also contains `dataset.ini` for event and sensor definitions and a `tests` folder. GitHub Actions runs continuous integration.
 
-During development we use a 30-recording sample; production configuration processes the full dataset on the UiS OpenStack VM. Changes are reviewed through pull requests before promotion to `main`. A self-hosted VM runner executes the scheduled Bronze workflow. The current simpler Silver contract needs a dev rerun before its full production-scale test in an isolated output folder.
+During development we use a 30-recording sample; production configuration processes the full dataset on the UiS OpenStack VM. Changes are reviewed through pull requests before promotion to `main`. A self-hosted VM runner executes the scheduled Bronze workflow. The current simpler Silver contract has passed the local dev run; its full production-scale test in an isolated output folder is still pending.
 
 We treat 3W as a fixed batch dataset and use its documented definitions for validation. We leave missing labels unknown and report uneven sensor coverage. Gold will use Silver's clean readings to build labelled windows and model features for a Spark MLlib Random Forest that detects and classifies undesirable events. We will hold out recordings for evaluation and report per-class precision and recall, macro F1, and a majority-class baseline. Gold and the complete scheduled Bronze-to-Gold workflow are planned work; CNN development is for another course.

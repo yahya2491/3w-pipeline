@@ -101,7 +101,7 @@ def _prior_marker(cfg):
 def test_run_silver_reconciles_all_outputs_and_repeat_run_is_identical(spark, silver_input):
     cfg = silver_input
     first = _run(cfg, spark)
-    second = _run(cfg, spark)
+    second = _run(cfg, spark, batch_rows=2)
     assert first["run_id"] != second["run_id"]
     assert all(second["reconcile"]["checks"].values())
     assert second["reconcile"]["counts"] == {
@@ -117,7 +117,13 @@ def test_run_silver_reconciles_all_outputs_and_repeat_run_is_identical(spark, si
         "sensor_reference_rows": 27,
     }
     summary = second["quality_summary"]
-    assert second["contract_version"] == 3
+    assert second["quality_summary"] == first["quality_summary"]
+    assert second["preparation_summary"] == first["preparation_summary"]
+    with open(second["report"]) as saved_report:
+        report = json.load(saved_report)
+    assert report["execution"]["batch_count"] == 3
+    assert [batch["status"] for batch in report["batches"]] == ["SUCCESS"] * 3
+    assert second["contract_version"] == 2
     assert second["quality_rules"]["resolved"]["expected_interval_seconds"] == 1
     assert second["quality_rules"]["sha256"]
     assert second["preparation_summary"]["rows"] == 6
@@ -137,6 +143,7 @@ def test_run_silver_reconciles_all_outputs_and_repeat_run_is_identical(spark, si
     assert saved.filter("source_type = 'REAL' AND _row_in_file = 0").first()["gas_lift_choke_opening_pct"] == 0.0
     for report in _reports(cfg.storage.silver):
         assert report["status"] == "SUCCESS"
+        assert report["contract"]["version"] == 2
         assert report["contract"]["sha256"]
         assert report["config_sha256"]
         assert report["duration_seconds"] > 0
@@ -309,6 +316,29 @@ def test_write_failure_is_reported_and_leaves_previous_marker(spark, silver_inpu
     assert report["error"]["phase"] == "transform_and_write"
     assert report["published"] is False
     assert cfg.storage.silver_ready.read_text() == previous
+
+
+def test_later_batch_failure_keeps_previous_marker(spark, silver_input, monkeypatch):
+    previous = _prior_marker(silver_input)
+    write = DataFrameWriter.parquet
+    observation_writes = 0
+
+    def fail_second_batch(writer, path, *args, **kwargs):
+        nonlocal observation_writes
+        if path.endswith("/silver_observations"):
+            observation_writes += 1
+            if observation_writes == 2:
+                raise OSError("injected later batch failure")
+        return write(writer, path, *args, **kwargs)
+
+    monkeypatch.setattr(DataFrameWriter, "parquet", fail_second_batch)
+    with pytest.raises(OSError, match="later batch failure"):
+        _run(silver_input, spark, batch_rows=2)
+    assert silver_input.storage.silver_ready.read_text() == previous
+    report = _reports(silver_input.storage.silver)[0]
+    assert report["published"] is False
+    assert report["status"] == "FAILED"
+    assert [batch["status"] for batch in report["batches"]] == ["SUCCESS", "FAILED"]
 
 
 def test_production_input_requires_isolated_destination(spark_cfg, tmp_path):

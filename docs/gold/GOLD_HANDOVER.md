@@ -4,11 +4,11 @@ This explains what Silver gives Gold and recommends a concrete Gold anomaly-dete
 
 ## Where we are
 
-Silver contract v3 keeps cleaned readings, bounded choke repair and row-level quality details. Gold owns model-specific window statistics. Read [Silver assumptions](../silver/SILVER_ASSUMPTIONS.md) for the cleaning choices and executable rules. Two historical full-dataset runs of contract v1 passed all 29 checks and matched across seven tables, with 76,587,318 observations from 2,228 recordings; those results do not validate v3. Rebuild Silver to obtain the current contract.
+Silver contract v2 keeps cleaned readings, bounded choke repair and row-level quality details. Gold owns model-specific window statistics. Read [Silver assumptions](../silver/SILVER_ASSUMPTIONS.md) for the cleaning choices and executable rules. Two historical full-dataset runs of contract v1 passed all 29 checks and matched across seven tables, with 76,587,318 observations from 2,228 recordings; those results do not validate v2. Rebuild Silver to obtain the current contract.
 
 The [comparison log](../evidence/silver/comparison.log) and reports linked from the [Silver reference](../silver/SILVER_REFERENCE.md) contain the evidence. The quality inspection on 12 October confirmed missing labels, observations without finite sensor readings, and out-of-range openings. We kept the existing rules and original values.
 
-Gold has not been implemented. The historical full-dataset Silver v1 output is in `/home/ubuntu/3w-data/silver-oh/`; it does not match the current contract. Use the separate `/home/ubuntu/3w-data/silver-v3/` destination for a future v3 full-dataset test.
+Gold has not been implemented. The historical full-dataset Silver v1 output is in `/home/ubuntu/3w-data/silver-oh/`; it does not match the current contract. Use the separate `/home/ubuntu/3w-data/silver-v2/` destination for a future v2 full-dataset test.
 
 The local 30-recording v2 development build passed all 30 checks with 1,931,052 observations
 and 193 columns before the simplification. Its [validation evidence](../evidence/silver/milestone12/README.md)
@@ -113,12 +113,12 @@ Keep `REAL`, `SIMULATED`, and `DRAWN` separate by default unless combining them 
 |---|---|
 | Local dev Silver root | `data/dev/silver/` |
 | Historical full-dataset v1 Silver root | `/home/ubuntu/3w-data/silver-oh/` |
-| Planned isolated v3 full-dataset test root | `/home/ubuntu/3w-data/silver-v3/` |
+| Planned isolated v2 full-dataset test root | `/home/ubuntu/3w-data/silver-v2/` |
 | Ready marker | `silver_ready.json` under the selected root |
 | Actual tables | `runs/<run_id>/<table_name>/` under that root |
 | Individual run reports | `_runs/<run_id>.json` under that root |
 
-Read the ready marker once at the beginning, check that it describes a successful result for the chosen environment and contract, and use its table paths throughout the Gold run. Do not read the whole `runs` directory or combine tables from different Silver runs. The default configured Silver path is `silver/`; it does not automatically change to the isolated test destination `silver-v3/`.
+Read the ready marker once at the beginning, check that it describes a successful result for the chosen environment and contract, and use its table paths throughout the Gold run. Do not read the whole `runs` directory or combine tables from different Silver runs. The default configured Silver path is `silver/`; it does not automatically change to the isolated test destination `silver-v2/`.
 
 Develop on the 30-file dev sample, which contains 1,931,052 observations. Use the repo's locked Python 3.11/PySpark 3.5.0 environment and Java 8 or 17. Use your own VM checkout because the VM account is shared. Setup, sample preparation, and checking commands are in the [Silver run guide](../silver/SILVER_RUN_GUIDE.md).
 

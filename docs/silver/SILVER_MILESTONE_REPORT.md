@@ -7,7 +7,7 @@ This report describes the work completed in each commit milestone. The [contract
 Milestones 1–11 describe the original preservation/quality implementation. Milestone 12
 added cleaning and experimental model-window features. Milestone 13 keeps the reusable
 cleaning and quality work in Silver and moves model-window aggregates to Gold. Earlier
-run counts and timings are historical evidence, not validation of contract v3.
+run counts and timings are historical evidence, not validation of contract v2.
 
 ## Pipeline
 
@@ -15,7 +15,7 @@ run counts and timings are historical evidence, not validation of contract v3.
 Original dataset files
     -> Bronze: download, verify, preserve observations and source identifiers
     -> Silver: rename fields, attach recording details, explain event codes
-         -> v3: clean readings, bounded choke repairs, row-level quality and sequence facts
+         -> v2: clean readings, bounded choke repairs, row-level quality and sequence facts
          -> silver_observations: one row per original observation
          -> instance_quality: one summary per recording
          -> sensor_availability: one summary per recording and sensor
@@ -26,7 +26,7 @@ Original dataset files
     -> Gold / analysis: a consumer of these checked tables
 ```
 
-Silver keeps original readings, timestamps and labels. Contract v3 adds clean sensor values, explicitly marked choke estimates, readable event descriptions, and sequence details. Quality tables explain flagged source values. Gold builds the model-specific windows and statistics.
+Silver keeps original readings, timestamps and labels. Contract v2 adds clean sensor values, explicitly marked choke estimates, readable event descriptions, and sequence details. Quality tables explain flagged source values. Gold builds the model-specific windows and statistics.
 
 ## Milestone 1 - Read Bronze and produce a first profile
 
@@ -414,7 +414,7 @@ and missing sensor readings are not filled. No source rows are removed or origin
 ## Milestone 13 - Keep Silver reusable and move model aggregates to Gold
 
 The Silver infographic separates reusable trusted records from consumer-specific answers.
-Contract v3 follows that boundary: it keeps renamed observations, recording identity, conformed
+Contract v2 follows that boundary: it keeps renamed observations, recording identity, conformed
 event and sensor references, clean sensor values, bounded choke-repair provenance, quality outputs,
 and sequence checks. It removes per-sensor validity flags that duplicate the clean values and issue
 table, row-level counts and pressure differences that Gold can calculate, and the rolling means,
@@ -423,5 +423,36 @@ labelled windows and calculate the statistics required by the Random Forest.
 
 The observation schema is now 76 columns: 36 Bronze fields, 3 catalogue fields, and 37
 Silver-derived fields. The previous 17-minute dev run tested the larger v2 schema. Run the
-dev sample again to verify contract v3 and measure its output size before another VM-scale run.
+dev sample again to verify contract v2 and measure its output size before another VM-scale run.
+
+## Milestone 14 - Bound temporary storage for the VM
+
+The VM ran out of disk while Spark was caching prepared observations. V1 wrote observations
+directly; V2 introduced a complete disk cache that remained even after the schema was reduced
+to 76 columns. Free space measured after failure did not show the peak temporary usage.
+
+The runner now writes without that observation cache. It processes complete recordings in
+batches targeting one million observations, verifies each batch's saved files, and stops its
+Spark context before continuing. Recording boundaries, cleaning rules, the 76 columns, and
+all seven tables stay the same. Reference tables are written once. Exact comparisons cancel
+signed row counts in one aggregation instead of running two directional comparisons. The
+ready marker is published only when every batch and the accumulated counts pass; a later
+batch failure preserves the previous marker.
+
+The actual updated runner processed all **30 dev recordings / 1,931,052 observations** in
+three batches and passed **32 checks**. Sampled temporary-plus-output storage peaked at
+**302 MB**, compared with **951 MB** for the cached runner on the same sample. No Spark
+scratch files remained after the run. Counts, quality totals, preparation totals, and saved
+rules matched the previous unbatched dev result. All 59 focused tests passed, including an
+exact seven-table comparison between single-batch and three-batch fixture runs and a failure
+in a later batch. The final catalogue guards also passed six targeted tests; lint and formatting
+passed. The optional choke evaluator now reads v2 clean columns without removed validity flags.
+
+The dev run took 400.6 seconds locally while regression tests were also running; this is not a
+controlled speed comparison. Smaller batches add startup and repeated-check overhead. The
+full VM run is still required to measure production storage and runtime. Each successful run
+retains its own output, and a recording larger than the batch target runs alone.
+
+See [the saved measurements](../evidence/silver/v2/storage_fix_dev.json) and the
+[VM command](SILVER_RUN_GUIDE.md#run-on-the-full-dataset-on-the-vm).
 
