@@ -28,11 +28,13 @@ from threew.config import REPO_ROOT, Config, load_config
 from threew.lock import LockHeld, run_lock
 from threew.silver.input import current_manifest_counts, current_manifest_rows, read_bronze_ready_marker
 from threew.silver.issues import USAGE_POLICY, build_quality_issues, quarantine_issues, summarize_quality
+from threew.silver.prepare import prepare_observations, summarize_preparation
 from threew.silver.quality import build_quality_summaries
 from threew.silver.reconcile import OBSERVATION_KEY, RECORDING_KEY, input_checks, output_checks, unique_non_null_keys
 from threew.silver.reference import REFERENCE_VERSION, build_reference_tables
+from threew.silver.rules import DEFAULT_RULES_PATH, load_rules
 from threew.silver.transform import build_silver_observations
-from threew.spark import get_spark
+from threew.spark import cleanup_spark, get_spark
 
 SparkFactory = Callable[[Config], AbstractContextManager[SparkSession]]
 
@@ -44,7 +46,7 @@ def spark_session(cfg: Config) -> Iterator[SparkSession]:
     try:
         yield session
     finally:
-        session.stop()
+        cleanup_spark(session.stop, "stop session")
 
 
 def _write_json_atomically(path: Path, payload: dict[str, Any]) -> None:
@@ -101,10 +103,15 @@ def _require_checks(report: dict[str, Any], checks: dict[str, bool]) -> None:
 
 
 def run_silver(
-    cfg: Config, *, spark_factory: SparkFactory = spark_session, output_root: Path | None = None
+    cfg: Config,
+    *,
+    spark_factory: SparkFactory = spark_session,
+    output_root: Path | None = None,
+    rules_path: Path = DEFAULT_RULES_PATH,
 ) -> dict[str, Any]:
     """Hold the writer's input lock and the output lock until verified publication."""
     silver_root = _output_root(cfg, output_root)
+    rules = load_rules(rules_path)
     now, started = datetime.now(UTC), time.monotonic()
     run_id = f"{now:%Y%m%dT%H%M%S%fZ}-{uuid.uuid4().hex[:8]}"
     run_root = silver_root / "runs" / run_id
@@ -135,7 +142,9 @@ def run_silver(
         "code": code_info(),
         "config": config,
         "config_sha256": hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest(),
-        "contract": {"version": 1, "sha256": hashlib.sha256(contract.read_bytes()).hexdigest()},
+        "contract": {"version": 2, "sha256": hashlib.sha256(contract.read_bytes()).hexdigest()},
+        "quality_rules": rules.snapshot(),
+        "preparation_summary": None,
         "output_root": str(silver_root),
         "source": None,
         "quality_summary": None,
@@ -166,6 +175,7 @@ def run_silver(
                     .withColumnRenamed("count", "bronze_rows")
                     .persist(StorageLevel.MEMORY_AND_DISK)
                 )
+                silver = None
                 try:
                     with _phase(report, "input_checks"):
                         _require_checks(report, input_checks(spark, bronze_counts, bronze_marker, manifest_counts))
@@ -183,16 +193,24 @@ def run_silver(
                             },
                         )
                     with _phase(report, "transform_and_write"):
-                        silver = build_silver_observations(bronze, manifest_rows)
-                        summaries = build_quality_summaries(silver)
-                        issues = build_quality_issues(silver).persist(StorageLevel.MEMORY_AND_DISK)
+                        source_silver = build_silver_observations(bronze, manifest_rows)
+                        # Wide prepared rows must not compete with windows/writers for heap.
+                        # Disk reuse still avoids recomputing temporal features during checks.
+                        silver = prepare_observations(source_silver, rules).persist(StorageLevel.DISK_ONLY)
+                        summaries = build_quality_summaries(source_silver)
+                        issues = build_quality_issues(source_silver, rules).persist(StorageLevel.MEMORY_AND_DISK)
                         additional = {
                             "quality_issues": issues,
                             "quality_quarantine": quarantine_issues(issues),
-                            **build_reference_tables(spark),
+                            **build_reference_tables(spark, rules),
                         }
                         try:
-                            silver.write.mode("errorifexists").parquet(str(table_paths["silver_observations"]))
+                            (
+                                silver.write.mode("errorifexists")
+                                .option("parquet.block.size", 32 * 1024 * 1024)
+                                .option("parquet.page.size", 256 * 1024)
+                                .parquet(str(table_paths["silver_observations"]))
+                            )
                             summaries.instance_quality.write.mode("errorifexists").parquet(
                                 str(table_paths["instance_quality"])
                             )
@@ -202,8 +220,8 @@ def run_silver(
                             for name, table in additional.items():
                                 table.write.mode("errorifexists").parquet(str(table_paths[name]))
                         finally:
-                            issues.unpersist()
-                            summaries.unpersist()
+                            cleanup_spark(issues.unpersist, "release issues")
+                            cleanup_spark(summaries.unpersist, "release summaries")
                     with _phase(report, "read_back_and_check"):
                         saved = {name: spark.read.parquet(str(path)) for name, path in table_paths.items()}
                         counts = {
@@ -253,8 +271,11 @@ def run_silver(
                                         "sensor_reference",
                                     )
                                 },
+                                rules=rules,
+                                preparation_source=source_silver,
                             ),
                         )
+                        report["preparation_summary"] = summarize_preparation(saved["silver_observations"], rules)
                         report["quality_summary"] = summarize_quality(
                             saved["quality_issues"],
                             saved["instance_quality"],
@@ -262,7 +283,9 @@ def run_silver(
                             counts["silver_observation_rows"],
                         )
                 finally:
-                    bronze_counts.unpersist()
+                    if silver is not None:
+                        cleanup_spark(silver.unpersist, "release prepared observations")
+                    cleanup_spark(bronze_counts.unpersist, "release Bronze counts")
             with _phase(report, "publish"):
                 if read_bronze_ready_marker(cfg) != bronze_marker:
                     raise RuntimeError("Bronze ready marker changed during the Silver run.")
@@ -283,6 +306,9 @@ def run_silver(
                     "quality_summary": report["quality_summary"],
                     "usage_policy": report["usage_policy"],
                     "reference_version": report["reference_version"],
+                    "quality_rules": report["quality_rules"],
+                    "preparation_summary": report["preparation_summary"],
+                    "contract_version": 2,
                 }
                 _write_json_atomically(ready_path, marker)
         except BaseException as exc:
@@ -308,9 +334,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--env", choices=("dev", "prod"), required=True)
     parser.add_argument("--output-root", type=Path, help="isolated Silver destination (required for production input)")
+    parser.add_argument("--rules", type=Path, default=DEFAULT_RULES_PATH, help="versioned Silver quality/feature rules")
     args = parser.parse_args(argv)
     try:
-        run_silver(load_config(args.env), output_root=args.output_root)
+        run_silver(load_config(args.env), output_root=args.output_root, rules_path=args.rules)
     except LockHeld as exc:
         print(f"Silver skipped: {exc}", file=sys.stderr)
         return 0

@@ -117,6 +117,10 @@ def test_run_silver_reconciles_all_outputs_and_repeat_run_is_identical(spark, si
         "sensor_reference_rows": 27,
     }
     summary = second["quality_summary"]
+    assert second["contract_version"] == 2
+    assert second["quality_rules"]["resolved"]["short_window_seconds"] == 120
+    assert second["quality_rules"]["sha256"]
+    assert second["preparation_summary"]["rows"] == 6
     assert summary["rows_with_issues"] == 6
     assert summary["rows_with_quarantine_issues"] == 6
     assert summary["quarantine_row_percent"] == 100.0
@@ -176,6 +180,20 @@ def test_corrupted_observations_cannot_be_published(spark, silver_input, monkeyp
     assert report["status"] == "FAILED"
     assert report["reconcile"]["checks"][failed_check] is False
     assert report["error"]["phase"] == "read_back_and_check"
+
+
+def test_corrupted_prepared_feature_prevents_publication(spark, silver_input, monkeypatch):
+    from threew.silver.prepare import prepare_observations
+
+    previous = _prior_marker(silver_input)
+
+    def broken(observations, rules):
+        return prepare_observations(observations, rules).withColumn("downhole_pdg_pressure_pa_mean_120s", F.lit(999.0))
+
+    monkeypatch.setattr("threew.silver.run.prepare_observations", broken)
+    with pytest.raises(RuntimeError, match="silver_prepared_values_match_rules"):
+        _run(silver_input, spark)
+    assert silver_input.storage.silver_ready.read_text() == previous
 
 
 @pytest.mark.parametrize(
@@ -358,8 +376,8 @@ def test_milestone8_corrupted_additional_output_cannot_be_published(spark, silve
     previous = _prior_marker(cfg)
     if table in ("event_reference", "sensor_reference"):
 
-        def broken_references(session):
-            tables = build_reference_tables(session)
+        def broken_references(session, rules=None):
+            tables = build_reference_tables(session, rules)
             field = "event_name" if table == "event_reference" else "unit"
             tables[table] = tables[table].withColumn(field, F.lit("wrong"))
             return tables
@@ -367,8 +385,8 @@ def test_milestone8_corrupted_additional_output_cannot_be_published(spark, silve
         monkeypatch.setattr("threew.silver.run.build_reference_tables", broken_references)
     elif table.startswith("quality_issues"):
 
-        def broken_issues(observations):
-            issues = build_quality_issues(observations)
+        def broken_issues(observations, rules=None):
+            issues = build_quality_issues(observations, rules)
             if table == "quality_issues_schema":
                 return issues.drop("field_name")
             return issues.withColumn("reason", F.lit("wrong"))

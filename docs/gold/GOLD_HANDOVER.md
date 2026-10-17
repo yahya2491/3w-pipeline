@@ -1,14 +1,19 @@
 # Gold layer handover
 
-This explains what Silver gives you and how you can use it in Gold. It describes the inputs, decisions, and possible outputs; the Gold implementation is yours to design. For column definitions and implementation details, use the [Silver reference](../silver/SILVER_REFERENCE.md) and [contract](../silver/SILVER_CONTRACT.md).
+This explains what Silver gives Gold and recommends a concrete Gold anomaly-detection baseline that matches the [project description](../3W_Project_Description_full.md). Gold has not been implemented yet. For Silver column definitions and implementation details, use the [Silver reference](../silver/SILVER_REFERENCE.md) and [contract](../silver/SILVER_CONTRACT.md).
 
 ## Where we are
 
-Silver is implemented. Two full-dataset runs each passed all 29 build checks, and their schemas and complete contents matched across all seven tables. The result has 76,587,318 observations from 2,228 recordings.
+Silver contract v2 is implemented with cleaned readings, bounded choke repair and 120/300-second causal features. Read [Silver assumptions](../silver/SILVER_ASSUMPTIONS.md) for the new columns and executable rules. Two historical full-dataset runs of contract v1 passed all 29 checks and matched across seven tables, with 76,587,318 observations from 2,228 recordings; those results do not validate v2 features. Rebuild Silver to obtain them.
 
 The [comparison log](../evidence/silver/comparison.log) and reports linked from the [Silver reference](../silver/SILVER_REFERENCE.md) contain the evidence. The quality inspection on 12 October confirmed missing labels, observations without finite sensor readings, and out-of-range openings. We kept the existing rules and original values.
 
 Gold has not been implemented. The current full Silver result is in the separate VM test destination, `/home/ubuntu/3w-data/silver-oh/`.
+
+The local 30-recording v2 development build passed all 30 checks with 1,931,052 observations
+and 193 columns. Its [validation evidence](../evidence/silver/milestone12/README.md) includes
+the actual feature coverage and a masked-reading repair experiment. The sample contained
+no actual invalid openings; full v2 VM validation remains to be run.
 
 ## The seven folders and how Gold can use them
 
@@ -16,7 +21,7 @@ Each folder holds a Parquet table. **All event categories 0–9 remain together 
 
 | Folder/table | What it contains | Possible use in Gold |
 |---|---|---|
-| `silver_observations` | Every original observation, all 27 renamed sensor columns, recording/event details, and source keys. | The measurements for your calculations, filtered according to the fields and quality rules your question needs. |
+| `silver_observations` | Original observations and 27 renamed sensors, plus clean values, validity/repair flags, causal features, metadata and source keys. | Use clean/features columns with coverage and timing checks; retain raw readings for audit and sequences for CNNs. |
 | `instance_quality` | One summary per recording: observation count, missing labels/state, time problems, and sensor coverage. | Check recording quality and length; summarise limitations by source type or event. |
 | `sensor_availability` | One row per recording and sensor, showing finite-reading counts and percentages. | Choose sensors and recordings with useful coverage. Finite presence does not guarantee that every value passes a domain rule. |
 | `quality_issues` | All detected warnings and errors, with row keys, affected fields/uses, observed values, reasons, and suggested actions. | Match problems to observations, decide which fields are suitable for the calculation, and explain exclusions. |
@@ -30,7 +35,7 @@ The observations also identify the source as `REAL`, `SIMULATED`, or `DRAWN` in 
 
 ## How to use the saved quality tables with observations
 
-**Preserving readings and identifying questionable fields is the chosen Silver design.** Silver's output is the observations together with their quality information. A successful build means these outputs passed their checks; it does not mean every reading is suitable for every calculation.
+**Use the prepared columns explicitly.** `<sensor>_clean` and the causal features coexist with the original columns. Opening replacements carry `_was_imputed` and `_source_age_seconds`; observed coverage excludes estimates. Raw quality issues remain even after a repair, so do not automatically reject a permitted clean replacement just because its raw measurement is quarantined. Conversely, a repair does not make the original measurement valid. Review sequence timing, feature coverage and target eligibility for the chosen task.
 
 Gold can read the existing `quality_issues` or `quality_quarantine` Parquet table alongside `silver_observations`. It does not need to rerun Silver or rediscover the same problems.
 
@@ -40,7 +45,7 @@ Gold can read the existing `quality_issues` or `quality_quarantine` Parquet tabl
 4. Use `field_name`, `affected_use`, and `recommended_action` to decide whether that particular measurement or label belongs in the result.
 5. Keep other readings when their issues are unrelated to the question. Record how many inputs were included and excluded.
 
-For example, an observation may have a missing class and an opening of −99.99%, while another sensor has a finite reading with no detected issue. Gold can use that other sensor for a calculation that does not require a class, exclude the opening from an opening calculation, and exclude the observation from a comparison requiring a known row class. The original Silver observation remains unchanged.
+For example, an observation may have a missing class and an original opening of −99.99%, while another sensor has a suitable finite reading. Gold can use that other sensor without a class label. The opening's clean value may be a permitted bounded estimate or null; inspect its repair flag and age. The unknown class cannot become confirmed evaluation ground truth. Original columns remain unchanged.
 
 The issue tables describe problems; the full measurements still come from `silver_observations`. Their `observed_value` field is text for inspection, not a replacement numeric sensor table.
 
@@ -52,10 +57,22 @@ One observation can have several issue entries. Matching every issue directly to
 |---|---|---|
 | Missing row class | 4,028,400 observations, about 5.26%. | Readings remain available for work that does not require a row class. Do not infer the missing class from the whole-recording event label. |
 | No finite sensor readings | 5,193 observations. | They cannot supply sensor measurements; their source rows and labels remain preserved. |
-| Production-choke opening outside 0–100% | 161,872 readings: 161,538 below zero and 334 above 100. Flagged range: −99.99 to 100.4375. | Exclude these opening measurements from calculations and keep the issue counts visible. Do not clip them or guess replacements. |
+| Production-choke opening outside 0–100% | 161,872 original readings: 161,538 below zero and 334 above 100. Flagged range: −99.99 to 100.4375. | Retain raw issue counts; v2 clean columns provide a bounded estimate or null with repair provenance. |
 | Time and label consistency | No missing/duplicate timestamps, backward intervals, gaps over one second, or class/recording mismatches were detected by the implemented checks. | Use the reported results, while preserving original row order and source time meaning. |
 
-Repeated −99.99 values appeared in the opening examples, but their source meaning is unconfirmed. We have not converted them to missing or assumed that all negative readings equal −99.99.
+Repeated −99.99 values appeared in the historical opening examples, but their source meaning is unconfirmed. V2 applies the same out-of-range rule to every finite invalid opening, without interpreting a particular number as a confirmed missing-value marker. The clean value is a bounded estimate or null; originals remain unchanged.
+
+## Planned Gold anomaly-detection model
+
+The project description says Gold should produce labelled, fixed-window features for an anomaly-detection model. A practical first model is a Spark MLlib `RandomForestClassifier`. It can classify each eligible window as normal or as an undesirable event, using Silver sensor measurements and features. If the event classes have enough examples, Gold can also test classifying the event type. Save the window features, true label, model prediction, and evaluation results as Gold outputs.
+
+Build one Gold row per fixed time window, such as five minutes. The exact window size and the minimum amount of usable data need to be set before building the table. Derive the target from supported `class_code` values in that same window: class 0 represents normal operation; supported nonzero classes represent an event and its phase. Exclude windows with missing or inconsistent labels from supervised evaluation rather than guessing their class. Keep label fields and event-derived metadata out of the model's predictor columns.
+
+Use Silver's `<sensor>_clean` readings and row-level changes, rates, rolling means, deviations, trends, and coverage fields to build window features. The Silver quality tables have a different job: `instance_quality` and `sensor_availability` show whether a recording or sensor has enough usable data; `quality_issues` and `quality_quarantine` identify affected fields and rows. Use these tables to set and explain inclusion rules, then report how many rows or windows were kept and excluded. Do not pass recording-level summary counts or quality outcomes into the model as predictors, because they could reveal the answer or duplicate the same recording-level information across many windows.
+
+Evaluate on recordings that were not used for training; consider grouping real recordings by well. Fit any learned preprocessing on the training set only. Report a confusion matrix, per-class precision and recall, and macro F1 so performance on rare events is visible. Compare results with a simple majority-class baseline. This demonstrates whether the Silver features and Gold model can detect the labelled undesirable events; it does not establish that they can predict an event before it begins.
+
+The separate CNN work can use the same ordered Silver sequences, with a matching labelled-window definition if the other course uses the same detection task.
 
 Four sensor columns have no finite readings anywhere in these full runs: `service_pump_downstream_pressure_pa`, `production_shutdown_valve_upstream_pressure_pa`, `subsea_production_line_pressure_pa`, and `service_pump_flow_rate_m3_s`. Other sensors have different coverage across recordings. Check availability before choosing inputs.
 

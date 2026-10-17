@@ -4,12 +4,17 @@
 
 This report describes the work completed in each commit milestone. The [contract](SILVER_CONTRACT.md) defines the tables and field meanings. The report was updated throughout the Silver implementation and records changes to the plan along the way.
 
+Milestones 1–11 describe the original preservation/quality implementation. Milestone 12
+extends it with executable cleaning and forecasting features; earlier full-dataset counts
+and timings are historical evidence, not validation of the new derived columns.
+
 ## Pipeline
 
 ```text
 Original dataset files
     -> Bronze: download, verify, preserve observations and source identifiers
     -> Silver: rename fields, attach recording details, explain event codes
+         -> v2: clean readings, bounded choke repairs, causal 120/300-second features
          -> silver_observations: one row per original observation
          -> instance_quality: one summary per recording
          -> sensor_availability: one summary per recording and sensor
@@ -20,7 +25,7 @@ Original dataset files
     -> Gold / analysis: a consumer of these checked tables
 ```
 
-Silver keeps the original readings, missing values, timestamps and labels. It makes the data understandable and reports its limitations. It does not invent measurements to make the tables look complete.
+Silver keeps original readings, timestamps and labels. V2 adds explicitly marked estimates and derived features without presenting them as observed source measurements. The assumptions and limitations are documented in Milestone 12.
 
 ## Milestone 1 - Read Bronze and produce a first profile
 
@@ -390,3 +395,18 @@ The `silver-oh` folder is just a test destination. The command still reads produ
 We check the silver implementation, the runs match. We also check the quality issues and quarantine tables, and the event and sensor reference tables. The final milestone is to check that the Silver implementation is complete and correct, and that it meets the contract and requirements. 
 
 We then make a PR to merge to Silver.
+
+## Milestone 12 - Prepare measurements and causal features for forecasting
+
+Added [SILVER_ASSUMPTIONS.md](SILVER_ASSUMPTIONS.md), [QUALITY_RULES.md](QUALITY_RULES.md)
+and [`conf/quality/silver_rules.yaml`](../../conf/quality/silver_rules.yaml). The code validates
+the rules, uses the same configured domains for issues/cleaning/references, and records resolved
+settings plus their fingerprint. Contract version is now 2; table count remains seven.
+
+All 27 sensors gain `_clean` and `_is_valid` columns. Finite invalid choke openings can use
+the most recent original valid reading from at most three seconds earlier in the same continuous
+sequence. `_was_imputed` and `_source_age_seconds` explain replacements. Estimated values
+never become anchors. For example `40, -99.99, 120, 120, 120, 42` becomes
+`40, 40, 40, 40, null, 42` in the clean column. Null/NaN/infinite openings, missing classes
+and missing sensor readings are not filled. No source rows are removed or original values changed.
+

@@ -9,9 +9,11 @@ from pyspark.sql import functions as F
 from pyspark.sql.types import IntegerType, StringType, TimestampNTZType
 
 from threew.silver.issues import ISSUE_KEY, build_quality_issues, quarantine_issues
+from threew.silver.prepare import prepare_observations
 from threew.silver.quality import SENSOR_FIELDS, build_quality_summaries
 from threew.silver.reference import build_reference_tables
 from threew.silver.transform import BRONZE_TYPES, SENSOR_RENAMES, build_silver_observations
+from threew.spark import cleanup_spark
 
 RECORDING_KEY = ("_source_path", "_file_sha256")
 OBSERVATION_KEY = (*RECORDING_KEY, "_row_in_file")
@@ -85,16 +87,23 @@ def output_checks(
     quality: DataFrame,
     sensors: DataFrame,
     additional: Mapping[str, DataFrame] | None = None,
+    rules=None,
+    preparation_source: DataFrame | None = None,
 ) -> dict[str, bool]:
     """Validate saved tables against Bronze, the contract and freshly computed summaries."""
     expected = build_silver_observations(bronze, manifest_rows)
+    if rules is not None:
+        expected = prepare_observations(expected, rules)
     summaries = build_quality_summaries(expected)
     issues = None
+    prepared_expected = None
     try:
         # Summary types come from the independent expected calculation, not the
         # saved/candidate tables. Parquet does not retain required-field nullability.
         checks = {
-            "silver_schema_matches_contract": schema_matches(observations, OBSERVATION_TYPES),
+            "silver_schema_matches_contract": schema_matches(
+                observations, {f.name: f.dataType for f in expected.schema} if rules is not None else OBSERVATION_TYPES
+            ),
             "instance_quality_schema_matches_contract": schema_matches(
                 quality, {f.name: f.dataType for f in summaries.instance_quality.schema}
             ),
@@ -146,12 +155,25 @@ def output_checks(
                 "sensor_availability_values_match_observations": same_rows(summaries.sensor_availability, sensors),
             }
         )
+        if rules is not None:
+            derived = [name for name in expected.columns if name not in OBSERVATION_TYPES]
+            if preparation_source is not None:
+                # Same validated base plan as the build: Spark can reuse its cached
+                # preparation. A producer with changed expressions does not match
+                # this canonical plan, so corrupt feature output is still rejected.
+                reference = prepare_observations(preparation_source, rules).select(*OBSERVATION_KEY, *derived)
+            else:
+                prepared_expected = expected.select(*OBSERVATION_KEY, *derived).persist(StorageLevel.MEMORY_AND_DISK)
+                reference = prepared_expected
+            checks["silver_prepared_values_match_rules"] = same_rows(
+                reference, observations.select(*OBSERVATION_KEY, *derived)
+            )
         if additional is not None:
-            issues = build_quality_issues(expected).persist(StorageLevel.MEMORY_AND_DISK)
+            issues = build_quality_issues(expected, rules).persist(StorageLevel.MEMORY_AND_DISK)
             expected_additional = {
                 "quality_issues": issues,
                 "quality_quarantine": quarantine_issues(issues),
-                **build_reference_tables(bronze.sparkSession),
+                **build_reference_tables(bronze.sparkSession, rules),
             }
             for name, reference in expected_additional.items():
                 candidate = additional[name]
@@ -163,6 +185,8 @@ def output_checks(
             ] and unique_non_null_keys(additional["quality_issues"], ISSUE_KEY)
         return checks
     finally:
+        if prepared_expected is not None:
+            cleanup_spark(prepared_expected.unpersist, "release expected preparation")
         if issues is not None:
-            issues.unpersist()
-        summaries.unpersist()
+            cleanup_spark(issues.unpersist, "release expected issues")
+        cleanup_spark(summaries.unpersist, "release expected summaries")

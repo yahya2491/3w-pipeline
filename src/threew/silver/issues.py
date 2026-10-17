@@ -13,7 +13,7 @@ from pyspark.sql import functions as F
 from pyspark.sql.window import Window
 
 from threew.silver.quality import with_timestamp_intervals
-from threew.silver.reference import SENSOR_DEFINITIONS
+from threew.silver.reference import sensor_definitions
 
 OBSERVATION_KEY = ("_source_path", "_file_sha256", "_row_in_file")
 ISSUE_KEY = (*OBSERVATION_KEY, "field_name", "issue_code")
@@ -30,7 +30,7 @@ USAGE_POLICY = {
     "missing_class": "Keep sensor readings; exclude this label from analyses requiring a known class.",
     "quarantine": "Review error issues for their affected field/use; join their keys to observations for complete readings.",
     "source_versions": "Use Bronze's current manifest; a new file hash is a new source version, not a row duplicate.",
-    "domains": "Check documented valve codes and percentage openings; do not invent pressure/flow/temperature limits.",
+    "domains": "Check versioned valve/opening domains; clean columns with repair flags supplement unchanged source values.",
     "state_code": "Domain not documented: preserve values, count missingness, and do not invent an allowed-code list.",
 }
 
@@ -39,8 +39,9 @@ def is_finite(value: Column) -> Column:
     return value.isNotNull() & ~F.isnan(value) & (value != float("inf")) & (value != float("-inf"))
 
 
-def build_quality_issues(observations: DataFrame) -> DataFrame:
+def build_quality_issues(observations: DataFrame, rules=None) -> DataFrame:
     """One issue per affected row/field/rule, with scope-specific usage guidance."""
+    definitions = sensor_definitions(rules)
     timed = with_timestamp_intervals(observations).withColumn(
         "_same_timestamp_rows",
         F.count("*").over(Window.partitionBy("_source_path", "_file_sha256", "timestamp")),
@@ -145,7 +146,7 @@ def build_quality_issues(observations: DataFrame) -> DataFrame:
         F.col("timestamp"),
     )
 
-    for definition in SENSOR_DEFINITIONS:
+    for definition in definitions:
         field = definition["sensor_name"]
         value = F.col(field)
         finite = is_finite(value)
@@ -166,7 +167,7 @@ def build_quality_issues(observations: DataFrame) -> DataFrame:
                 "unsupported_valve_state",
                 "error",
                 "sensor_measurement",
-                "The documented valve states are 0, 0.5 and 1.",
+                f"Allowed valve states: {definition['allowed_values']}.",
                 "Review this sensor value; do not round or replace it.",
                 value,
             )
@@ -177,12 +178,12 @@ def build_quality_issues(observations: DataFrame) -> DataFrame:
                 "opening_out_of_range",
                 "error",
                 "sensor_measurement",
-                "A choke opening percentage must be between 0 and 100.",
-                "Review this opening value; do not clip it.",
+                f"Opening percentage must be between {definition['minimum']:g} and {definition['maximum']:g}.",
+                "Keep the source; use the clean column and its repair provenance for model inputs.",
                 value,
             )
 
-    any_sensor = reduce(lambda a, b: a | b, (is_finite(F.col(d["sensor_name"])) for d in SENSOR_DEFINITIONS))
+    any_sensor = reduce(lambda a, b: a | b, (is_finite(F.col(d["sensor_name"])) for d in definitions))
     add(
         ~any_sensor,
         "sensor_readings",

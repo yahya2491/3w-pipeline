@@ -2,13 +2,13 @@
 
 ## 1 Project statement
 
-`To what extent is the oil-well sensor data complete and suitable for anomaly analysis, and how can our layers identify its quality limitations?`
+`How effectively can a Spark MLlib Random Forest use Silver-prepared sensor features to detect and classify undesirable operating conditions in Petrobras 3W data?`
 
-We build a batch data pipeline on Spark that turns the raw Petrobras 3W dataset (v2.0.0) into trusted, analysis-ready data for detecting and classifying undesirable events in offshore oil wells. The pipeline follows the Medallion architecture (Bronze, Silver, Gold) and runs end to end through GitHub Actions on our UiS OpenStack VM.
+We build a batch data pipeline on Spark that turns the raw Petrobras 3W dataset (v2.0.0) into trusted, analysis-ready data for detecting and classifying undesirable events in offshore oil wells. The pipeline follows the Medallion architecture (Bronze, Silver, Gold); Bronze runs through GitHub Actions on our UiS OpenStack VM, and Gold is planned.
 
-The final output is a labelled, window-level feature table that an anomaly detection model consumes directly. Silver also serves as a reusable cleaned dataset for other analyses.
+The planned Gold output is a labelled, window-level feature table for a Spark MLlib Random Forest. Silver also serves as a reusable prepared dataset for other analyses.
 
-Out of scope: real-time or streaming ingestion, live well data, model training and evaluation, and dashboards beyond what is needed to validate the outputs.
+Out of scope: real-time or streaming ingestion, live well data, CNN development (planned for another course), and dashboards beyond what is needed to validate the outputs.
 
 ## 2 Dataset description
 
@@ -34,26 +34,26 @@ Additionally some source field names use Portuguese terminology or abbreviations
 
 ## 4 Silver design
 
-The purpose of the Silver layer is to make the prepared Bronze data easier to understand and use in Gold. We standardise field names, add recording and event details, and identify data-quality problems. We preserve the source readings because detecting a problem does not necessarily tell us what the correct value should be.
+The purpose of the Silver layer is to make the prepared Bronze data easier to understand and use in Gold. We standardise field names, add recording and event details, identify data-quality problems, and prepare clean sensor values and time-based features. We preserve the source readings because detecting a problem does not necessarily tell us what the correct value should be.
 
 ### Grain and data model
 
-One row in the main Silver table represents one original observation, with all 27 sensor fields kept as columns. This means that Silver retains the same 76,587,318 observations as Bronze. We do not create a separate observation row for each sensor.
+One row in the main Silver table represents one original observation, with all 27 sensor fields kept as columns. Silver retains the observations from Bronze; it does not create a separate observation row for each sensor.
 
 To trace an observation back to its source, we use three fields together: `_source_path` identifies the original file, `_file_sha256` identifies its exact version, and `_row_in_file` identifies the row's original position. The recording name, `instance_id`, is not sufficient on its own because some names appear in more than one event folder. We use the source path and file fingerprint to join each observation to Bronze's current file catalogue and add the recording details.
 
-Silver saves seven Parquet tables. The counts below are from the recorded full-dataset runs on 11 October 2026.
+Silver saves seven Parquet tables:
 
-| Table | Purpose | Rows |
-| --- | --- | ---: |
-| `silver_observations` | All original observations, with clearer field names and added recording/event details. Missing and flagged values remain preserved. | 76,587,318 |
-| `instance_quality` | One summary per recording (one original Parquet file), containing observation counts, missing labels, timestamp problems, and overall sensor coverage. | 2,228 |
-| `sensor_availability` | One summary per sensor per recording, showing counts and percentages of finite versus missing or nonfinite readings. This describes coverage, not whether every reading is valid. | 60,156 |
-| `quality_issues` | Warnings and errors linked to individual observations, with the affected field, reason, and recommended action. Covers label, timestamp, and sensor-value problems; individual null sensor cells are summarised in `sensor_availability` instead. | 4,195,465 |
-| `quality_quarantine` | The error-only subset of `quality_issues`, identifying affected measurements, labels, or timestamps for exclusion or further investigation. The original observations remain in `silver_observations`. | 167,065 |
-| `event_reference` | One definition per event category, containing its readable name and supported observation classes and phases, such as normal, transient, and steady. | 10 |
-| `sensor_reference` | One definition per sensor, connecting its original name to its readable English name, meaning, unit, and applicable value rules. | 27 |
-`silver_observations` is the main table, while the other six tables are reference or summary tables. The `sensor_reference` and `event_reference` tables are static definitions, while the other six tables are generated from the source data.
+| Table | Purpose |
+| --- | --- |
+| `silver_observations` | All original observations, with clearer field names, recording/event details, and Silver-prepared columns. |
+| `instance_quality` | One summary per recording, including missing labels, timestamp problems, and sensor coverage. |
+| `sensor_availability` | One summary per sensor per recording, showing finite and missing or non-finite readings. |
+| `quality_issues` | Warnings and errors linked to affected observations and fields, with reasons and recommended actions. |
+| `quality_quarantine` | The error-level subset of `quality_issues`, for review or filtering. |
+| `event_reference` | Event names and supported observation classes and phases. |
+| `sensor_reference` | Sensor names, meanings, units, and applicable value rules. |
+`silver_observations` is the main table; the other six are reference or summary tables. `sensor_reference` and `event_reference` are static definitions; the other five are generated from the source data.
 
 ### Standardisation and event labels
 
@@ -68,13 +68,15 @@ The dataset uses two labels that describe different things. `instance_label` ide
 | 1 | The event is established, referred to as the steady phase. |
 | Missing | No observation label is available. |
 
-These events are usually faults or undesirable operating conditions. Silver adds readable event and phase names alongside the original codes.
+These events are usually faults or undesirable operating conditions. Silver adds `instance_event_name`, `row_event_name`, `row_event_phase`, and `class_label_status` alongside the original codes. They make the recording event and row class easier to interpret and show whether the row class agrees with the recording label; they do not infer missing labels or make predictions.
 
 ### Missing values and quality rules
 
-We preserve missing and questionable values in `silver_observations`. We do not replace missing readings with zero, estimate replacements, or clip values to an allowed range. Zero is not automatically treated as missing. Separate quality tables describe the limitations and identify which observations or fields they affect. 
+We preserve original readings in `silver_observations`. For each of the 27 sensors, Silver adds an `_is_valid` flag and a `_clean` value. A valid value is copied into the clean column; a missing or invalid value is usually null there, except for the limited choke repair described below. We do not replace missing readings with zero or clip values to an allowed range. Zero is not automatically treated as missing. Separate quality tables describe the limitations and identify which observations or fields they affect.
 
-We do not directly modify the source readings because we cannot assume that a missing or out-of-range value is incorrect. For example, a choke opening of 120% is outside the documented range of 0–100%, but you cant just be sure that the reading can simplify to 100% or that it should be treated as missing. The Silver layer flags the problem, but leaves the original value in place.
+For a finite choke opening outside the documented range of 0–100%, Silver can use the most recent original valid reading from the same uninterrupted sequence, if it is no more than three seconds old. The repaired value is flagged and its source age is recorded. Missing, NaN, infinite, long-gap, and sequence-boundary values are not repaired. If there is no eligible earlier reading, the clean value stays null. The original value is kept unchanged; Silver does not clip an opening such as 120% to 100%.
+
+Silver also adds 120- and 300-second rolling features for seven sensors, plus changes, rates, and pressure-difference features. These are attached to each observation and use recent sensor history for Gold anomaly detection. They summarize behavior; they do not repair bad readings. Rolling features require at least 50% observed coverage and do not cross timestamp or sequence breaks.
 
 **`instance_quality`: quality of each recording**
 
@@ -128,17 +130,15 @@ The distinction is therefore:
 
 ### Validation and measured results
 
-After we run the silver layers and produce the tables, we run python code to check the resutls like row counts, perserved values and summaries against the expected results. We also ran two full-dataset runs and compared the results. The two runs passed all 29 build checks, and a separate comparison found matching schemas and complete contents across all seven tables.
+The Silver v2 development run processed 30 recordings and 1,931,052 observations, passed all 30 saved-output checks, and took about 17 minutes. An earlier full-dataset run and comparison used the previous Silver design; those results do not validate Silver v2. A full v2 run on the VM is still required.
 
-Both runs retained all observations and reported 4,028,400 missing-class warnings, 5,193 observations without finite sensor readings, and 161,872 choke-opening range errors. Error-level issues affected 167,065 distinct observations, or 0.2181% of the dataset. This percentage excludes missing-class warnings, which affected approximately 5.26% of observations. The runs reported no inconsistent class labels or timestamp errors under the implemented rules.
-
-These results show that Silver preserved the data and made its limitations explicit. 
+The development sample had no naturally occurring out-of-range choke openings, so it did not demonstrate repairs on real invalid values. A separate masked-reading evaluation measures how well the bounded repair reconstructs hidden valid readings.
 
 ### Spark processing and future scaling
 
-We implemented Silver using PySpark Dataframes and built-in Spark SQL functions. And we use window functions to compare timestamps within each recording. The two recorded full runs took approximately 54 to 58 minutes. Further tuning should focus on optimizing the execution plans.
+We implemented Silver using PySpark DataFrames, built-in Spark SQL functions, and window functions. Compatible rolling features are calculated together. Disk-only persistence and 32 MiB output row groups were used after a 2 GiB driver attempt ran out of memory. The 17-minute development run shows that the current setup completes on the development VM; these settings have not been benchmarked as optimal.
 
-Additionally, for the future we could also see how to handle those quality issues rather than just flagging them. For example, we could impute missing values, or correct invalid readings based on the surrounding context.
+The next steps are to complete the full v2 Silver run and build and evaluate the planned Gold model.
 
 ## 5 Gold layer
 
@@ -154,8 +154,8 @@ Additionally, for the future we could also see how to handle those quality issue
 
 ## 6 End to end delivery
 
-Another engineer can clone the repository and follow the run instructions using Python 3.11, PySpark 3.5.0, and using `run.md` as reference. The main branch is the prod configuration, and other branches are created and named depending on the specific task. Each branch is for development. The repository contains a `requirements.txt` file, a `run.md` file with instructions, and a `dataset.ini` file with event and sensor definitions. The repository also contains a `tests` folder with unit tests. The repository is structured to support continuous integration and delivery through GitHub Actions.
+Another engineer can clone the repository and use `README.md` for setup and pipeline instructions, with `docs/silver/SILVER_RUN_GUIDE.md` for Silver-specific commands. The project uses Python 3.11, PySpark 3.5.0, and the pinned `requirements.lock` and `requirements-dev.lock` files. It also contains `dataset.ini` for event and sensor definitions and a `tests` folder. GitHub Actions runs continuous integration.
 
-During development we will use a 30 sample file; production configuration processes the full dataset on the UiS OpenStack VM. Changes are reviewed by the other group memberthrough pull requests before promotion to `main` (production). A self-hosted VM runner executes Bronze. The intended schedule is Monday at 03:17 UTC. Silver has been validated using production input in an isolated output folder. 
+During development we use a 30-recording sample; production configuration processes the full dataset on the UiS OpenStack VM. Changes are reviewed through pull requests before promotion to `main`. A self-hosted VM runner executes the scheduled Bronze workflow. Silver v2 has passed its development checks; its full production-scale run in an isolated output folder remains to be completed.
 
-We treat 3W as a fixed batch dataset and use its documented definitions for validation. We dont fix missing labels and uneven sensor coverage. Future improvements include fixing missing and inconsistent data, automating all stages (from ingestion to gold delivery).
+We treat 3W as a fixed batch dataset and use its documented definitions for validation. We leave missing labels unknown and report uneven sensor coverage. Gold will use Silver's clean values and time-based features to build labelled windows for a Spark MLlib Random Forest that detects and classifies undesirable events. We will hold out recordings for evaluation and report per-class precision and recall, macro F1, and a majority-class baseline. Gold and the complete scheduled Bronze-to-Gold workflow are planned work; CNN development is for another course.

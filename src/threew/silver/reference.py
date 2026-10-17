@@ -92,6 +92,23 @@ def sensor_definition(source_name: str, sensor_name: str) -> dict:
 
 
 SENSOR_DEFINITIONS = tuple(sensor_definition(source, name) for source, name in SENSOR_RENAMES.items())
+
+
+def sensor_definitions(rules=None):
+    """Resolve domain rules once for validation, cleaning and published references."""
+    if rules is None:
+        return SENSOR_DEFINITIONS
+    return tuple(
+        {
+            **definition,
+            "allowed_values": list(rules.valve_states) if definition["allowed_values"] is not None else None,
+            "minimum": rules.opening_min_pct if definition["minimum"] is not None else None,
+            "maximum": rules.opening_max_pct if definition["maximum"] is not None else None,
+        }
+        for definition in SENSOR_DEFINITIONS
+    )
+
+
 EVENT_REFERENCE_SCHEMA = (
     "event_code int, event_name string, supports_normal boolean, supports_steady boolean, "
     "supports_transient boolean, steady_class_code int, transient_class_code int, "
@@ -103,7 +120,7 @@ SENSOR_REFERENCE_SCHEMA = (
 )
 
 
-def build_reference_tables(spark: SparkSession) -> dict:
+def build_reference_tables(spark: SparkSession, rules=None) -> dict:
     """Ten event definitions and 27 sensor definitions, ready for Spark/SQL consumers."""
     events = [
         {
@@ -121,5 +138,5 @@ def build_reference_tables(spark: SparkSession) -> dict:
     ]
     return {
         "event_reference": spark.createDataFrame(events, EVENT_REFERENCE_SCHEMA),
-        "sensor_reference": spark.createDataFrame(list(SENSOR_DEFINITIONS), SENSOR_REFERENCE_SCHEMA),
+        "sensor_reference": spark.createDataFrame(list(sensor_definitions(rules)), SENSOR_REFERENCE_SCHEMA),
     }

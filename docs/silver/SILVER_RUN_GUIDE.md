@@ -28,6 +28,36 @@ Run:
 python -m threew.silver.run --env dev
 ```
 
+Milestone 12 is included automatically. The command loads `conf/quality/silver_rules.yaml`,
+adds clean sensor readings, limited three-second choke repairs and 120/300-second features
+to `silver_observations`, and saves resolved rules plus a preparation summary. See
+[Silver assumptions](SILVER_ASSUMPTIONS.md) before selecting predictor columns. There are
+still seven tables. Larger output and additional window processing mean older timings
+and storage measurements are not estimates for this version.
+
+The development configuration uses two local cores and a 4 GB Spark driver. Prepared
+observations are reused from disk through verification. The wide observation writer uses
+32 MiB Parquet row groups and 256 KiB pages to limit simultaneous column buffers. Allow
+several minutes for the 30-file sample; the rolling features are substantially heavier
+than the original rename-and-profile pipeline. A 2 GB driver exhausted its Java heap
+while writing this sample during validation, so use the updated configuration.
+
+The completed Milestone 12 run took about 17 minutes on this development setup and passed
+all 30 saved-output checks. Its [evidence record](../evidence/silver/milestone12/README.md)
+includes counts, storage size and the masked-reading experiment. Runtime varies by machine.
+
+Use `--rules /absolute/path/to/rules.yaml` only for a deliberately documented alternative.
+
+After a successful v2 run, assess short choke estimates on deliberately hidden valid readings:
+
+```bash
+python scripts/evaluate_choke_repair.py --env dev --output output/choke_repair.json
+```
+
+This reports errors for one-, two- and three-second masked stretches by sensor/source type.
+It does not establish the true values of actual faulty readings or tune settings on held-out
+test data. For a separate Silver destination, add `--silver-root /absolute/path/to/silver-root`.
+
 This command:
 
 1. Checks that Bronze finished successfully and that its rows match the recording catalogue.
@@ -37,7 +67,8 @@ This command:
 5. Builds separate summaries for each recording and each sensor in each recording.
 6. Checks labels, timestamps, and sensor values, recording quality problems and reasons for reviewing them.
 7. Creates shared event and sensor reference tables.
-8. Saves all seven tables, reads them back, and checks their contents before marking the result ready.
+8. Adds cleaned readings, repair indicators, observed/prepared counts, causal temporal features and choke pressure differences.
+9. Saves all seven tables, reads them back, and checks source preservation and derived contents before marking the result ready.
 
 For the dev sample, expect 1,931,052 observations, 30 recording summaries, 810 sensor summaries, 10 event references, and 27 sensor references. Quality issue counts depend on the input and rules.
 
@@ -58,6 +89,22 @@ Each attempt gets a new folder under `data/dev/silver/runs/<run_id>/`. The actua
 `data/dev/silver/silver_ready.json` points to the latest successful run. It does not contain the sensor data. If a new run fails, the previous marker stays in place. An incomplete attempt may leave a folder behind, so use the table paths in the ready marker.
 
 Each attempt also writes a report under `data/dev/silver/_runs/` when it finishes normally or handles a failure. A process killed abruptly can leave no final report. Reports contain counts, checks, timings, output sizes, source/code/configuration details, and a quality summary.
+
+To inspect the new preparation counts without starting Spark:
+
+```bash
+python - <<'PY'
+import json
+from pathlib import Path
+
+ready = json.loads(Path("data/dev/silver/silver_ready.json").read_text())
+print("Contract:", ready.get("contract_version", 1))
+print(json.dumps(ready.get("preparation_summary"), indent=2))
+print("Rules:", ready.get("quality_rules", {}).get("sha256"))
+PY
+```
+
+An old marker has no preparation summary; rebuild Silver to produce contract v2.
 
 ## Check the code changes
 
@@ -89,7 +136,13 @@ For quality issues, quarantine, and safe-run checks:
 pytest -q tests/test_silver_issues.py tests/test_silver_run.py
 ```
 
-The [milestone report](SILVER_MILESTONE_REPORT.md) explains the development steps. The [Silver contract](SILVER_CONTRACT.md) describes the observation fields and preservation rules; the table list above includes the additional Milestone 8 outputs.
+For cleaning, elapsed-time features, shared rules and reconstruction evaluation:
+
+```bash
+pytest -q tests/test_silver_prepare.py
+```
+
+The [milestone report](SILVER_MILESTONE_REPORT.md) explains the development steps. The [Silver contract](SILVER_CONTRACT.md) and [assumptions](SILVER_ASSUMPTIONS.md) describe the original observation fields and the Milestone 12 preparation; all seven table names remain stable.
 
 ## Run on the full dataset on the VM
 
@@ -161,7 +214,7 @@ if len(successful) < 2:
 first, second = successful[-2:]
 print("Comparing:", first["run_id"], "and", second["run_id"], flush=True)
 print("Code commits:", first["code"]["commit"], second["code"]["commit"], flush=True)
-for field in ("source", "config_sha256", "contract", "reference_version"):
+for field in ("source", "config_sha256", "contract", "reference_version", "quality_rules"):
     if first[field] != second[field]:
         raise SystemExit(f"Runs differ in {field}; review the inputs/settings first.")
 
