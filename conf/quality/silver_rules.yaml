@@ -9,20 +9,6 @@ cleaning:
   missing_classes: preserve_unknown
   missing_sensors: preserve_missing
   other_invalid_sensors: null_in_clean_column
-temporal:
-  # Selected sensors gain deltas/rates, rolling means/sample stddev, baseline deviation,
-  # short-vs-long trend, invalid duration, and original/prepared coverage counts.
-  # Fixed relationship: clean production-choke upstream pressure minus downstream pressure,
-  # plus its delta/rate. Formulas and output names are in SILVER_ASSUMPTIONS.md.
+sequence:
+  # Expected spacing used to flag timestamp-sequence breaks and limit choke repairs.
   expected_interval_seconds: 1
-  short_window_seconds: 120
-  long_window_seconds: 300
-  minimum_observed_fraction: 0.5
-  sensors:
-    - downhole_pdg_pressure_pa
-    - subsea_tree_tpt_pressure_pa
-    - production_choke_upstream_pressure_pa
-    - production_choke_downstream_pressure_pa
-    - production_choke_downstream_temperature_c
-    - gas_lift_flow_rate_m3_s
-    - production_choke_opening_pct

@@ -2,7 +2,7 @@
 
 Usage:
     python -m threew.silver.run --env dev
-    python -m threew.silver.run --env prod --output-root /home/ubuntu/3w-data/silver-oh
+    python -m threew.silver.run --env prod --output-root /home/ubuntu/3w-data/silver-v3
 """
 
 import argparse
@@ -72,7 +72,7 @@ def _output_root(cfg: Config, output_root: Path | None) -> Path:
         return cfg.storage.silver
     path = Path(output_root).expanduser().resolve()
     protected = [cfg.storage.bronze.parent, cfg.storage.landing.parent, cfg.storage.staging, cfg.storage.root]
-    # Siblings such as <root>/silver-oh are allowed; the input root itself and
+    # Sibling output roots are allowed; the input root itself and
     # any ancestors are not, and neither are Bronze/landing/staging directories.
     if (
         path == cfg.storage.root
@@ -195,7 +195,7 @@ def run_silver(
                     with _phase(report, "transform_and_write"):
                         source_silver = build_silver_observations(bronze, manifest_rows)
                         # Wide prepared rows must not compete with windows/writers for heap.
-                        # Disk reuse still avoids recomputing temporal features during checks.
+                        # Disk reuse avoids recomputing prepared values during checks.
                         silver = prepare_observations(source_silver, rules).persist(StorageLevel.DISK_ONLY)
                         summaries = build_quality_summaries(source_silver)
                         issues = build_quality_issues(source_silver, rules).persist(StorageLevel.MEMORY_AND_DISK)
@@ -308,7 +308,7 @@ def run_silver(
                     "reference_version": report["reference_version"],
                     "quality_rules": report["quality_rules"],
                     "preparation_summary": report["preparation_summary"],
-                    "contract_version": 2,
+                    "contract_version": 3,
                 }
                 _write_json_atomically(ready_path, marker)
         except BaseException as exc:

@@ -5,8 +5,9 @@
 This report describes the work completed in each commit milestone. The [contract](SILVER_CONTRACT.md) defines the tables and field meanings. The report was updated throughout the Silver implementation and records changes to the plan along the way.
 
 Milestones 1–11 describe the original preservation/quality implementation. Milestone 12
-extends it with executable cleaning and forecasting features; earlier full-dataset counts
-and timings are historical evidence, not validation of the new derived columns.
+added cleaning and experimental model-window features. Milestone 13 keeps the reusable
+cleaning and quality work in Silver and moves model-window aggregates to Gold. Earlier
+run counts and timings are historical evidence, not validation of contract v3.
 
 ## Pipeline
 
@@ -14,7 +15,7 @@ and timings are historical evidence, not validation of the new derived columns.
 Original dataset files
     -> Bronze: download, verify, preserve observations and source identifiers
     -> Silver: rename fields, attach recording details, explain event codes
-         -> v2: clean readings, bounded choke repairs, causal 120/300-second features
+         -> v3: clean readings, bounded choke repairs, row-level quality and sequence facts
          -> silver_observations: one row per original observation
          -> instance_quality: one summary per recording
          -> sensor_availability: one summary per recording and sensor
@@ -25,7 +26,7 @@ Original dataset files
     -> Gold / analysis: a consumer of these checked tables
 ```
 
-Silver keeps original readings, timestamps and labels. V2 adds explicitly marked estimates and derived features without presenting them as observed source measurements. The assumptions and limitations are documented in Milestone 12.
+Silver keeps original readings, timestamps and labels. Contract v3 adds clean sensor values, explicitly marked choke estimates, readable event descriptions, and sequence details. Quality tables explain flagged source values. Gold builds the model-specific windows and statistics.
 
 ## Milestone 1 - Read Bronze and produce a first profile
 
@@ -409,4 +410,18 @@ sequence. `_was_imputed` and `_source_age_seconds` explain replacements. Estimat
 never become anchors. For example `40, -99.99, 120, 120, 120, 42` becomes
 `40, 40, 40, 40, null, 42` in the clean column. Null/NaN/infinite openings, missing classes
 and missing sensor readings are not filled. No source rows are removed or original values changed.
+
+## Milestone 13 - Keep Silver reusable and move model aggregates to Gold
+
+The Silver infographic separates reusable trusted records from consumer-specific answers.
+Contract v3 follows that boundary: it keeps renamed observations, recording identity, conformed
+event and sensor references, clean sensor values, bounded choke-repair provenance, quality outputs,
+and sequence checks. It removes per-sensor validity flags that duplicate the clean values and issue
+table, row-level counts and pressure differences that Gold can calculate, and the rolling means,
+variation, rates, coverage and other model-window calculations from Silver. Gold will create
+labelled windows and calculate the statistics required by the Random Forest.
+
+The observation schema is now 76 columns: 36 Bronze fields, 3 catalogue fields, and 37
+Silver-derived fields. The previous 17-minute dev run tested the larger v2 schema. Run the
+dev sample again to verify contract v3 and measure its output size before another VM-scale run.
 

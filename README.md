@@ -13,13 +13,14 @@ Silver progress is documented in the [milestone report](docs/silver/SILVER_MILES
 See the [Silver contract](docs/silver/SILVER_CONTRACT.md) for table definitions.
 The [Silver run guide](docs/silver/SILVER_RUN_GUIDE.md) covers commands, failures and comparison of saved runs.
 
-Silver contract v2 adds cleaned sensor columns, three-second bounded repairs of finite invalid
-choke openings, causal 120/300-second statistics, changes/rates and production-choke pressure
-differences. Read [Silver assumptions](docs/silver/SILVER_ASSUMPTIONS.md) and
+Silver contract v3 standardizes observations, adds cleaned sensor columns and three-second bounded
+repairs of finite invalid choke openings, and records quality, event references and sensor references.
+Gold builds model-specific windows and statistics from those reusable observations. Read
+[Silver assumptions](docs/silver/SILVER_ASSUMPTIONS.md) and
 [quality rules](docs/silver/QUALITY_RULES.md). Original measurements and all seven tables remain.
 With Bronze ready, run `python -m threew.silver.run --env dev` in the locked Linux environment.
-Gold forecasting and the other course's CNN experiments consume the prepared output; neither
-model is implemented by this Silver milestone.
+Gold anomaly classification and the other course's CNN experiments consume the prepared output;
+neither model is implemented by this Silver milestone.
 
 Pipeline run dates and times are UTC. Source observation clocks remain timezone-free and unchanged.
 

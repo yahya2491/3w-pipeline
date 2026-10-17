@@ -117,8 +117,8 @@ def test_run_silver_reconciles_all_outputs_and_repeat_run_is_identical(spark, si
         "sensor_reference_rows": 27,
     }
     summary = second["quality_summary"]
-    assert second["contract_version"] == 2
-    assert second["quality_rules"]["resolved"]["short_window_seconds"] == 120
+    assert second["contract_version"] == 3
+    assert second["quality_rules"]["resolved"]["expected_interval_seconds"] == 1
     assert second["quality_rules"]["sha256"]
     assert second["preparation_summary"]["rows"] == 6
     assert summary["rows_with_issues"] == 6
@@ -182,13 +182,13 @@ def test_corrupted_observations_cannot_be_published(spark, silver_input, monkeyp
     assert report["error"]["phase"] == "read_back_and_check"
 
 
-def test_corrupted_prepared_feature_prevents_publication(spark, silver_input, monkeypatch):
+def test_corrupted_clean_reading_prevents_publication(spark, silver_input, monkeypatch):
     from threew.silver.prepare import prepare_observations
 
     previous = _prior_marker(silver_input)
 
     def broken(observations, rules):
-        return prepare_observations(observations, rules).withColumn("downhole_pdg_pressure_pa_mean_120s", F.lit(999.0))
+        return prepare_observations(observations, rules).withColumn("downhole_pdg_pressure_pa_clean", F.lit(999.0))
 
     monkeypatch.setattr("threew.silver.run.prepare_observations", broken)
     with pytest.raises(RuntimeError, match="silver_prepared_values_match_rules"):

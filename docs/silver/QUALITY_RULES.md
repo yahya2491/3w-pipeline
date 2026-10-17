@@ -11,7 +11,6 @@
 | Missing sensors | `preserve_missing` | Keeps missing original readings missing. |
 | Other invalid prepared sensor values | `null_in_clean_column` | Preserves the source value and leaves its clean value null. |
 | Expected interval | 1 second | Defines continuity for sequence segments. |
-| Short and long windows | 120 and 300 seconds | Set elapsed-time feature windows. |
-| Minimum observed fraction | 0.5 | Requires at least 60 original valid readings in 120 seconds and 150 in 300 seconds for statistics that use those windows. |
-| Selected continuous sensors | 7 names in YAML | Receive the configured causal features. All 27 sensors still receive validity and clean columns. |
+
+Silver does not set model-window lengths or calculate rolling statistics. Gold owns those choices.
 

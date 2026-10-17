@@ -28,28 +28,25 @@ Run:
 python -m threew.silver.run --env dev
 ```
 
-Milestone 12 is included automatically. The command loads `conf/quality/silver_rules.yaml`,
-adds clean sensor readings, limited three-second choke repairs and 120/300-second features
-to `silver_observations`, and saves resolved rules plus a preparation summary. See
-[Silver assumptions](SILVER_ASSUMPTIONS.md) before selecting predictor columns. There are
-still seven tables. Larger output and additional window processing mean older timings
-and storage measurements are not estimates for this version.
+The current Silver contract is version 3. The command loads `conf/quality/silver_rules.yaml`,
+adds clean sensor readings, limited three-second choke repairs, sequence checks, and row-level
+quality details. It saves resolved rules plus a preparation summary. Silver does not build
+model-window statistics; those belong in Gold. There are still seven tables.
 
 The development configuration uses two local cores and a 4 GB Spark driver. Prepared
-observations are reused from disk through verification. The wide observation writer uses
-32 MiB Parquet row groups and 256 KiB pages to limit simultaneous column buffers. Allow
-several minutes for the 30-file sample; the rolling features are substantially heavier
-than the original rename-and-profile pipeline. A 2 GB driver exhausted its Java heap
-while writing this sample during validation, so use the updated configuration.
+observations are reused from disk through verification. The observation writer uses 32 MiB
+Parquet row groups and 256 KiB pages to limit simultaneous column buffers. A previous
+2 GB driver exhausted its Java heap while writing the more complex v2 output, so keep the
+current driver configuration for the first v3 run.
 
-The earlier Milestone 12 run took about 17 minutes on this development setup and passed
-all 30 saved-output checks before the feature-column reductions. Its [evidence record](../evidence/silver/milestone12/README.md)
+The earlier v2 run took about 17 minutes and passed all 30 saved-output checks, but it wrote
+model-window features that v3 no longer includes. Its [evidence record](../evidence/silver/milestone12/README.md)
 does not validate the current schema. Rerun the dev sample to record current checks and
 storage size; runtime varies by machine.
 
 Use `--rules /absolute/path/to/rules.yaml` only for a deliberately documented alternative.
 
-After a successful v2 run, assess short choke estimates on deliberately hidden valid readings:
+After a successful v3 run, assess short choke estimates on deliberately hidden valid readings:
 
 ```bash
 python scripts/evaluate_choke_repair.py --env dev --output output/choke_repair.json
@@ -68,7 +65,7 @@ This command:
 5. Builds separate summaries for each recording and each sensor in each recording.
 6. Checks labels, timestamps, and sensor values, recording quality problems and reasons for reviewing them.
 7. Creates shared event and sensor reference tables.
-8. Adds cleaned readings, repair indicators, observed/prepared counts, causal temporal features and choke pressure differences.
+8. Adds clean readings, repair details, and sequence checks. Gold can calculate row-level counts and pressure differences if needed.
 9. Saves all seven tables, reads them back, and checks source preservation and derived contents before marking the result ready.
 
 For the dev sample, expect 1,931,052 observations, 30 recording summaries, 810 sensor summaries, 10 event references, and 27 sensor references. Quality issue counts depend on the input and rules.
@@ -105,7 +102,7 @@ print("Rules:", ready.get("quality_rules", {}).get("sha256"))
 PY
 ```
 
-An old marker has no preparation summary; rebuild Silver to produce contract v2.
+An old marker has no preparation summary; rebuild Silver to produce contract v3.
 
 ## Check the code changes
 
@@ -137,13 +134,13 @@ For quality issues, quarantine, and safe-run checks:
 pytest -q tests/test_silver_issues.py tests/test_silver_run.py
 ```
 
-For cleaning, elapsed-time features, shared rules and reconstruction evaluation:
+For cleaning, sequence checks, shared rules and reconstruction evaluation:
 
 ```bash
 pytest -q tests/test_silver_prepare.py
 ```
 
-The [milestone report](SILVER_MILESTONE_REPORT.md) explains the development steps. The [Silver contract](SILVER_CONTRACT.md) and [assumptions](SILVER_ASSUMPTIONS.md) describe the original observation fields and the Milestone 12 preparation; all seven table names remain stable.
+The [milestone report](SILVER_MILESTONE_REPORT.md) explains the development steps. The [Silver contract](SILVER_CONTRACT.md) and [assumptions](SILVER_ASSUMPTIONS.md) describe the observation fields and current reusable Silver design; all seven table names remain stable.
 
 ## Run on the full dataset on the VM
 
@@ -153,10 +150,10 @@ Run:
 
 ```bash
 source .venv/bin/activate
-python -m threew.silver.run --env prod --output-root /home/ubuntu/3w-data/silver-oh
+python -m threew.silver.run --env prod --output-root /home/ubuntu/3w-data/silver-v3
 ```
 
-This reads production Bronze and saves the test result under `silver-oh`.
+This reads production Bronze and saves the isolated v3 test result under `silver-v3`.
 
 ## Read and save the full-run report
 
@@ -167,7 +164,7 @@ python - <<'PY'
 import json
 from pathlib import Path
 
-root = Path("/home/ubuntu/3w-data/silver-oh")
+root = Path("/home/ubuntu/3w-data/silver-v3")
 ready = json.loads((root / "silver_ready.json").read_text())
 report_path = Path(ready["report"])
 print("Report:", report_path)
@@ -183,19 +180,19 @@ After Silver has finished successfully twice, check that both runs produced the 
 
 Run the command below from the VM project folder with `.venv` active. It:
 
-1. Finds the two most recent successful run reports in `silver-oh/_runs/`.
+1. Finds the two most recent successful run reports in `silver-v3/_runs/`.
 2. Checks that both reports describe the same Bronze input, configuration, contract, and reference version. It stops if these differ.
 3. Reads each of the seven saved tables and compares its columns, data types, and every row.
 4. Prints `MATCH` or `DIFFERENT` for each table.
 
 This does not rebuild Silver or change its saved tables. It starts Spark to read and compare both results, so the full-dataset comparison can take time. File names, row order, and run-folder names can differ while the table contents still match.
 
-Like the Silver run command, this uses `tee` to show the output and save it to a dated log under `/home/ubuntu/3w-data/silver-oh/comparisons/`, alongside the saved runs and their reports. `set -o pipefail` makes a comparison failure count as a failed command even when its output is piped to `tee`.
+Like the Silver run command, this uses `tee` to show the output and save it to a dated log under `/home/ubuntu/3w-data/silver-v3/comparisons/`, alongside the saved runs and their reports. `set -o pipefail` makes a comparison failure count as a failed command even when its output is piped to `tee`.
 
 ```bash
 set -o pipefail
-mkdir -p /home/ubuntu/3w-data/silver-oh/comparisons/
-python -u - <<'PY' 2>&1 | tee /home/ubuntu/3w-data/silver-oh/comparisons/compare-$(date +%Y%m%d-%H%M%S).log
+mkdir -p /home/ubuntu/3w-data/silver-v3/comparisons/
+python -u - <<'PY' 2>&1 | tee /home/ubuntu/3w-data/silver-v3/comparisons/compare-$(date +%Y%m%d-%H%M%S).log
 import json
 from pathlib import Path
 
@@ -203,7 +200,7 @@ from threew.config import load_config
 from threew.silver.reconcile import same_rows
 from threew.silver.run import spark_session
 
-root = Path("/home/ubuntu/3w-data/silver-oh")
+root = Path("/home/ubuntu/3w-data/silver-v3")
 successful = []
 for path in sorted((root / "_runs").glob("*.json")):
     report = json.loads(path.read_text())
@@ -254,9 +251,9 @@ Two successful Silver runs alone are not enough to claim reproducibility. The co
 cd ~/3w-pipeline
 source .venv/bin/activate
 set -o pipefail
-mkdir -p /home/ubuntu/3w-data/silver-oh/reviews/
+mkdir -p /home/ubuntu/3w-data/silver-v3/reviews/
 
-python -u - <<'PY' 2>&1 | tee /home/ubuntu/3w-data/silver-oh/reviews/quality-$(date +%Y%m%d-%H%M%S).log
+python -u - <<'PY' 2>&1 | tee /home/ubuntu/3w-data/silver-v3/reviews/quality-$(date +%Y%m%d-%H%M%S).log
 import json
 from pathlib import Path
 
@@ -264,7 +261,7 @@ from pyspark.sql import functions as F
 from threew.config import load_config
 from threew.silver.run import spark_session
 
-root = Path("/home/ubuntu/3w-data/silver-oh")
+root = Path("/home/ubuntu/3w-data/silver-v3")
 ready = json.loads((root / "silver_ready.json").read_text())
 print("Silver run:", ready["run_id"], flush=True)
 
