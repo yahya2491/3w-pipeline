@@ -1,16 +1,55 @@
 # Gold layer handover
 
-This explains what Silver gives Gold and recommends a concrete Gold classification baseline that matches the [project description](../3W_Project_Description_full.md). Gold has not been implemented yet. For definitions and implementation details, use the [contract](../silver/SILVER_CONTRACT.md) and [milestone report](../silver/SILVER_MILESTONE_REPORT.md).
+This explains which Silver version to use, where its saved tables are on the VM, and how they support the planned Random Forest/XGBoost comparison in the [project description](../3W_Project_Description_full.md). Gold has not been implemented yet. For field definitions, use the [contract](../silver/SILVER_CONTRACT.md); for validation, use the [milestone report](../silver/SILVER_MILESTONE_REPORT.md).
 
 ## Where we are
 
-Silver contract v2 has 106 observation columns. Alongside clean readings, bounded choke repair and quality details, it stores 120-second mean, sample standard deviation, change and usable-count features for seven sensors, plus two invalid-choke durations. Gold chooses labelled examples and model inputs, then trains and evaluates its classifier. Read [Silver assumptions](../silver/SILVER_ASSUMPTIONS.md) for the limitations. The [106-column full VM run](../evidence/silver/v2/prod_run1/silver_run_1_,metrics.json) passed all 32 checks and published all seven tables.
+Use the final **106-column Silver v2** for Gold. It provides clean readings for all 27 sensors, bounded choke-opening estimates, sequence and quality details, 120-second features for seven sensors, and two invalid-opening durations. Original measurements, labels and row identities remain available. Read [Silver assumptions](../silver/SILVER_ASSUMPTIONS.md) for the limits of cleaning and feature selection.
 
-The [comparison log](../evidence/silver/comparison.log) and [milestone report](../silver/SILVER_MILESTONE_REPORT.md) record earlier evidence. The historical quality inspection found missing labels, observations without finite sensor readings, and out-of-range openings. Originals remain available.
+Both [full VM runs](../evidence/silver/v2/README.md) passed all 32 checks and published all seven tables. Each covers 2,228 recordings and 76,587,318 observations across 82 batches, saving 10.53 GB of Parquet. The [v2 comparison log](../evidence/silver/v2/comparison.log) confirms matching schemas and complete contents for every table, including duplicates and nulls. Runtimes were 6 h 10 min 25 s and 6 h 5 min 32 s; this is not a controlled storage-performance benchmark.
 
-Gold has not been implemented. The validated 106-column baseline is saved under `/home/ubuntu/3w-data/silver-v2/runs/20261017T232322182032Z-ba450086/`. Existing pipeline data has also been copied to the attached volume under `/mnt/silver-data/3w-data/`. New Silver builds use `/mnt/silver-data/3w-data/silver-v2/` as their explicit output root. The historical full-dataset Silver v1 output uses an earlier schema.
+The current saved input is the second run on the attached volume: `/mnt/silver-data/3w-data/silver-v2/runs/20261018T091117552005Z-3280e5d3/`. The original baseline remains under `/home/ubuntu/3w-data/silver-v2/runs/20261017T232322182032Z-ba450086/`. Resolve one successful ready marker and keep that run's paths together, as explained below.
 
-The earlier 193-column and 76-column runs used different schemas. The current [full-dataset v2 validation](../silver/SILVER_MILESTONE_REPORT.md#full-dataset-v2-validation) covers 2,228 recordings and 76,587,318 observations across 82 batches, saving 10.53 GB of Parquet in 6 hours 10 minutes.
+## What Silver v2 and silver-fixes mean
+
+Silver v2 is the existing Silver v1 implementation extended with review feedback and additional prepared columns. It is the next revision of the same Silver layer, with the same observation grain and seven table roles. There is no separate `silver-v2` Python package: both revisions use `threew.silver` and `python -m threew.silver.run`.
+
+| Name seen in the project | Meaning |
+|---|---|
+| Silver v1 | The original preservation, readable-metadata and quality implementation. It had 43 observation columns and its own [two-run evidence](../evidence/silver/v1/). Its VM output is `silver-oh/`. |
+| `silver-fixes` | The Git branch containing the feedback changes and current handover work. This is the review branch, not a data directory. |
+| `feat(silverv2)` / `feat(silver(v2))` | Commit-message scopes used while implementing and adjusting that feedback on `silver-fixes`. They describe the Silver revision; they do not imply a differently named branch or package. |
+| Silver contract v2 | The revised output contract. The final observation table has 106 columns; earlier intermediate v2 builds had different column counts. |
+| `silver-v2/` | The explicit VM output folder used to retain revised Silver runs separately from v1. It now sits under `/mnt/silver-data/3w-data/`. |
+
+The upstream dataset version `3W v2.0.0` is a separate version name; it does not identify the Silver contract.
+
+The Git history makes the feedback progression visible:
+
+| Commit | What it records |
+|---|---|
+| `2569412`, `c14e733` | `feat(silverv2)` commits implementing supervisor feedback: clean sensor values, repair provenance and derived behaviour features. The initial observation extension reached 193 columns. |
+| `ddccb80`, `d3f70f1` | Reduce derived columns after VM storage failures, first to 135 and then 76. |
+| `b3ccd25` | Bound temporary work by complete-recording batches and remove the full prepared-table cache. |
+| `98868cc` | Restore a focused set of 120-second features, giving the final 106-column schema; first full run revision. |
+| `fd4579f`, `330496f` | Code cleanup, validation refactoring and clearer documentation; second full run revision is `330496f`. |
+| `55175a8` | Add saved run reports and evidence to the branch; the seven-table comparison is now saved as well. |
+
+V1 already carried 36 Bronze fields, three catalogue fields and four event descriptions. V2 retains them and adds 63 fields. The complete breakdown is:
+
+| Column group | Count | Use in Gold |
+|---|---:|---|
+| Original Bronze fields | 36 | 27 original sensor readings plus nine time, label, state and lineage fields; use originals for inspection and lineage for grouping. |
+| Recording catalogue fields | 3 | `instance_id`, `well_id`, `instance_start`; context and split bookkeeping. |
+| Event descriptions | 4 | Readable supplied labels and consistency status; exclude from predictors. |
+| Clean sensor readings | 27 | One `<sensor>_clean` value per sensor. |
+| Choke repair details | 4 | Two `_was_imputed` flags and two `_source_age_seconds` fields. |
+| Sequence details | 2 | `sequence_usable`, `sequence_segment_id`; keep histories within recording segments. |
+| Recent sensor behaviour | 28 | Mean, sample standard deviation, previous-reading change and usable count for each of seven sensors. |
+| Invalid-opening durations | 2 | Duration of consecutive finite invalid original openings; candidate quality indicators. |
+| **Total** | **106** | Gold selects a suitable subset for its model examples. |
+
+Relative to Bronze, this is 70 additional columns: three catalogue fields and 67 Silver fields. Relative to the 43-column v1 observation table, it is 63 additional columns. Definitions, types and the seven featured sensors are in the [contract](../silver/SILVER_CONTRACT.md). Historical v1 and reduced-column v2 runs remain evidence for those schemas; Gold should use the validated final 106-column run.
 
 ## The seven folders and how Gold can use them
 
@@ -114,15 +153,31 @@ Keep `REAL`, `SIMULATED`, and `DRAWN` separate by default unless combining them 
 | Historical full-dataset v1 Silver root | `/home/ubuntu/3w-data/silver-oh/` |
 | Original validated v2 baseline root | `/home/ubuntu/3w-data/silver-v2/` |
 | Current mounted v2 output root | `/mnt/silver-data/3w-data/silver-v2/` |
+| Second validated v2 run | `/mnt/silver-data/3w-data/silver-v2/runs/20261018T091117552005Z-3280e5d3/` |
 | Copied pipeline data, including Bronze | `/mnt/silver-data/3w-data/` |
 | Spark temporary data on the volume | `/mnt/silver-data/spark-tmp/` |
+| Saved repository evidence | `docs/evidence/silver/v2/` |
 | Ready marker | `silver_ready.json` under the selected root |
 | Actual tables | `runs/<run_id>/<table_name>/` under that root |
 | Individual run reports | `_runs/<run_id>.json` under that root |
 
-Read `/mnt/silver-data/3w-data/silver-v2/silver_ready.json` once at the beginning, check that it describes a successful result for the chosen environment and contract, and use its table paths throughout the Gold run. Do not read the whole `runs` directory or combine tables from different Silver runs. The default configured Silver path is `silver/`; it does not automatically change to the explicit output root on the volume.
+After connecting to `group20` as `ubuntu`, access the mount as a normal directory inside the VM:
 
-The volume is mounted at `/mnt/silver-data`; it stores the whole pipeline, despite the mount's name. Copying data does not rewrite absolute paths inside existing reports or ready markers. A copied baseline marker can still point to the original `/home/ubuntu/3w-data/` tables. Confirm the selected run ID and actual table paths before describing Gold input as a new mounted-volume build. A new successful build publishes a marker with the new output paths. No second mounted-volume run or v2 comparison result is claimed here without its saved evidence.
+```bash
+mountpoint /mnt/silver-data
+df -h /mnt/silver-data
+cd /mnt/silver-data/3w-data/silver-v2
+ls
+ls runs/20261018T091117552005Z-3280e5d3
+```
+
+The final command lists the seven table folders. For example, the current observations are at `/mnt/silver-data/3w-data/silver-v2/runs/20261018T091117552005Z-3280e5d3/silver_observations/`. These are Parquet datasets; read the entire selected table folder with Spark, rather than choosing one part file.
+
+Read `/mnt/silver-data/3w-data/silver-v2/silver_ready.json` once at the beginning of Gold. The [saved second-run marker](../evidence/silver/v2/prod_run2/silver_ready.json) selects `20261018T091117552005Z-3280e5d3`, has contract version 2, and records successful reconciliation. Its linked [report](../evidence/silver/v2/prod_run2/silver_run_2_,metrics.json) records `SUCCESS` and `published: true`. Use its `tables[<name>]["path"]` values throughout the Gold run. If the live marker later selects a newer run, validate that selection before using it. Do not read the whole `runs` directory or combine tables from different Silver runs. The configured default Silver path is `silver/`; it does not automatically change to this explicit volume output root.
+
+The attached 100 GB `/dev/vdb` volume is mounted at `/mnt/silver-data`; the original approximately 40 GB `/dev/vda` contains `/home/ubuntu/`. The volume's name does not restrict it to Silver data. Existing pipeline files were copied under `/mnt/silver-data/3w-data/`, and the second build wrote new output there. Copying does not rewrite absolute paths inside old reports or markers, so the copied first-run marker can still point to `/home/ubuntu/3w-data/`. Use the saved second run or its verified current marker when selecting volume input.
+
+SSH logout leaves the mount and its files available. Data persists on the volume; automatic mounting after a VM reboot depends on `/etc/fstab`. The supplied evidence has not confirmed that configuration or a reboot test. Check `mountpoint` before writes after a restart; see [VM storage](../silver/VM_STORAGE.md) for the UUID and layout.
 
 `conf/prod.yaml` still reads Bronze from `/home/ubuntu/3w-data/`; `--output-root` changes only the Silver destination. Gold should use the selected Silver ready marker rather than deriving its input root from this Bronze configuration. See [VM storage](../silver/VM_STORAGE.md) for the volume layout, persistence and evidence locations.
 
@@ -140,60 +195,63 @@ Gold still needs its own runner, storage configuration, and agreed output defini
 
 # VM storage for Silver and Gold
 
-## Current layout
+## Mounted volume and paths
 
-The UiS OpenStack VM `group20` runs Ubuntu 24.04 under the `ubuntu` account. Its original `/dev/vda` disk is about 40 GB. The user's VM output showed 4.7 GB free on the root filesystem before the storage change. The attached volume `group20-silver` appears as a 100 GB `/dev/vdb` device, formatted as ext4 and mounted at `/mnt/silver-data`. The VM reported about 93 GB available on that filesystem before copying pipeline data; this is a point-in-time observation, not its current free-space figure.
+The UiS OpenStack VM is `group20`, running Ubuntu 24.04 as `ubuntu`. Its original disk is `/dev/vda` (about 40 GB). The attached OpenStack volume `group20-silver` is `/dev/vdb` (100 GB), formatted as ext4 and mounted at `/mnt/silver-data`. This mount is a directory inside the VM filesystem. It holds copied landing, Bronze and Silver data despite its Silver-specific name.
 
-| Purpose | Path |
+The VM reported about 93 GB available before the copy and second run. Check current capacity with `df`; that earlier figure is not current free space.
+
+| Purpose | Location inside the VM |
 |---|---|
-| Mounted volume | `/mnt/silver-data/` |
-| Copied pipeline data | `/mnt/silver-data/3w-data/` |
-| New Silver output root | `/mnt/silver-data/3w-data/silver-v2/` |
+| Attached volume | `/mnt/silver-data/` |
+| Copied existing pipeline data | `/mnt/silver-data/3w-data/` |
+| Current Silver v2 output root | `/mnt/silver-data/3w-data/silver-v2/` |
+| Second validated v2 run | `/mnt/silver-data/3w-data/silver-v2/runs/20261018T091117552005Z-3280e5d3/` |
 | Spark temporary data | `/mnt/silver-data/spark-tmp/` |
-| Execution and comparison evidence | `/mnt/silver-data/evidence/silver-v2/` |
+| Original v2 baseline | `/home/ubuntu/3w-data/silver-v2/runs/20261017T232322182032Z-ba450086/` |
+| Historical v1 output | `/home/ubuntu/3w-data/silver-oh/` (also copied under `/mnt/silver-data/3w-data/silver-oh/`) |
 | Configured production Bronze input | `/home/ubuntu/3w-data/bronze/3w_observations/` |
-| Original successful v2 baseline | `/home/ubuntu/3w-data/silver-v2/runs/20261017T232322182032Z-ba450086/` |
+| VM comparison log | `/mnt/silver-data/comparison-20261017-vs-20261018.log` |
 
-The copied `3w-data/` contains `_staging/`, `landing/`, `bronze/`, `silver-oh/` and `silver-v2/`. There is no need for a second output root directly at `/mnt/silver-data/silver-v2/`. The mount name does not restrict it to Silver data.
+The copied `3w-data/` contains `_staging/`, `landing/`, `bronze/`, `silver-oh/` and `silver-v2/`. The earlier empty `/mnt/silver-data/silver-v2/` is not the selected output root. Its presence or removal does not change the nested path used here.
 
-`conf/prod.yaml` still sets `storage.root` to `/home/ubuntu/3w-data`. A Silver `--output-root` override selects the destination independently. Copying the dataset to the volume does not switch Bronze input to the copy, and does not rewrite absolute paths inside saved reports or ready markers. Keep the original baseline available for comparison. Gold must read the chosen marker once and follow its recorded table paths; a copied baseline marker can still reference the original disk.
+## Access from the VM
 
-## Running and inspecting storage
-
-Run these commands inside the VM, from the repository with `.venv` active:
+After connecting through SSH, use normal directory commands:
 
 ```bash
 mountpoint /mnt/silver-data
 df -h / /mnt/silver-data
-
-SPARK_LOCAL_DIRS=/mnt/silver-data/spark-tmp \
-TMPDIR=/mnt/silver-data/spark-tmp \
-python -u -m threew.silver.run \
-  --env prod \
-  --output-root /mnt/silver-data/3w-data/silver-v2
+cd /mnt/silver-data/3w-data/silver-v2
+ls
+ls runs/20261018T091117552005Z-3280e5d3
 ```
 
-Only launch after the mount check succeeds. Keep SSH connected for this foreground command. Use `nohup` with redirected output or an existing terminal multiplexer when the job must survive SSH disconnects. Redirect logs to the volume, not the nearly full root disk. Follow the project's branch policy: production deployment uses `main`, development changes use `dev`, and an identical-code comparison requires matching recorded commits and clean working trees.
+The last directory contains seven Parquet table folders. For example, observations are at `runs/20261018T091117552005Z-3280e5d3/silver_observations/`. Read the complete table folder with Spark or PyArrow. The [Gold handover](../gold/GOLD_HANDOVER.md#where-the-input-is-and-how-to-work) describes selecting all input paths from one ready marker.
 
-To inspect the data footprint without modifying anything:
+To inspect data and scratch sizes:
 
 ```bash
 du -sh /mnt/silver-data/3w-data/*
 du -sh /mnt/silver-data/spark-tmp
 ```
 
-Each Silver attempt writes `runs/<run_id>/` and `_runs/<run_id>.json`; a successful build updates `silver_ready.json` under the selected output root. The copied baseline is not evidence that a second run completed. Confirm the new report's status, reconciliation, publication and distinct run ID before comparing it.
+## Silver output and Gold input
+
+`conf/prod.yaml` still sets the production storage root to `/home/ubuntu/3w-data`. Copying data does not change the configured Bronze input. Silver selects its volume destination using `--output-root /mnt/silver-data/3w-data/silver-v2`, with both `SPARK_LOCAL_DIRS` and `TMPDIR` pointing to `/mnt/silver-data/spark-tmp`. The [run guide](SILVER_RUN_GUIDE.md) contains the complete launch command.
+
+The second run report confirms successful publication to the volume. Gold should resolve `/mnt/silver-data/3w-data/silver-v2/silver_ready.json` once and use that run's recorded table paths. Its saved snapshot selects `20261018T091117552005Z-3280e5d3`. Reports are in `_runs/`; tables are in `runs/<run_id>/<table_name>/`. Copying an older report or marker does not rewrite its absolute paths, so copied baseline evidence can still refer to the original root disk.
 
 ## Persistence
 
-Disconnecting SSH does not unmount the volume or erase files. Data remains on the volume across a VM reboot, but automatic remounting requires the corresponding `/etc/fstab` configuration. The UUID reported by the VM is `94ea1fc0-7bdf-4495-9222-d115b5cb029a`. The intended entry is:
+Disconnecting SSH does not unmount the volume or erase its files. Data remains on the volume across a VM reboot; automatic remounting requires the filesystem configuration. The known UUID is `94ea1fc0-7bdf-4495-9222-d115b5cb029a`, with this intended `/etc/fstab` entry:
 
 ```text
 UUID=94ea1fc0-7bdf-4495-9222-d115b5cb029a /mnt/silver-data ext4 defaults,nofail 0 2
 ```
 
-Check for an existing entry before adding one, back up `/etc/fstab` before editing, and validate with `sudo findmnt --verify --verbose`. The supplied VM transcript confirmed the live mount; it did not confirm the entry had been installed or a reboot tested. Do not format the existing volume again. Since `nofail` allows the VM to boot without the volume, always check the mount before a large write.
+The supplied evidence confirms the mounted volume and a successful build there. It does not establish that this entry has been installed or a reboot tested. Check for an existing entry, back up `/etc/fstab` before any edit, and validate with `sudo findmnt --verify --verbose`. Do not format this volume again. Check that it is mounted before large writes, especially after a reboot.
 
-## Evidence and Git
+## Saved evidence
 
-Preserve both reports, separately named ready-marker snapshots, execution logs and the complete seven-table comparison result. Small reviewed evidence belongs under `docs/evidence/silver/v2/`; the Parquet data, Spark temporary files, virtual environments and filesystem backups remain outside Git. The new volume adds capacity; neither a speedup nor a completed v2 reproducibility comparison follows from adding it. Use the [run guide](SILVER_RUN_GUIDE.md) for the exact comparison.
+The repository contains both [v2 run reports, ready-marker snapshots and the comparison log](../evidence/silver/v2/README.md). All seven tables matched in the recorded comparison. These are data-output checks; the mount adds capacity, and no controlled speedup is claimed. Keep Parquet datasets, Spark temporary files, virtual environments and filesystem backups outside Git.

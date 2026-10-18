@@ -20,7 +20,7 @@ The sample contains 30 recordings and 1,931,052 observations. To inspect Bronze 
 
 ## Run on the full dataset on the VM
 
-The [recorded 106-column VM run](../evidence/silver/v2/prod_run1/silver_run_1_,metrics.json) passed all 32 checks over 2,228 recordings and 76,587,318 observations. It published 10.53 GB of Parquet across seven tables in 6 hours 10 minutes. Each new run retains its own complete output copy; allow additional space for Spark temporary data.
+The [two recorded 106-column VM runs](../evidence/silver/v2/README.md) each passed all 32 checks over 2,228 recordings and 76,587,318 observations. Each published 10.53 GB of Parquet across seven tables; runtimes were 6 h 10 min 25 s and 6 h 5 min 32 s. Their [saved comparison log](../evidence/silver/v2/comparison.log) reports matching schemas and complete contents for all seven tables. Each new run retains its own complete output copy; allow additional space for Spark temporary data.
 
 The attached volume is mounted at `/mnt/silver-data`; [VM storage](VM_STORAGE.md) describes the layout. Run one job at a time and reuse the existing production Bronze table. For a reproducibility pair, keep the same commit, clean working tree, dependencies, input, rules and configuration; do not pull or change batch size between the two runs. Production deployment remains restricted to `main`; development changes belong on `dev`.
 
@@ -88,53 +88,74 @@ HF_HUB_OFFLINE=1 python -m pytest -q
 
 Equal row counts alone do not establish equal contents. Compare the seven tables only when both runs' outputs are still present. This separate comparison reads whole tables and needs extra shuffle space; the runner's batch limit does not apply. Do not run it on the constrained VM without enough room for both outputs and the comparison.
 
-From the VM checkout with `.venv` active, compare the explicit original baseline with the latest published mounted-volume run. The guard rejects a copied baseline marker if no new successful run has been published. The two run reports retain their actual table paths, even when the report itself was copied.
+Run the following inside the VM. It compares the seven saved tables directly in the two explicit run folders below. It checks schemas and complete contents, including duplicate rows and nulls, while ignoring physical file layout and row order. It does not read run reports, ready markers or code metadata. To compare a different pair, change `first` and `second`.
+
+The comparison for this pair is already saved in [v2/comparison.log](../evidence/silver/v2/comparison.log), with seven `MATCH` results and the final complete-content equality message. The [evidence summary](../evidence/silver/v2/README.md) links both reports and ready-marker snapshots. The command remains here for repeating the check or selecting a different pair.
 
 ```bash
+cd /home/ubuntu/3w-pipeline
+source .venv/bin/activate
+
 export SPARK_LOCAL_DIRS=/mnt/silver-data/spark-tmp
 export TMPDIR=/mnt/silver-data/spark-tmp
+set -o pipefail
 
-python -u - <<'PY'
-import json
+mountpoint -q /mnt/silver-data &&
+python -u - <<'PY' 2>&1 | tee /mnt/silver-data/comparison-20261017-vs-20261018.log
 from pathlib import Path
 
 from threew.config import load_config
 from threew.silver.reconcile import same_rows
 from threew.silver.run import spark_session
 
-baseline_id = "20261017T232322182032Z-ba450086"
-first_path = Path("/home/ubuntu/3w-data/silver-v2/_runs") / f"{baseline_id}.json"
-root = Path("/mnt/silver-data/3w-data/silver-v2")
-ready = json.loads((root / "silver_ready.json").read_text())
-first = json.loads(first_path.read_text())
-second = json.loads(Path(ready["report"]).read_text())
-if first["run_id"] == second["run_id"]:
-    raise SystemExit("The marker still selects the copied baseline; a new successful run is needed.")
-for report in (first, second):
-    if report.get("status") != "SUCCESS" or report.get("published") is not True:
-        raise SystemExit("Both reports must describe successful published runs.")
-    if report["reconcile"].get("passed") is not True or not all(report["reconcile"]["checks"].values()):
-        raise SystemExit("Both runs must have passed all reconciliation checks.")
-if ready["run_id"] != second["run_id"] or ready["tables"] != second["tables"]:
-    raise SystemExit("The ready marker and selected report disagree.")
-print("Runs:", first["run_id"], second["run_id"])
-print("Code:", first["code"], second["code"])
-for field in ("code", "source", "config_sha256", "contract", "reference_version", "quality_rules", "execution"):
-    if first[field] != second[field]:
-        raise SystemExit(f"Runs differ in {field}; review before comparing.")
-if first["code"].get("dirty") is not False or second["code"].get("dirty") is not False:
-    raise SystemExit("Use clean checkouts for the identical-code claim.")
-if set(first["tables"]) != set(second["tables"]) or len(first["tables"]) != 7:
-    raise SystemExit("Runs must contain the same seven tables.")
+first = Path(
+    "/home/ubuntu/3w-data/silver-v2/runs/"
+    "20261017T232322182032Z-ba450086"
+)
+second = Path(
+    "/mnt/silver-data/3w-data/silver-v2/runs/"
+    "20261018T091117552005Z-3280e5d3"
+)
+
+tables = [
+    "silver_observations",
+    "instance_quality",
+    "sensor_availability",
+    "quality_issues",
+    "quality_quarantine",
+    "event_reference",
+    "sensor_reference",
+]
+
+for root in (first, second):
+    for name in tables:
+        if not (root / name).is_dir():
+            raise SystemExit(f"Missing table: {root / name}")
+
+results = {}
+
 with spark_session(load_config("prod")) as spark:
-    for name in sorted(first["tables"]):
-        left = spark.read.parquet(first["tables"][name]["path"])
-        right = spark.read.parquet(second["tables"][name]["path"])
-        if left.schema != right.schema or not same_rows(left, right):
-            raise SystemExit(f"{name}: DIFFERENT")
-        print(name, "MATCH")
-print("All seven tables match.")
+    for name in tables:
+        print(f"Comparing {name}...", flush=True)
+
+        left = spark.read.parquet(str(first / name))
+        right = spark.read.parquet(str(second / name))
+
+        if left.schema != right.schema:
+            results[name] = False
+            print(f"{name}: DIFFERENT SCHEMA; contents not compared", flush=True)
+            continue
+
+        results[name] = same_rows(left, right)
+        result = "MATCH" if results[name] else "DIFFERENT CONTENT"
+        print(f"{name}: {result}", flush=True)
+
+if all(results.values()):
+    print("RESULT: All seven tables have identical schemas and complete contents.")
+else:
+    raise SystemExit("RESULT: One or more tables differ. See results above.")
 PY
 ```
 
-Save the execution and comparison logs, both original reports, and separately named snapshots of both ready markers under `/mnt/silver-data/evidence/silver-v2/`. Small reviewed evidence files can be committed under `docs/evidence/silver/v2/` on `dev`; datasets, Spark scratch files and virtual environments stay outside Git. `same_rows` compares duplicate multiplicities and nulls while ignoring row order. The [historical v1 comparison](../evidence/silver/comparison.log) demonstrates this check for those earlier outputs; it does not establish equality for later v2 runs.
+The command saves its log at `/mnt/silver-data/comparison-20261017-vs-20261018.log`. The copy reviewed for this pair is in `docs/evidence/silver/v2/comparison.log`. A successful comparison prints seven `MATCH` results and the final message that all seven tables have identical schemas and complete contents. If Spark fails, the comparison is incomplete.
+

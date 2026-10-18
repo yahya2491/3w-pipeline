@@ -34,6 +34,8 @@ The observation key is the combination of `_source_path`, `_file_sha256`, and `_
 
 The clean columns give Gold usable readings, including limited repairs of invalid choke openings. The 120-second features describe recent sensor behaviour for the planned Spark classifier. Repair flags and quality tables explain which values need care. Original readings remain available, so Gold can calculate additional features.
 
+Raw copies in Silver allow direct comparison with clean values and help inspect repairs. Bronze remains the authoritative preserved source. Keeping both versions in Silver is an audit choice; it does not mean raw invalid values should enter model inputs. The temporal features are candidates for Random Forest and XGBoost; their usefulness still needs Gold evaluation.
+
 ## The 67 columns Silver adds
 
 ### Event descriptions: 4 columns
@@ -62,7 +64,7 @@ Only these two sensors can receive the three-second repair:
 - `gas_lift_choke_opening_pct` — gas-lift choke opening.
 - `production_choke_opening_pct` — production choke opening.
 
-Repairs are written to their `_clean` columns. The other 25 sensors are not filled from earlier readings but instead switch to null when they are Null, NaN or infinity.
+Repairs are written to their `_clean` columns. The other 25 sensors are not filled from earlier readings. Missing, NaN and infinite readings have null clean values, and valve states outside their documented allowed codes also have null clean values. Finite pressure, temperature and flow readings are retained without invented physical limits.
 
 An opening of `120` means **120%**, which is outside the allowed 0–100% range. Silver puts the repaired value in `production_choke_opening_pct_clean`: for example, 40 if the most recent original valid opening was 40% at most three seconds earlier in the same continuous segment. Without an eligible reading, the clean value becomes null. The original column keeps 120 only to record what the source reported; use the clean column for sensor analysis. Silver does not assume the correct value was 100% by clipping it. See the [quality rules](QUALITY_RULES.md).
 

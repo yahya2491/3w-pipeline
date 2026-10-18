@@ -4,15 +4,27 @@
 
 Milestones 1–11 record the original preservation and quality implementation. The [contract](SILVER_CONTRACT.md) defines the current 106-column output. Commands belong in the [run guide](SILVER_RUN_GUIDE.md), and data handling is defined in the [quality rules](QUALITY_RULES.md).
 
-The [106-column full VM run](../evidence/silver/v2/prod_run1/silver_run_1_,metrics.json) passed all 32 checks across 2,228 recordings and 76,587,318 observations. It published all seven tables, saving 10.53 GB of Parquet in 6 hours 10 minutes across 82 batches. Gold model implementation and evaluation remain planned work.
+The [two 106-column full VM runs](../evidence/silver/v2/README.md) each passed all 32 checks across 2,228 recordings and 76,587,318 observations. Each published all seven tables and saved 10.53 GB of Parquet across 82 batches. The [v2 comparison log](../evidence/silver/v2/comparison.log) confirms equal schemas and complete contents for all seven tables, including duplicates and nulls. Gold model implementation and evaluation remain planned work.
 
 The [106-column dev run](../evidence/silver/v2/features_106_dev.json) passed all 32 checks on 30 recordings, saving 235 MB of Parquet with a sampled temporary-plus-output peak of 544 MB. The [earlier 76-column VM run](../evidence/silver/v2/old_v2_evidence/run_,metrics.json) passed 32 checks across 82 batches and saved 4.75 GB. These earlier reports describe their respective schemas and run environments.
 
 ## Full-dataset v2 validation
 
-Run `20261017T232322182032Z-ba450086` validated the 106-column implementation at commit `98868ccc685526e1ead42ed43c1cff72bef4353c`, with a clean checkout. The [original VM report](../evidence/silver/v2/prod_run1/silver_run_1_,metrics.json) records `SUCCESS`, successful reconciliation and publication, and all 32 checks passing.
+The [first VM report](../evidence/silver/v2/prod_run1/silver_run_1_,metrics.json) and [second VM report](../evidence/silver/v2/prod_run2/silver_run_2_,metrics.json) both record `SUCCESS`, publication and all 32 reconciliation checks passing. Their saved [ready-marker snapshots](../evidence/silver/v2/README.md#evidence-files) agree with the respective reports. Both used four local Spark cores, a 4 GB driver, eight shuffle partitions and a target of one million observations per batch, keeping complete recordings together in 82 batches.
 
-The run started at 23:23:22 UTC on 17 October 2026 and finished at 05:33:47 UTC on 18 October. It used four local Spark cores, a 4 GB driver and a target of one million observations per batch, with complete recordings kept together.
+| Measurement | First run | Second run |
+|---|---|---|
+| Run ID | `20261017T232322182032Z-ba450086` | `20261018T091117552005Z-3280e5d3` |
+| Clean Git revision | `98868cc` | `330496f` |
+| Started (UTC) | 17 October 2026, 23:23:22 | 18 October 2026, 09:11:17 |
+| Finished (UTC) | 18 October 2026, 05:33:47 | 18 October 2026, 15:16:49 |
+| Total duration | 22,225.411 s (6 h 10 min 25 s) | 21,932.017 s (6 h 5 min 32 s) |
+| Transformation and writing | 9,273.619 s | 8,808.489 s |
+| Read-back and validation | 12,518.428 s | 12,680.097 s |
+| Input checks | 326.691 s | 332.489 s |
+| Saved Parquet across seven tables | 10,534,195,883 bytes | 10,534,195,883 bytes |
+
+Each run contains the following rows:
 
 | Table | Rows |
 |---|---:|
@@ -24,15 +36,25 @@ The run started at 23:23:22 UTC on 17 October 2026 and finished at 05:33:47 UTC 
 | `event_reference` | 10 |
 | `sensor_reference` | 27 |
 
-The seven tables contain 10,534,195,883 bytes of Parquet (10.53 GB, decimal). Transformation and writing took 9,273.619 seconds; read-back and validation took 12,518.428 seconds; input checks took 326.691 seconds. Total runtime was 22,225.411 seconds. The report measures saved Parquet size; it does not measure peak temporary disk usage.
+The reports measure saved Parquet size (10.53 GB decimal per run), not peak temporary disk usage. Both report three repaired production-choke readings, 161,869 unresolved production-choke readings, no gas-lift-opening repairs, 5,193 rows without an observed valid sensor and no unusable-time rows. Their preparation and quality summaries agree.
 
-The isolated Silver root was `/home/ubuntu/3w-data/silver-v2/`, with this run's tables under `runs/20261017T232322182032Z-ba450086/`. Gold should resolve the selected successful run through its ready marker and keep its table paths together. This report establishes one successful full-dataset v2 run; comparison of repeated v2 runs is separate evidence.
+The first output remains under `/home/ubuntu/3w-data/silver-v2/runs/20261017T232322182032Z-ba450086/`. The second is under `/mnt/silver-data/3w-data/silver-v2/runs/20261018T091117552005Z-3280e5d3/`. The mounted run's ready marker records these new table paths. Gold should select one successful marker once and use its paths together; see the [Gold handover](../gold/GOLD_HANDOVER.md).
+
+The saved [comparison log](../evidence/silver/v2/comparison.log) contains seven `MATCH` results and `RESULT: All seven tables have identical schemas and complete contents.` The command in the [run guide](SILVER_RUN_GUIDE.md#compare-two-saved-runs) reads the two explicit table folders and uses `same_rows` to compare duplicate multiplicities and nulls independently of row order or file layout. The comparison checks the tables, not code or report metadata. The reports retain different Git revisions and contract-document hashes; their source, configuration, resolved quality rules and batch settings agree. The result establishes equal saved outputs across those revisions, without claiming identical code metadata.
+
+The second build used the additional volume. These runs were not a controlled performance experiment: the code revision and execution conditions also changed. Their timings do not establish a volume speedup.
+
+## How v1 became v2
+
+Silver v1 was the original preservation, readable-metadata and quality implementation, with seven output tables and 43 observation columns. The work on `silver-fixes` extends that same pipeline with review feedback; commit scopes such as `feat(silverv2)` describe this extension. It remains the `threew.silver` package and uses the same `python -m threew.silver.run` entry point. `silver-v2/` is the chosen output folder for the revised contract, not a second Python package.
+
+The final v2 schema retains v1's 36 Bronze fields, three recording fields and four event descriptions, and adds 63 more fields: 27 clean sensor readings, four repair details, two sequence fields, 28 recent-behaviour features and two invalid-opening durations. This gives 106 columns while retaining the same observation grain and the same seven table roles. Historical v1 output and evidence remain separate; they are not the current Gold input. See the [contract](SILVER_CONTRACT.md) for every field group and the [handover](../gold/GOLD_HANDOVER.md#what-silver-v2-and-silver-fixes-mean) for the naming and commit history.
 
 ## Pipeline
 
 The storage decisions behind the current build are recorded in Git. The initial v2 extension (`2569412`) reached 193 observation columns. Storage pressure led to reductions to 135 (`ddccb80`) and then 76 (`d3f70f1`). Commit `b3ccd25` added complete-recording batches, removed the full observation cache and streamlined exact comparisons. Commit `98868cc` restored a focused set of 120-second features, reaching the current 106 columns while retaining bounded batch processing. These revisions changed the derived columns; original sensor readings remained available.
 
-The VM subsequently received the attached volume described in [VM storage](VM_STORAGE.md). Existing pipeline data was copied under `/mnt/silver-data/3w-data/`; new Silver output uses its `silver-v2/` directory and Spark scratch uses `/mnt/silver-data/spark-tmp/`. The measured 6-hour-10-minute run above preceded this storage change. The mount provides capacity for retained outputs and temporary data; no measured speedup or completed repeated v2 comparison is inferred from it.
+The VM subsequently received the attached volume described in [VM storage](VM_STORAGE.md). Existing pipeline data was copied under `/mnt/silver-data/3w-data/`; new Silver output uses its `silver-v2/` directory and Spark scratch uses `/mnt/silver-data/spark-tmp/`. The first run preceded this storage change, and the second completed on the volume. Output equality is supported by the saved comparison log; the mount provides capacity for retained outputs and temporary data.
 
 ```text
 Original dataset files
@@ -399,7 +421,7 @@ The dev sample is small. This milestone checks Silver against the full Bronze ta
 python -m threew.silver.run --env prod --output-root /home/ubuntu/3w-data/silver-oh
 ```
 
-The [first v1 run](../evidence/silver/v1/prod_run1/silver_run_1_,metrics.json) and [second v1 run](../evidence/silver/v1/prod_run2/silver_run_2_,metrics.json) both passed 29 checks. Each saved 2.76 GB of Parquet containing 76,587,318 observations, 2,228 recording summaries, 60,156 sensor summaries, 10 event references, and 27 sensor references. Runtimes were 58.3 and 53.9 minutes. The [comparison log](../evidence/silver/comparison.log) records matching contents for all seven tables. These results validate the original v1 schema.
+The [first v1 run](../evidence/silver/v1/prod_run1/silver_run_1_,metrics.json) and [second v1 run](../evidence/silver/v1/prod_run2/silver_run_2_,metrics.json) both passed 29 checks. Each saved 2.76 GB of Parquet containing 76,587,318 observations, 2,228 recording summaries, 60,156 sensor summaries, 10 event references, and 27 sensor references. Runtimes were 58.3 and 53.9 minutes. The [v1 comparison log](../evidence/silver/v1/comparison.log) records matching contents for all seven tables. These results validate the original v1 schema.
 
 The `silver-oh` folder is just a test destination. The command still reads production Bronze; it does not write to the official production Silver folder. See the [run guide](SILVER_RUN_GUIDE.md) for how to compare the outputs.
 
@@ -407,4 +429,4 @@ The `silver-oh` folder is just a test destination. The command still reads produ
 
 We check the silver implementation, the runs match. We also check the quality issues and quarantine tables, and the event and sensor reference tables. The final milestone is to check that the Silver implementation is complete and correct, and that it meets the contract and requirements. 
 
-We then make a PR to merge to Silver.
+The feedback work is reviewed from `silver-fixes`; the `silverv2` commit scope describes the revised Silver contract. The current two-run v2 evidence is summarised above. Production promotion follows the project's `main` deployment policy.

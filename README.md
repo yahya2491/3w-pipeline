@@ -23,10 +23,17 @@ With Bronze ready, run `python -m threew.silver.run --env dev` in the locked Lin
 Gold anomaly classification consumes the prepared output; the model is planned work and is not
 implemented by this Silver milestone.
 
-The [106-column full VM run](docs/evidence/silver/v2/prod_run1/silver_run_1_,metrics.json)
-passed all 32 checks across 2,228 recordings and 76,587,318 observations. It published all seven
-tables, saving 10.53 GB of Parquet in 6 hours 10 minutes. See the
+Both [106-column full VM runs](docs/evidence/silver/v2/README.md) passed all 32 checks across
+2,228 recordings and 76,587,318 observations. Each published seven tables and saved 10.53 GB
+of Parquet; runtimes were 6 h 10 min 25 s and 6 h 5 min 32 s. The
+[v2 comparison log](docs/evidence/silver/v2/comparison.log) confirms matching schemas and
+complete contents for all seven tables, including duplicates and nulls. See the
 [full-dataset v2 validation](docs/silver/SILVER_MILESTONE_REPORT.md#full-dataset-v2-validation) for details.
+
+Silver v2 is the existing Silver implementation extended with review feedback and prepared
+sensor features. The work is on `silver-fixes`; commit scopes such as `feat(silverv2)` name
+that revision, and `silver-v2/` is its VM output folder. The Python entry point remains
+`threew.silver.run`. The [Gold handover](docs/gold/GOLD_HANDOVER.md) explains the versions and paths.
 
 The VM's attached volume is mounted at `/mnt/silver-data`. Existing pipeline data has been copied
 under `/mnt/silver-data/3w-data/`; new Silver runs save to its `silver-v2/` directory and use

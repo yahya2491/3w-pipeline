@@ -41,7 +41,7 @@ One row in the main Silver table represents one original observation, with all 2
 
 To trace an observation back to its source, we use three fields together: `_source_path` identifies the original file, `_file_sha256` identifies its exact version, and `_row_in_file` identifies the row's original position. The recording name, `instance_id`, is not sufficient on its own because some names appear in more than one event folder. We use the source path and file fingerprint to join each observation to Bronze's current file catalogue and add the recording details.
 
-Silver saves seven Parquet tables. The counts below are from the recorded full-dataset runs on 11 October 2026.
+Silver saves seven Parquet tables. The counts below agree across the two final 106-column v2 full runs on 17–18 October 2026. Both passed all 32 checks, and the [saved comparison](evidence/silver/v2/comparison.log) reports identical schemas and complete contents for all seven tables. Reports and timings are in the [v2 evidence summary](evidence/silver/v2/README.md).
 
 | Table | Purpose | Rows |
 | --- | --- | ---: |
@@ -52,7 +52,7 @@ Silver saves seven Parquet tables. The counts below are from the recorded full-d
 | `quality_quarantine` | The error-only subset of `quality_issues`, identifying affected measurements, labels, or timestamps for exclusion or further investigation. The original observations remain in `silver_observations`. | 167,065 |
 | `event_reference` | One definition per event category, containing its readable name and supported observation classes and phases, such as normal, transient, and steady. | 10 |
 | `sensor_reference` | One definition per sensor, connecting its original name to its readable English name, meaning, unit, and applicable value rules. | 27 |
-`silver_observations` is the main table, while the other six tables are reference or summary tables. The `sensor_reference` and `event_reference` tables are static definitions, while the other six tables are generated from the source data.
+`silver_observations` is the main table, while the other six tables provide summaries, issues or reference definitions. The `sensor_reference` and `event_reference` tables are static definitions; the other five tables are generated from the source data.
 
 ### Standardisation and event labels
 
@@ -133,9 +133,10 @@ The current Silver implementation was run on a development sample of 30 recordin
 
 ### Spark processing and future scaling
 
-//Silver uses PySpark DataFrames, built-in Spark SQL functions, and window functions to prepare sensor values and calculate time-based features. It processes complete recordings in batches targeting one million observations per batch, so a recording is never split across batches. The development run used three batches.
+Silver uses PySpark DataFrames, built-in Spark SQL functions, and window functions to prepare sensor values and calculate time-based features. It processes complete recordings in batches targeting one million observations per batch, so a recording is never split across batches. The development run used three batches; each final full VM run used 82.
 
-//That run took about 13 minutes while other tests were running, so the time is not a controlled performance benchmark. Its sampled peak for Silver output and Spark scratch data was about 544 MB, excluding Bronze data and previous Silver runs. Scaling the saved output by row count gives an estimate of about 9.3 GB for the full dataset; this does not estimate peak temporary storage. Full-dataset runtime and storage for the current 106-column version still need to be measured on the VM.
+The final full VM builds each saved 10.53 GB of Parquet and took 6 h 10 min 25 s and 6 h 5 min 32 s. The second wrote to the attached volume under `/mnt/silver-data/3w-data/silver-v2/` and matched all seven first-run tables. These are recorded results, not a controlled performance comparison. See the [milestone report](silver/SILVER_MILESTONE_REPORT.md#full-dataset-v2-validation).
+
 
 ## 5 Gold layer
 
