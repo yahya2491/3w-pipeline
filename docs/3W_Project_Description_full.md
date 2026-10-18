@@ -18,6 +18,24 @@ Additionally some source field names use Portuguese terminology or abbreviations
 
 ## 3 Bronze layer
 
+```mermaid
+flowchart TD
+    A[Petrobras 3W<br/>GitHub, v2.0.0] --> B[Hugging Face mirror<br/>pinned commit]
+    T[GitHub Actions<br/>weekly, Mondays] --> P
+    B --> P
+    subgraph VM [Bronze run on the VM]
+        P[List and plan<br/>only new or changed files] <--> M[(Manifest and run report)]
+        P --> D[Download and verify<br/>sha256 per file]
+        D --> L[Land atomically<br/>no partial files]
+        L --> LZ[(Landing zone<br/>original bytes)]
+        L --> S[Check schema<br/>Parquet footers vs contract]
+        S --> C[Convert with pyarrow<br/>adds lineage columns]
+        C --> BT[(Bronze table<br/>readable by Spark)]
+        C --> RC[Reconcile with Spark<br/>6 checks, then ready marker]
+    end
+    RC --> SV[Silver layer]
+```
+
 *Source and preservation.* We publish the 3W dataset unchanged to our own Hugging Face dataset repo (Yahya2491/3w-pipeline). The pipeline pins one exact commit, so every run reads the same data. Upgrading the data is a deliberate config change recorded in Git. Files land on the VM byte for byte as published, organized by ingestion date and event label.
 
 *Ingestion.* Each run lists the files at the pinned commit and compares them with a manifest of what is already stored. It downloads only new or changed files and verifies each one by its sha256 checksum. Files are written atomically, so a failed run never leaves a partial file behind. A second run with no source changes downloads nothing, which makes ingestion idempotent.
