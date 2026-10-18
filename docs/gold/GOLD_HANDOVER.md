@@ -72,8 +72,6 @@ Use `instance_quality` and `sensor_availability` to assess recordings, and `qual
 
 Evaluate on recordings that were not used for training; consider grouping real recordings by well. Fit any learned preprocessing on the training set only. Report a confusion matrix, per-class precision and recall, and macro F1 so performance on rare events is visible. Compare results with a simple majority-class baseline. This demonstrates whether the Gold model can detect the labelled undesirable events using Silver's prepared records; it does not establish that it can predict an event before it begins.
 
-The separate CNN work can use the same ordered Silver sequences, with a matching labelled-window definition if the other course uses the same detection task.
-
 Four sensor columns have no finite readings anywhere in these full runs: `service_pump_downstream_pressure_pa`, `production_shutdown_valve_upstream_pressure_pa`, `subsea_production_line_pressure_pa`, and `service_pump_flow_rate_m3_s`. Other sensors have different coverage across recordings. Check availability before choosing inputs.
 
 Finite means not missing, NaN, or infinity. A finite value can still be flagged: an opening above 100 is counted as present in `sensor_availability` but fails its value rule. Zero is a real reading and should not be treated as missing.

@@ -20,8 +20,8 @@ Gold selects labelled examples and trains/evaluates its Spark model from those p
 [Silver assumptions](docs/silver/SILVER_ASSUMPTIONS.md) and
 [quality rules](docs/silver/QUALITY_RULES.md). Original measurements and all seven tables remain.
 With Bronze ready, run `python -m threew.silver.run --env dev` in the locked Linux environment.
-Gold anomaly classification and the other course's CNN experiments consume the prepared output;
-neither model is implemented by this Silver milestone.
+Gold anomaly classification consumes the prepared output; the model is planned work and is not
+implemented by this Silver milestone.
 
 Pipeline run dates and times are UTC. Source observation clocks remain timezone-free and unchanged.
 

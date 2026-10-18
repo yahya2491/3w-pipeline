@@ -8,7 +8,7 @@ We build a batch data pipeline on Spark that turns the raw Petrobras 3W dataset 
 
 The planned Gold output is a labelled, window-level feature table for a Spark MLlib Random Forest. Silver also serves as a reusable prepared dataset for other analyses.
 
-Out of scope: real-time or streaming ingestion, live well data, CNN development (planned for another course), and dashboards beyond what is needed to validate the outputs.
+Out of scope: real-time or streaming ingestion, live well data, and dashboards beyond what is needed to validate the outputs.
 
 ## 2 Dataset description
 
@@ -155,4 +155,4 @@ Another engineer can clone the repository and use `README.md` for setup and pipe
 
 During development we will use a 30 sample file; production configuration processes the full dataset on the UiS OpenStack VM. Changes are reviewed by the other group memberthrough pull requests before promotion to `main` (production). A self-hosted VM runner executes Bronze. The intended schedule is Monday at 03:17 UTC. Silver has been validated using production input in an isolated output folder. 
 
-We treat 3W as a fixed batch dataset and use its documented definitions for validation. We leave missing labels unknown and report uneven sensor coverage. Gold will use Silver's clean readings and 120-second features to build labelled examples for a Spark MLlib Random Forest that detects and classifies undesirable events. We will hold out recordings for evaluation and report per-class precision and recall, macro F1, and a majority-class baseline. Gold and the complete scheduled Bronze-to-Gold workflow are planned work; CNN development is for another course.
+We treat 3W as a fixed batch dataset and use its documented definitions for validation. We leave missing labels unknown and report uneven sensor coverage. Gold will use Silver's clean readings and 120-second features to build labelled examples for a Spark MLlib Random Forest that detects and classifies undesirable events. We will hold out recordings for evaluation and report per-class precision and recall, macro F1, and a majority-class baseline. Gold and the complete scheduled Bronze-to-Gold workflow are planned work.
