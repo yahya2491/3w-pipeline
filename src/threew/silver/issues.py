@@ -8,20 +8,14 @@ the complete original observation remains in silver_observations.
 
 from functools import reduce
 
-from pyspark.sql import Column, DataFrame
+from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 from pyspark.sql.window import Window
 
-from threew.silver.quality import with_timestamp_intervals
-from threew.silver.reference import sensor_definitions
+from threew.silver.quality import is_finite, with_timestamp_intervals
+from threew.silver.reference import OBSERVATION_KEY, RECORDING_KEY, sensor_definitions
 
-OBSERVATION_KEY = ("_source_path", "_file_sha256", "_row_in_file")
 ISSUE_KEY = (*OBSERVATION_KEY, "field_name", "issue_code")
-ISSUE_SCHEMA = (
-    "_source_path string, _file_sha256 string, _row_in_file long, field_name string, "
-    "issue_code string, severity string, affected_use string, reason string, "
-    "recommended_action string, observed_value string"
-)
 USAGE_POLICY = {
     "timestamps": "Preserve source time and row order; flag problems. Never infer replacement timestamps.",
     "duplicate_identity": "Stop on repeated source-path/file-hash/row-position keys, including identical copies.",
@@ -35,16 +29,12 @@ USAGE_POLICY = {
 }
 
 
-def is_finite(value: Column) -> Column:
-    return value.isNotNull() & ~F.isnan(value) & (value != float("inf")) & (value != float("-inf"))
-
-
 def build_quality_issues(observations: DataFrame, rules=None) -> DataFrame:
     """One issue per affected row/field/rule, with scope-specific usage guidance."""
     definitions = sensor_definitions(rules)
     timed = with_timestamp_intervals(observations).withColumn(
         "_same_timestamp_rows",
-        F.count("*").over(Window.partitionBy("_source_path", "_file_sha256", "timestamp")),
+        F.count("*").over(Window.partitionBy(*RECORDING_KEY, "timestamp")),
     )
     entries = []
 

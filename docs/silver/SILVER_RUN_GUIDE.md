@@ -1,178 +1,61 @@
 # Silver run guide
 
-## Prepare the 30-file dev sample
+Use the locked Linux environment described in the [README](../../README.md). The commands below build the current **106-column Silver v2**. Field definitions are in the [contract](SILVER_CONTRACT.md); measured results are in the [milestone report](SILVER_MILESTONE_REPORT.md).
 
-If the dev Bronze sample is not already there, run:
+## Run the dev sample
+
+Reuse the existing dev Bronze table. If it has not been prepared, run Bronze once:
 
 ```bash
 python -m threew.bronze.run --env dev
 ```
 
-Bronze downloads 30 original Parquet files, checks them, and prepares a Spark-readable table under `data/dev/bronze/3w_observations/`.
-
-Prepare the sample once and reuse it while developing Silver to compare changes against the same input.
-
-To get a read-only overview of that Bronze data, run:
+Then build Silver:
 
 ```bash
-python -m threew.silver.profile --env dev
+python -u -m threew.silver.run --env dev
 ```
 
-This prints a summary of the recordings, sensors, labels, and timestamp consistency. It does not build or change Silver.
-
-## Build Silver from the dev sample
-
-Run:
-
-```bash
-python -m threew.silver.run --env dev
-```
-
-The current Silver contract is version 2. The command loads `conf/quality/silver_rules.yaml`,
-adds clean sensor readings, limited three-second choke repairs, sequence checks, and row-level
-quality details. The 106-column observations also contain 120-second means, sample standard
-deviations, previous-reading changes and usable counts for seven sensors, plus invalid-opening
-durations for both chokes. It saves resolved rules and preparation counts, including how many
-rows have all 120 sensor readings. There are still seven tables. Gold selects labelled examples
-and trains/evaluates the model.
-
-The development configuration uses two local cores and a 4 GB Spark driver. The runner works
-in batches targeting **1,000,000 observations**, keeping each recording intact. A recording
-larger than the target runs alone. It writes and checks each batch, then stops its Spark context
-to release temporary cache and shuffle files before starting the next one. All batches feed
-the same seven tables; no batch column is added. The ready marker is published only after
-every batch passes. Recording boundaries and the cleaning rules are preserved.
-
-The complete prepared observations are no longer cached on disk. The observation writer
-still uses 32 MiB Parquet row groups and 256 KiB pages to limit column buffers. Keep the
-current driver configuration. To use smaller batches on a constrained machine, add
-`--batch-rows 500000`; recordings are never split, so this is a target rather than a hard limit.
-
-The 106-column runner passed all 32 checks on the full 30-recording dev sample. It saved
-about 235 MB of Parquet and reached a sampled temporary-plus-output peak of 544 MB.
-All 279 offline tests passed. See the [current evidence](../evidence/silver/v2/features_106_dev.json)
-and Milestone 15 in the [milestone report](SILVER_MILESTONE_REPORT.md). The full VM run is
-still needed; local results are not VM guarantees.
-
-Use `--rules /absolute/path/to/rules.yaml` only for a deliberately documented alternative.
-
-This command:
-
-1. Checks that Bronze finished successfully and that its rows match the recording catalogue.
-2. Matches each observation to its recording and adds recording details where available.
-3. Renames sensor and label columns and adds readable event descriptions.
-4. Preserves the original readings, timestamps, missing values, and row identities.
-5. Builds separate summaries for each recording and each sensor in each recording.
-6. Checks labels, timestamps, and sensor values, recording quality problems and reasons for reviewing them.
-7. Creates shared event and sensor reference tables.
-8. Adds clean readings, repair details, sequence checks, and the 30 documented sensor features.
-9. Saves all seven tables, reads them back, and checks source preservation and derived contents before marking the result ready.
-
-For the dev sample, expect 1,931,052 observations, 30 recording summaries, 810 sensor summaries, 10 event references, and 27 sensor references. Quality issue counts depend on the input and rules.
-
-Each attempt gets a new folder under `data/dev/silver/runs/<run_id>/`. The actual data is saved as Parquet files inside the seven table folders:
-
-| Table | What it contains |
-|---|---|
-| `silver_observations` | Every original observation, with clearer column names and added recording/event details. |
-| `instance_quality` | One row per recording, summarising missing labels, timestamp problems, and sensor coverage. |
-| `sensor_availability` | One row per recording and sensor, counting finite readings and missing or non-finite readings. |
-| `quality_issues` | Problems found, with the affected observation, field, reason, severity, and recommended action. |
-| `quality_quarantine` | The error-level entries from `quality_issues`, identifying readings that need review for the stated use. |
-| `event_reference` | The 10 event definitions and their supported class/phase combinations. |
-| `sensor_reference` | The 27 sensor definitions, source names, Silver names, units, and documented value rules. |
-
-`quality_quarantine` is a list of issues, not a second copy of the full observations. The complete readings remain in `silver_observations`; use the source path, file fingerprint, and original row position to find the affected row. A problem with one sensor does not automatically make the other sensors unusable.
-
-`data/dev/silver/silver_ready.json` points to the latest successful run. It does not contain the sensor data. If a new run fails, the previous marker stays in place. An incomplete attempt may leave a folder behind, so use the table paths in the ready marker.
-
-Each attempt writes progress under `data/dev/silver/_runs/` before and after each batch,
-then saves the final success or failure report. An abrupt kill can leave a `RUNNING` report.
-Reports include batch recording keys, status and checks, counts, timings, output sizes,
-source/code/configuration details, and a quality summary. A failed run's folder is incomplete;
-it is not a published Silver result.
-
-To inspect the new preparation counts without starting Spark:
-
-```bash
-python - <<'PY'
-import json
-from pathlib import Path
-
-ready = json.loads(Path("data/dev/silver/silver_ready.json").read_text())
-print("Contract:", ready.get("contract_version", 1))
-print(json.dumps(ready.get("preparation_summary"), indent=2))
-print("Rules:", ready.get("quality_rules", {}).get("sha256"))
-PY
-```
-
-Earlier v2 builds had different column sets. Rebuild to obtain the current 106-column
-schema; the version number alone does not establish that the 30 feature fields are present.
-
-## Check the code changes
-
-The Silver run above checks the whole pipeline against the 30-file sample. The automated tests use smaller inputs and do not need to download the full dataset.
-
-From the project folder, with the environment active, run:
-
-```bash
-ruff check .
-ruff format --check .
-HF_HUB_OFFLINE=1 pytest -q
-```
-
-For input and column/label transformation tests:
-
-```bash
-pytest -q tests/test_silver_input.py tests/test_silver_transform.py
-```
-
-For recording/sensor summaries and timestamp checks:
-
-```bash
-pytest -q tests/test_silver_quality.py
-```
-
-For quality issues, quarantine, and safe-run checks:
-
-```bash
-pytest -q tests/test_silver_issues.py tests/test_silver_run.py
-```
-
-For cleaning, sequence checks, shared rules and reconstruction evaluation:
-
-```bash
-pytest -q tests/test_silver_prepare.py
-```
-
-The [milestone report](SILVER_MILESTONE_REPORT.md) explains the development steps. The [Silver contract](SILVER_CONTRACT.md) and [assumptions](SILVER_ASSUMPTIONS.md) describe the observation fields and current reusable Silver design; all seven table names remain stable.
+The sample contains 30 recordings and 1,931,052 observations. To inspect Bronze without rebuilding it, use `python -m threew.silver.profile --env dev`.
 
 ## Run on the full dataset on the VM
 
-After the dev checks pass, run from the VM checkout, activate its `.venv`, and reuse the existing production Bronze table. This test does not require a new production Bronze run.
-
-Run:
+Commit and push local changes before updating the VM checkout. Run one job at a time and reuse the existing production Bronze table:
 
 ```bash
 cd ~/3w-pipeline
+git pull --ff-only
 source .venv/bin/activate
-python -u -m threew.silver.run --env prod --output-root /home/ubuntu/3w-data/silver-v2
+df -h /home/ubuntu/3w-data
+
+python -u -m threew.silver.run \
+  --env prod \
+  --output-root /home/ubuntu/3w-data/silver-v2
 ```
 
-This reads production Bronze and saves the isolated v2 test result under `silver-v2`.
-Use the updated checkout: commit `d3f70f1` still has the old full-observation disk cache.
-Batch progress is printed during the run. The batch design limits temporary work, but the
-complete output still needs disk space and each new run keeps its own copy. Check available
-space during the first full VM run; local dev success alone does not establish its peak usage.
 
-The 106-column dev run saved about 235 MB on the 30-file sample. Simple row scaling
-suggests roughly 9.3 GB for one full output; this is not a VM measurement and does not include
-working space. With about 15 GB free, do not budget for two retained full outputs at once.
-Existing runs are not deleted automatically. The full-run report records actual output sizes.
+## What batches mean
 
-## Read and save the full-run report
+A batch is a group of complete recordings, targeting 1,000,000 observations. A recording larger than the target runs alone. Silver writes and checks each batch, stops its Spark context to release temporary files, and then continues. All batches contribute to the same seven tables.
 
-On the VM, run this to print the report for the latest successful result:
+The full prepared-observation table is not cached. Only smaller recording counts, summaries, and issue data are cached during a batch. The writer uses 32 MiB Parquet row groups and 256 KiB pages to limit column buffers.
+
+To reduce the batch target, add `--batch-rows 500000`. This cannot split an oversized recording. The dev configuration uses two local cores; production uses four. Both use a 4 GB Spark driver.
+
+The 120-second feature history is separate from batching. Complete recordings preserve the sequence needed for repairs and features.
+
+## Find the output and reports
+
+Under the selected Silver root:
+
+| Path | Contents |
+|---|---|
+| `runs/<run_id>/<table_name>/` | The seven Parquet tables for that attempt. |
+| `_runs/<run_id>.json` | Full report: code/configuration, batch progress, checks, counts, sizes, timings, and quality results. |
+| `silver_ready.json` | Summary and table paths for the latest successful run. Also points to the full report. |
+
+
+To display the full report for the latest successful VM run without starting Spark:
 
 ```bash
 python - <<'PY'
@@ -182,36 +65,28 @@ from pathlib import Path
 root = Path("/home/ubuntu/3w-data/silver-v2")
 ready = json.loads((root / "silver_ready.json").read_text())
 report_path = Path(ready["report"])
+print("Run:", ready["run_id"])
 print("Report:", report_path)
 print(report_path.read_text())
 PY
 ```
 
-This only reads the report; it does not start Spark or rebuild Silver. Keep the original JSON report from `_runs/` as evidence for each successful run.
-
-## Compare the two successful runs
-
-After Silver has finished successfully twice, check that both runs produced the same data. Equal row counts alone do not prove this: one reading could have changed while the number of rows stayed the same.
-
-Run the command below from the VM project folder with `.venv` active. It:
-
-1. Finds the two most recent successful run reports in `silver-v2/_runs/`.
-2. Checks that both reports describe the same Bronze input, configuration, contract, and reference version. It stops if these differ.
-3. Reads each of the seven saved tables and compares its columns, data types, and every row.
-4. Prints `MATCH` or `DIFFERENT` for each table.
-
-This does not rebuild Silver or change its saved tables. It starts Spark to read and compare both results, so the full-dataset comparison can take time. File names, row order, and run-folder names can differ while the table contents still match.
-
-This separate comparison script processes whole tables; the runner's batch limit does not
-apply to it. It needs additional shuffle space. On the constrained VM, compare recording
-batches or provide more scratch space before using this full-table script.
-
-Like the Silver run command, this uses `tee` to show the output and save it to a dated log under `/home/ubuntu/3w-data/silver-v2/comparisons/`, alongside the saved runs and their reports. `set -o pipefail` makes a comparison failure count as a failed command even when its output is piped to `tee`.
+## Check code changes
 
 ```bash
-set -o pipefail
-mkdir -p /home/ubuntu/3w-data/silver-v2/comparisons/
-python -u - <<'PY' 2>&1 | tee /home/ubuntu/3w-data/silver-v2/comparisons/compare-$(date +%Y%m%d-%H%M%S).log
+ruff check .
+ruff format --check .
+HF_HUB_OFFLINE=1 python -m pytest -q
+```
+
+## Compare two saved runs
+
+Equal row counts alone do not establish equal contents. Compare the seven tables only when both runs' outputs are still present. This separate comparison reads whole tables and needs extra shuffle space; the runner's batch limit does not apply. Do not run it on the constrained VM without enough room for both outputs and the comparison.
+
+From the VM checkout with `.venv` active:
+
+```bash
+python -u - <<'PY'
 import json
 from pathlib import Path
 
@@ -220,107 +95,27 @@ from threew.silver.reconcile import same_rows
 from threew.silver.run import spark_session
 
 root = Path("/home/ubuntu/3w-data/silver-v2")
-successful = []
-for path in sorted((root / "_runs").glob("*.json")):
-    report = json.loads(path.read_text())
-    if report.get("status") == "SUCCESS" and report.get("published") is True:
-        successful.append(report)
+reports = [json.loads(path.read_text()) for path in sorted((root / "_runs").glob("*.json"))]
+successful = [r for r in reports if r.get("status") == "SUCCESS" and r.get("published") is True]
 if len(successful) < 2:
-    raise SystemExit("Two successful runs are needed before comparing.")
-
+    raise SystemExit("Two successful runs are needed.")
 first, second = successful[-2:]
-print("Comparing:", first["run_id"], "and", second["run_id"], flush=True)
-print("Code commits:", first["code"]["commit"], second["code"]["commit"], flush=True)
+print("Runs:", first["run_id"], second["run_id"])
+print("Code:", first["code"], second["code"])
 for field in ("source", "config_sha256", "contract", "reference_version", "quality_rules"):
     if first[field] != second[field]:
-        raise SystemExit(f"Runs differ in {field}; review the inputs/settings first.")
-
-tables = {
-    "silver_observations", "instance_quality", "sensor_availability",
-    "quality_issues", "quality_quarantine", "event_reference", "sensor_reference",
-}
-if set(first["tables"]) != tables or set(second["tables"]) != tables:
-    raise SystemExit("Both runs must contain the current seven tables.")
-
-matched = True
+        raise SystemExit(f"Runs differ in {field}; review before comparing.")
+if set(first["tables"]) != set(second["tables"]) or len(first["tables"]) != 7:
+    raise SystemExit("Runs must contain the same seven tables.")
 with spark_session(load_config("prod")) as spark:
-    for name in sorted(tables):
+    for name in sorted(first["tables"]):
         left = spark.read.parquet(first["tables"][name]["path"])
         right = spark.read.parquet(second["tables"][name]["path"])
-        equal = left.schema == right.schema and same_rows(left, right)
-        matched = matched and equal
-        print(name, "MATCH" if equal else "DIFFERENT", flush=True)
-if not matched:
-    raise SystemExit("The two results differ; investigate before claiming reproducibility.")
+        if left.schema != right.schema or not same_rows(left, right):
+            raise SystemExit(f"{name}: DIFFERENT")
+        print(name, "MATCH")
 print("All seven tables match.")
 PY
 ```
 
-`same_rows` checks the actual values, including missing values and repeated rows. For example, two copies of a row in one result must also appear twice in the other result. Row order does not affect the comparison.
-
-A passing comparison prints seven `MATCH` results followed by `All seven tables match.` Keep the comparison log alongside the two original run reports as evidence for Milestone 10.
-
-The script prints both code commits; it does not automatically check that they are equal. If they differ, review what changed before describing this as a repeat using unchanged code. Matching tables still shows that those two runs produced the same output.
-
-Two successful Silver runs alone are not enough to claim reproducibility. The comparison must also pass.
-
-## Review the quality issues
-
-```bash
-cd ~/3w-pipeline
-source .venv/bin/activate
-set -o pipefail
-mkdir -p /home/ubuntu/3w-data/silver-v2/reviews/
-
-python -u - <<'PY' 2>&1 | tee /home/ubuntu/3w-data/silver-v2/reviews/quality-$(date +%Y%m%d-%H%M%S).log
-import json
-from pathlib import Path
-
-from pyspark.sql import functions as F
-from threew.config import load_config
-from threew.silver.run import spark_session
-
-root = Path("/home/ubuntu/3w-data/silver-v2")
-ready = json.loads((root / "silver_ready.json").read_text())
-print("Silver run:", ready["run_id"], flush=True)
-
-with spark_session(load_config("prod")) as spark:
-    issues = spark.read.parquet(ready["tables"]["quality_issues"]["path"])
-
-    counts = (
-        issues.groupBy("issue_code", "severity")
-        .count()
-        .orderBy("issue_code")
-        .collect()
-    )
-
-    print("\nISSUE TOTALS", flush=True)
-    for row in counts:
-        print(f"{row['issue_code']}: {row['count']:,} ({row['severity']})")
-
-    for row in counts:
-        code = row["issue_code"]
-        print(f"\nFIVE EXAMPLES: {code}", flush=True)
-        issues.filter(F.col("issue_code") == code).select(
-            "_source_path",
-            "_row_in_file",
-            "field_name",
-            "observed_value",
-            "reason",
-            "recommended_action",
-        ).show(5, truncate=False)
-
-    print("\nFLAGGED OPENING VALUES: COUNTS AND RANGES", flush=True)
-    openings = issues.filter(
-        F.col("issue_code") == "opening_out_of_range"
-    ).withColumn("value", F.col("observed_value").cast("double"))
-
-    openings.groupBy("field_name").agg(
-        F.count("*").alias("flagged_readings"),
-        F.min("value").alias("lowest_value"),
-        F.max("value").alias("highest_value"),
-        F.sum((F.col("value") < 0).cast("long")).alias("below_zero"),
-        F.sum((F.col("value") > 100).cast("long")).alias("above_100"),
-    ).show(truncate=False)
-PY
-```
+Save the output alongside the two original reports. `same_rows` compares duplicate multiplicities and nulls while ignoring row order. Review the recorded commits and dirty states separately before claiming the code was unchanged. The [historical v1 comparison](../evidence/silver/comparison.log) demonstrates this check for those earlier outputs.

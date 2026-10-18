@@ -14,6 +14,7 @@ from pyspark.sql.window import Window
 from threew.bronze.inspect import load_contract
 from threew.config import Config, load_config
 from threew.silver.input import read_bronze_ready_marker
+from threew.silver.quality import is_finite
 from threew.spark import get_spark
 
 
@@ -66,7 +67,7 @@ def sensor_missingness(df: DataFrame, sensor_names: tuple[str, ...]) -> list[dic
 
 
 def recording_sensor_counts(df: DataFrame, sensor_names: tuple[str, ...]) -> DataFrame:
-    """Count usable sensors in each source-file version (a recording)."""
+    """Count sensors with finite readings in each source-file version."""
     recording_keys = ("source_type", "label", "_source_path", "_file_sha256")
     missing_columns = (set(sensor_names) | set(recording_keys)) - set(df.columns)
     if missing_columns:
@@ -76,9 +77,7 @@ def recording_sensor_counts(df: DataFrame, sensor_names: tuple[str, ...]) -> Dat
 
     present_columns = []
     for index, name in enumerate(sensor_names):
-        value = F.col(name)
-        usable = value.isNotNull() & ~F.isnan(value) & (value != float("inf")) & (value != float("-inf"))
-        present_columns.append(F.max(F.when(usable, 1).otherwise(0)).alias(f"sensor_{index}_present"))
+        present_columns.append(F.max(F.when(is_finite(F.col(name)), 1).otherwise(0)).alias(f"sensor_{index}_present"))
 
     per_sensor = df.groupBy(*recording_keys).agg(*present_columns)
     count_expression = sum(F.col(f"sensor_{index}_present") for index in range(len(sensor_names)))

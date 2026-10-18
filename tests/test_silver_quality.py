@@ -11,7 +11,8 @@ from pyspark.sql.types import (
     TimestampNTZType,
 )
 
-from threew.silver.quality import SENSOR_FIELDS, build_quality_summaries
+from threew.silver.quality import build_quality_summaries
+from threew.silver.reference import SENSOR_FIELDS
 
 
 def _silver_fixture(spark):

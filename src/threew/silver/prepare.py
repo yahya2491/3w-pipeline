@@ -6,12 +6,10 @@ from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 from pyspark.sql.window import Window
 
-from threew.silver.features import OPENINGS, add_sensor_features
-from threew.silver.issues import is_finite
-from threew.silver.reference import SENSOR_RENAMES
+from threew.silver.features import add_sensor_features
+from threew.silver.quality import is_finite
+from threew.silver.reference import OPENINGS, RECORDING_KEY, SENSOR_FIELDS
 from threew.silver.rules import QualityRules
-
-RECORDING = ("_source_path", "_file_sha256")
 
 
 def observed_valid(name, rules):
@@ -27,7 +25,7 @@ def observed_valid(name, rules):
 def prepare_observations(observations: DataFrame, rules: QualityRules) -> DataFrame:
     """Retain source rows; add clean values, repair provenance and 30 sensor features."""
     original = observations.columns
-    ordered = Window.partitionBy(*RECORDING).orderBy("_row_in_file")
+    ordered = Window.partitionBy(*RECORDING_KEY).orderBy("_row_in_file")
     prefix = ordered.rowsBetween(Window.unboundedPreceding, Window.currentRow)
     df = observations.withColumn("_prep_us", F.unix_micros(F.col("timestamp").cast("timestamp")))
     df = df.select(
@@ -49,14 +47,14 @@ def prepare_observations(observations: DataFrame, rules: QualityRules) -> DataFr
         | ~F.coalesce(F.col("_prep_prev_usable"), F.lit(False))
     )
     df = df.withColumn("sequence_segment_id", F.sum(F.when(boundary, 1).otherwise(0)).over(prefix))
-    segment = Window.partitionBy(*RECORDING, "sequence_segment_id").orderBy("_row_in_file")
+    segment = Window.partitionBy(*RECORDING_KEY, "sequence_segment_id").orderBy("_row_in_file")
     previous = segment.rowsBetween(Window.unboundedPreceding, -1)
     df = df.select(
         "*",
-        *[observed_valid(name, rules).alias(f"_prep_valid_{name}") for name in SENSOR_RENAMES.values()],
+        *[observed_valid(name, rules).alias(f"_prep_valid_{name}") for name in SENSOR_FIELDS],
     )
     clean_columns = []
-    for name in SENSOR_RENAMES.values():
+    for name in SENSOR_FIELDS:
         valid = F.col(f"_prep_valid_{name}")
         cleaned = F.when(valid, F.col(name))
         if name in OPENINGS:
@@ -99,7 +97,7 @@ def prepare_observations(observations: DataFrame, rules: QualityRules) -> DataFr
 def summarize_preparation(observations: DataFrame, rules: QualityRules) -> dict:
     has_valid_sensor = reduce(
         lambda a, b: a | b,
-        (observed_valid(name, rules) for name in SENSOR_RENAMES.values()),
+        (observed_valid(name, rules) for name in SENSOR_FIELDS),
     )
     expressions = [
         F.count("*").alias("rows"),

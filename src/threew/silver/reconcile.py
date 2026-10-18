@@ -10,15 +10,19 @@ from pyspark.sql.types import IntegerType, StringType, TimestampNTZType
 
 from threew.silver.issues import ISSUE_KEY, build_quality_issues, quarantine_issues
 from threew.silver.prepare import prepare_observations
-from threew.silver.quality import SENSOR_FIELDS, build_quality_summaries
-from threew.silver.reference import build_reference_tables
-from threew.silver.transform import BRONZE_TYPES, SENSOR_RENAMES, build_silver_observations
+from threew.silver.quality import build_quality_summaries
+from threew.silver.reference import (
+    OBSERVATION_KEY,
+    RECORDING_KEY,
+    SENSOR_FIELDS,
+    SENSOR_RENAMES,
+    build_reference_tables,
+)
+from threew.silver.transform import BRONZE_TYPES, build_silver_observations
 from threew.spark import cleanup_spark
 
-RECORDING_KEY = ("_source_path", "_file_sha256")
-OBSERVATION_KEY = (*RECORDING_KEY, "_row_in_file")
 RENAMES = {**SENSOR_RENAMES, "label": "instance_label", "class": "class_code", "state": "state_code"}
-OBSERVATION_TYPES = {
+BASE_OBSERVATION_TYPES = {
     **{RENAMES.get(name, name): value for name, value in BRONZE_TYPES.items()},
     "instance_id": StringType(),
     "well_id": IntegerType(),
@@ -28,7 +32,9 @@ OBSERVATION_TYPES = {
         for name in ("instance_event_name", "row_event_name", "row_event_phase", "class_label_status")
     },
 }
-DETAIL_FIELDS = tuple(name for name in OBSERVATION_TYPES if name not in RENAMES.values() and name not in BRONZE_TYPES)
+DETAIL_FIELDS = tuple(
+    name for name in BASE_OBSERVATION_TYPES if name not in RENAMES.values() and name not in BRONZE_TYPES
+)
 REQUIRED_OBSERVATION_FIELDS = (
     *OBSERVATION_KEY,
     "_ingest_run_id",
@@ -96,7 +102,6 @@ def output_checks(
     sensors: DataFrame,
     additional: Mapping[str, DataFrame] | None = None,
     rules=None,
-    preparation_source: DataFrame | None = None,
 ) -> dict[str, bool]:
     """Validate saved tables against Bronze, the contract and freshly computed summaries."""
     expected = build_silver_observations(bronze, manifest_rows)
@@ -105,11 +110,12 @@ def output_checks(
     summaries = build_quality_summaries(expected)
     issues = None
     try:
-        # Summary types come from the independent expected calculation, not the
-        # saved/candidate tables. Parquet does not retain required-field nullability.
+        # Recompute from Bronze. Explicit-value tests check the transformation rules;
+        # reconciliation checks that saved values match those rules.
         checks = {
             "silver_schema_matches_contract": schema_matches(
-                observations, {f.name: f.dataType for f in expected.schema} if rules is not None else OBSERVATION_TYPES
+                observations,
+                {f.name: f.dataType for f in expected.schema} if rules is not None else BASE_OBSERVATION_TYPES,
             ),
             "instance_quality_schema_matches_contract": schema_matches(
                 quality, {f.name: f.dataType for f in summaries.instance_quality.schema}
@@ -163,12 +169,8 @@ def output_checks(
             }
         )
         if rules is not None:
-            derived = [name for name in expected.columns if name not in OBSERVATION_TYPES]
-            if preparation_source is not None:
-                # Recompute with the canonical rules, independently of saved clean values.
-                reference = prepare_observations(preparation_source, rules).select(*OBSERVATION_KEY, *derived)
-            else:
-                reference = expected.select(*OBSERVATION_KEY, *derived)
+            derived = [name for name in expected.columns if name not in BASE_OBSERVATION_TYPES]
+            reference = expected.select(*OBSERVATION_KEY, *derived)
             checks["silver_prepared_values_match_rules"] = same_rows(
                 reference, observations.select(*OBSERVATION_KEY, *derived)
             )

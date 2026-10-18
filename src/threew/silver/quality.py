@@ -3,13 +3,12 @@
 from typing import NamedTuple
 
 from pyspark import StorageLevel
-from pyspark.sql import DataFrame
+from pyspark.sql import Column, DataFrame
 from pyspark.sql import functions as F
 from pyspark.sql.window import Window
 
-from threew.silver.transform import SENSOR_RENAMES
+from threew.silver.reference import RECORDING_KEY, SENSOR_FIELDS
 
-SENSOR_FIELDS = tuple(SENSOR_RENAMES.values())
 RECORDING_FIELDS = (
     "source_type",
     "instance_label",
@@ -34,9 +33,14 @@ class QualitySummaries(NamedTuple):
         self.recording_metrics.unpersist()
 
 
+def is_finite(value: Column) -> Column:
+    """Whether a reading is finite; domain validity is checked separately."""
+    return value.isNotNull() & ~F.isnan(value) & (value != float("inf")) & (value != float("-inf"))
+
+
 def with_timestamp_intervals(silver: DataFrame) -> DataFrame:
     """Compare source-order neighbors without changing original timestamps or rows."""
-    ordered = Window.partitionBy("_source_path", "_file_sha256").orderBy("_row_in_file")
+    ordered = Window.partitionBy(*RECORDING_KEY).orderBy("_row_in_file")
     return (
         silver.withColumn("_quality_timestamp", F.col("timestamp"))
         .withColumn(
@@ -69,8 +73,7 @@ def _recording_metrics(silver: DataFrame) -> DataFrame:
 
     sensor_metrics = []
     for index, name in enumerate(SENSOR_FIELDS):
-        value = F.col(name)
-        finite = value.isNotNull() & ~F.isnan(value) & (value != float("inf")) & (value != float("-inf"))
+        finite = is_finite(F.col(name))
         sensor_metrics.append(F.sum(F.when(finite, 1).otherwise(0)).alias(f"_sensor_{index}_finite_rows"))
 
     metrics = timed.groupBy(*RECORDING_FIELDS).agg(
@@ -112,7 +115,7 @@ def build_quality_summaries(silver: DataFrame) -> QualitySummaries:
     """Build one quality row per recording and one availability row per recording and sensor.
 
     A sensor is considered present only when it has at least one finite value.
-    Null, NaN, and infinite values are not counted as usable measurements.
+    Domain validity is checked separately in the issue table and clean columns.
     """
     metrics = _recording_metrics(silver).persist(StorageLevel.MEMORY_AND_DISK)
 

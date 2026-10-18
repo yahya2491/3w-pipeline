@@ -33,8 +33,8 @@ from threew.silver.input import current_manifest_counts, current_manifest_rows, 
 from threew.silver.issues import USAGE_POLICY, build_quality_issues, quarantine_issues, summarize_quality
 from threew.silver.prepare import prepare_observations, summarize_preparation
 from threew.silver.quality import build_quality_summaries
-from threew.silver.reconcile import OBSERVATION_KEY, RECORDING_KEY, input_checks, output_checks, unique_non_null_keys
-from threew.silver.reference import REFERENCE_VERSION, build_reference_tables
+from threew.silver.reconcile import input_checks, output_checks, unique_non_null_keys
+from threew.silver.reference import OBSERVATION_KEY, RECORDING_KEY, REFERENCE_VERSION, build_reference_tables
 from threew.silver.rules import DEFAULT_RULES_PATH, load_rules
 from threew.silver.transform import build_silver_observations
 from threew.spark import cleanup_spark, get_spark
@@ -74,14 +74,8 @@ def _output_root(cfg: Config, output_root: Path | None) -> Path:
     if output_root is None:
         return cfg.storage.silver
     path = Path(output_root).expanduser().resolve()
-    protected = [cfg.storage.bronze.parent, cfg.storage.landing.parent, cfg.storage.staging, cfg.storage.root]
-    # Sibling output roots are allowed; the input root itself and
-    # any ancestors are not, and neither are Bronze/landing/staging directories.
-    if (
-        path == cfg.storage.root
-        or cfg.storage.root.is_relative_to(path)
-        or any(_overlap(path, p) for p in protected[:-1])
-    ):
+    protected = (cfg.storage.bronze.parent, cfg.storage.landing.parent, cfg.storage.staging)
+    if path == cfg.storage.root or cfg.storage.root.is_relative_to(path) or any(_overlap(path, p) for p in protected):
         raise ValueError("Silver output must be separate from Bronze, landing, staging and their ancestors.")
     if cfg.env == "prod" and _overlap(path, cfg.storage.silver):
         raise ValueError("Canonical production Silver is protected; choose a separate --output-root.")
@@ -182,7 +176,6 @@ def _run_batch(spark, cfg, batch, table_paths, rules, report, batch_report, *, f
                     for name in ("quality_issues", "quality_quarantine", "event_reference", "sensor_reference")
                 },
                 rules=rules,
-                preparation_source=source_silver,
             )
             batch_report["checks"].update(checks)
             _require_checks(report, checks)

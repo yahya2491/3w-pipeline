@@ -1,20 +1,18 @@
-"""Add the 30 observation-level sensor features used by downstream Gold models."""
+"""Add trailing sensor features for the planned Gold classifier."""
 
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 from pyspark.sql.window import Window
 
-from threew.silver.issues import is_finite
-from threew.silver.reference import SENSOR_RENAMES
+from threew.silver.quality import is_finite
+from threew.silver.reference import OPENINGS, RECORDING_KEY
 from threew.silver.rules import QualityRules
-
-OPENINGS = tuple(target for source, target in SENSOR_RENAMES.items() if source.startswith("ABER-"))
 
 
 def add_sensor_features(observations: DataFrame, rules: QualityRules) -> DataFrame:
     """Use clean readings within one recording/segment; never read future values."""
     df = observations.withColumn("_feature_us", F.unix_micros(F.col("timestamp").cast("timestamp")))
-    segment = ("_source_path", "_file_sha256", "sequence_segment_id")
+    segment = (*RECORDING_KEY, "sequence_segment_id")
     ordered = Window.partitionBy(*segment).orderBy("_row_in_file")
     prefix = ordered.rowsBetween(Window.unboundedPreceding, Window.currentRow)
     # (current time - 120 seconds, current time]: exactly 120 readings at 1 Hz.

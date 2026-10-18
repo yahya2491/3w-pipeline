@@ -5,7 +5,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from threew.silver.reconcile import RECORDING_KEY
+from threew.silver.reference import RECORDING_KEY
 
 DEFAULT_BATCH_ROWS = 1_000_000
 

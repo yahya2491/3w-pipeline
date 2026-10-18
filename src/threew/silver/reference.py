@@ -10,6 +10,8 @@ from pyspark.sql import SparkSession
 REFERENCE_VERSION = 1
 REFERENCE_SOURCE = "docs/bronze/BRONZE_REFERENCE.md sections 6 and 7"
 SOURCE_TYPES = ("REAL", "SIMULATED", "DRAWN")
+RECORDING_KEY = ("_source_path", "_file_sha256")
+OBSERVATION_KEY = (*RECORDING_KEY, "_row_in_file")
 
 SENSOR_RENAMES = {
     "ABER-CKGL": "gas_lift_choke_opening_pct",
@@ -40,7 +42,8 @@ SENSOR_RENAMES = {
     "T-PDG": "downhole_pdg_temperature_c",
     "T-TPT": "subsea_tree_tpt_temperature_c",
 }
-
+SENSOR_FIELDS = tuple(SENSOR_RENAMES.values())
+OPENINGS = tuple(target for source, target in SENSOR_RENAMES.items() if source.startswith("ABER-"))
 
 EVENT_NAMES = {
     0: "Normal Operation",

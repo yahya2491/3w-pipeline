@@ -2,13 +2,9 @@
 
 ## Where we are
 
-This report describes the work completed in each commit milestone. The [contract](SILVER_CONTRACT.md) defines the tables and field meanings. The report was updated throughout the Silver implementation and records changes to the plan along the way.
+Milestones 1–11 record the original preservation and quality implementation. The [contract](SILVER_CONTRACT.md) defines the current 106-column output. Commands belong in the [run guide](SILVER_RUN_GUIDE.md), and data handling is defined in the [quality rules](QUALITY_RULES.md).
 
-Milestones 1–11 describe the original preservation/quality implementation. Milestone 12
-added cleaning and experimental model-window features. Milestone 13 keeps the reusable
-cleaning and quality work in Silver and moves model-window aggregates to Gold. Milestone 14
-reduces temporary storage; Milestone 15 adds a focused set of sensor features. Earlier run
-counts and timings are historical evidence, not validation of the current 106-column schema.
+The [106-column dev run](../evidence/silver/v2/features_106_dev.json) passed all 32 checks on 30 recordings, saving 235 MB of Parquet with a sampled temporary-plus-output peak of 544 MB. The [earlier 76-column VM run](../evidence/silver/v2/old_v2_evidence/run_,metrics.json) passed 32 checks across 82 batches and saved 4.75 GB. Full VM validation of the 106-column build and Gold model evaluation remain pending.
 
 ## Pipeline
 
@@ -48,7 +44,7 @@ We also ran the extended profile on the VM's complete Bronze table: 2,228 record
 The whole extended run was ran using
 
 ```bash
-threew.silver.profile --env prod
+python -m threew.silver.profile --env prod
 ```
 
 Missing sensors means that a sensor was not present in a recording, or that all its readings were null, NaN or positive/negative infinity. There were 27 sensors in the original dataset. The profile found that every recording had at least four sensors with usable readings, and no recording had all 27 sensors missing.
@@ -61,8 +57,6 @@ We wrote [SILVER_CONTRACT.md](SILVER_CONTRACT.md). A contract is a shared descri
 One Silver observation is one original Bronze observation. Its identity is the source path, source-file hash and original row number together. The contract lists all 27 sensor names and units, the recording details, the row labels, and the two quality tables.
 
 Main silver decisions are to preserve the original readings, missing values, timestamps and labels; to rename the Portuguese sensor abbreviations to readable English names; and to add recording details and readable event names.
-
-So basically in the silver we transformed the original bronze data into a more understandable format, while keeping the original data intact. The contract ensures that everyone knows what to expect from the Silver tables and how to use them correctly.
 
 ## Milestone 3 - Add recording details and clearer column names
 
@@ -82,15 +76,13 @@ A Bronze row contains one moment of sensor readings. Some useful facts describe 
 pytest -q tests/test_silver_input.py tests/test_silver_transform.py
 ```
 
-The tests were run on the 30 file sample, but they were also designed to be run on the full dataset to ensure that the code works correctly.
+These tests use small offline fixtures. The separate dev pipeline run processes the 30-file sample.
 
 ## Milestone 4 - Explain the event labels
 
 The recording label tells us what kind of event the whole recording is about. The class code tells us what is happening at each second inside it.
 
 The original data uses `label` to identify the event represented by the whole recording and `class` to describe the condition at each row. A class of `0` represents normal operation. For event `N`, class `N` represents the established event and class `100 + N` represents its transient phase. For example, in an Event 1 recording, classes 0, 1, and 101 represent normal operation, steady Event 1, and transient Event 1 respectively. Silver preserves these original codes and adds readable event names, phase names, and consistency flags. It does not change or remove source rows; missing class values remain missing.
-
-Its a little hard to follow, but essentially the dataset is split into 10 different event types (Event 0 through Event 9, with each with its own label numbering from 0 to 9), and each event type (like event label 1 is a abrupt increase of BSW). On the other hand, the class codes are used to identify which phase of the event is happening at each second in the recording. Look at the tabels below for more details. Silver adds readable names for these events and phases, and also checks for consistency between the class codes and the recording labels.
 
 Event classes in original dataset:
 
@@ -149,7 +141,7 @@ pytest -q tests/test_silver_transform.py
 
 ## Milestone 5 - Keep timestamps and check the time sequence
 
-We decided to keep each timestamp exactly as Bronze provides it. To check the order, Silver uses the original row number in the file and compares each timestamp with the next one. It can report missing times, repeated times, time moving backwards, or gaps.
+We keep each timestamp exactly as Bronze provides it. Silver uses the original row number to compare each timestamp with the previous one. It reports missing times, repeated times, time moving backwards, and gaps.
 
 Silver currently as of this milestone does not change timestamps, fill gaps, sort rows by time, or remove readings. We also decided here not to add a repeated time-gap column to every observation. The time results belong in a separate summary for each recording.
 
@@ -168,8 +160,6 @@ pytest -q tests/test_silver_quality.py
 ## Milestone 6 - Make two quality summaries
 
 A recording is one original source file, identified by its source path and file hash. 
-
-So in this milestone we created two quality summaries to avoid repeating recording-wide facts on millions of rows. The first summary is `instance_quality`, which has one row per recording. The second summary is `sensor_availability`, which has one row per recording and sensor. 
 
 The observation table keeps every reading. Instead of repeating recording-wide facts on millions of rows, Silver puts them in two smaller tables:
 
@@ -218,10 +208,10 @@ Sensor availability:
 | `instance_start` | Recording start time, when available. |
 | `recording_rows` | Total number of observations in the recording. |
 | `sensor_name` | Silver name of the sensor. |
-| `rows_with_finite_values` | Number of rows with a usable finite sensor value. |
-| `rows_without_finite_values` | Number of rows where the sensor value is unavailable. |
-| `percent_rows_with_finite_values` | Percentage of rows with a usable finite sensor value. |
-| `has_finite_values` | Whether the sensor has at least one usable value. |
+| `rows_with_finite_values` | Number of original readings that are neither null, NaN, nor infinite. |
+| `rows_without_finite_values` | Number of null, NaN, or infinite original readings. |
+| `percent_rows_with_finite_values` | Percentage of original readings that are finite. |
+| `has_finite_values` | Whether the sensor has at least one finite original reading. |
 
 A zero sensor reading counts as a real value. Null, NaN (not a number), and infinite values count as unavailable in the summaries. The observation table still keeps the original values.
 
@@ -289,8 +279,8 @@ python -m threew.silver.run --env dev
 
 Two recorded builds passed all 19 Silver checks on the 30-file dev sample. Each contained 1,931,052 observations, 30 recording summaries, and 810 sensor summaries. The saved tables had the same contents both times. 
 
-See the [dev validation record](../evidence/silver/old_evidence/silver_fixes_20261011.json)
-and the [earlier Silver review](../evidence/silver/old_evidence/silver_review_20261011.json).
+See the [dev validation record](../evidence/silver/v1/dev_evidence/silver_fixes_20261011.json)
+and the [earlier Silver review](../evidence/silver/v1/dev_evidence/silver_review_20261011.json).
 
 These record the earlier development checks. The later full-dataset runs
 and seven-table comparison are documented in Milestone 10.
@@ -312,8 +302,6 @@ We wrote down and enforced these rules:
 | A time is missing, or the interval is shorter/longer than one second | Reports the affected row. Fractional timestamps stay unchanged; gaps are not filled. |
 | The same source path, file hash and original row position appear twice | Stops the run before writing output, whether the copies are identical or conflicting. No arbitrary winner is chosen. |
 | A source file is corrected and has a new hash | Uses the file version selected by Bronze's current catalogue. This is different from a duplicate observation. |
-
-Firs tthe first 2 rows of the table above, the timestamp problems, we ensure that we dont modify the timestamps or the data directly since we cant gurantee that the timestamps are correct, or if there is an internal error, so we just keep it as is and report the affected rows for manual review.
 
 ### Add issue reasons and a quarantine list
 
@@ -358,15 +346,13 @@ for name in ("quality_issues", "quality_quarantine", "event_reference", "sensor_
 PY
 ```
 
-After the Silver run completes, this read-only Python command reads silver_ready.json and prints a brief quality summary. It shows the number of observations, the number with quarantine issues, the issue types and severities detected, and the paths to the quality_issues, quality_quarantine, event_reference, and sensor_reference Parquet tables. It does not start Spark, rebuild Silver, or modify any data. It is a quick way to inspect and verify the reported quality results without opening the Parquet output tables individually. 
-
 ## Milestone 9 - Make runs save and Test good runs
 
 The first part of the milestone is about stopping one run from interfering with another. The runner gives each attempt its own folder and uses a temporary lock (a guard that stops two runs writing to the same place at once). If a run fails, the previous ready marker stays in place. A production test must write to a separate folder so it cannot overwrite the official Silver output.
 
 These safeguards are part of `run.py`; they are not more data transformations. The failure and lock tests are in [test_silver_run.py](../../tests/test_silver_run.py).
 
-**Status:** implemented locally. The full-dataset VM run in Milestone 10 is still needed to check it at production scale.
+The full-dataset v1 evidence is recorded in Milestone 10.
 
 The tests use small sample data, so they do not need to download the full dataset. They check that good inputs work and that problems—like a missing row, changed reading, wrong summary, or failed write—are caught.
 
@@ -387,8 +373,7 @@ The dev sample is small. This milestone checks Silver against the full Bronze ta
 python -m threew.silver.run --env prod --output-root /home/ubuntu/3w-data/silver-oh
 ```
 
-Complete two successful runs using the same code, configuration, and Bronze input. Compare the contents of all seven output tables: silver_observations, instance_quality, sensor_availability, quality_issues, quality_quarantine, event_reference, and sensor_reference.
-Record both run IDs, row counts, run times, and output sizes. The expected baseline is 76,587,318 observations, 2,228 recording summaries, 60,156 sensor summaries, 10 event references, and 27 sensor references. Quality issue counts depend on the input and rules, but should match between these unchanged runs.
+The [first v1 run](../evidence/silver/v1/prod_run1/silver_run_1_,metrics.json) and [second v1 run](../evidence/silver/v1/prod_run2/silver_run_2_,metrics.json) both passed 29 checks. Each saved 2.76 GB of Parquet containing 76,587,318 observations, 2,228 recording summaries, 60,156 sensor summaries, 10 event references, and 27 sensor references. Runtimes were 58.3 and 53.9 minutes. The [comparison log](../evidence/silver/comparison.log) records matching contents for all seven tables. These results validate the original v1 schema.
 
 The `silver-oh` folder is just a test destination. The command still reads production Bronze; it does not write to the official production Silver folder. See the [run guide](SILVER_RUN_GUIDE.md) for how to compare the outputs.
 
@@ -397,106 +382,3 @@ The `silver-oh` folder is just a test destination. The command still reads produ
 We check the silver implementation, the runs match. We also check the quality issues and quarantine tables, and the event and sensor reference tables. The final milestone is to check that the Silver implementation is complete and correct, and that it meets the contract and requirements. 
 
 We then make a PR to merge to Silver.
-
-## Milestone 12 - Prepare measurements and causal features for forecasting
-
-Added [SILVER_ASSUMPTIONS.md](SILVER_ASSUMPTIONS.md), [QUALITY_RULES.md](QUALITY_RULES.md)
-and [`conf/quality/silver_rules.yaml`](../../conf/quality/silver_rules.yaml). The code validates
-the rules, uses the same configured domains for issues/cleaning/references, and records resolved
-settings plus their fingerprint. Contract version is now 2; table count remains seven.
-
-All 27 sensors gain `_clean` and `_is_valid` columns. Finite invalid choke openings can use
-the most recent original valid reading from at most three seconds earlier in the same continuous
-sequence. `_was_imputed` and `_source_age_seconds` explain replacements. Estimated values
-never become anchors. For example `40, -99.99, 120, 120, 120, 42` becomes
-`40, 40, 40, 40, null, 42` in the clean column. Null/NaN/infinite openings, missing classes
-and missing sensor readings are not filled. No source rows are removed or original values changed.
-
-## Milestone 13 - Keep Silver reusable and move model aggregates to Gold
-
-The Silver infographic separates reusable trusted records from consumer-specific answers.
-Contract v2 follows that boundary: it keeps renamed observations, recording identity, conformed
-event and sensor references, clean sensor values, bounded choke-repair provenance, quality outputs,
-and sequence checks. It removes per-sensor validity flags that duplicate the clean values and issue
-table, row-level counts and pressure differences that Gold can calculate, and the rolling means,
-variation, rates, coverage and other model-window calculations from Silver. Gold will create
-labelled windows and calculate the statistics required by the Random Forest.
-
-The observation schema is now 76 columns: 36 Bronze fields, 3 catalogue fields, and 37
-Silver-derived fields. The previous 17-minute dev run tested the larger v2 schema. Run the
-dev sample again to verify contract v2 and measure its output size before another VM-scale run.
-
-## Milestone 14 - Bound temporary storage for the VM
-
-The VM ran out of disk while Spark was caching prepared observations. V1 wrote observations
-directly; V2 introduced a complete disk cache that remained even after the schema was reduced
-to 76 columns. Free space measured after failure did not show the peak temporary usage.
-
-The runner now writes without that observation cache. It processes complete recordings in
-batches targeting one million observations, verifies each batch's saved files, and stops its
-Spark context before continuing. Recording boundaries, cleaning rules, the 76 columns, and
-all seven tables stay the same. Reference tables are written once. Exact comparisons cancel
-signed row counts in one aggregation instead of running two directional comparisons. The
-ready marker is published only when every batch and the accumulated counts pass; a later
-batch failure preserves the previous marker.
-
-The actual updated runner processed all **30 dev recordings / 1,931,052 observations** in
-three batches and passed **32 checks**. Sampled temporary-plus-output storage peaked at
-**302 MB**, compared with **951 MB** for the cached runner on the same sample. No Spark
-scratch files remained after the run. Counts, quality totals, preparation totals, and saved
-rules matched the previous unbatched dev result. All 59 focused tests passed, including an
-exact seven-table comparison between single-batch and three-batch fixture runs and a failure
-in a later batch. The final catalogue guards also passed six targeted tests; lint and formatting
-passed. At that milestone, the optional choke evaluator read clean columns without the removed validity flags.
-
-The dev run took 400.6 seconds locally while regression tests were also running; this is not a
-controlled speed comparison. Smaller batches add startup and repeated-check overhead. The
-full VM run is still required to measure production storage and runtime. Each successful run
-retains its own output, and a recording larger than the batch target runs alone.
-
-See [the saved measurements](../evidence/silver/v2/storage_fix_dev.json) and the
-[VM command](SILVER_RUN_GUIDE.md#run-on-the-full-dataset-on-the-vm).
-
-## Milestone 15 - Add focused sensor features and remove diagnostic scripts
-
-The 76-column version handled cleaning and storage reliably, but it left all temporal feature
-preparation to Gold. We add 30 selected columns so Silver also prepares useful model inputs:
-120-second mean, sample standard deviation, previous-reading change and usable count for
-seven pressure, temperature and gas-lift-flow sensors, plus invalid-duration fields for both
-original choke openings. The schema is **106 columns: 36 Bronze + 3 catalogue + 67 derived**.
-The contract label remains **v2**, and the same seven tables are written.
-
-The seven sensors have recorded coverage in the dataset and represent operating conditions
-relevant to the intended model. This is a justified candidate set, not a claim of measured
-feature importance. Gold must compare it with a clean-reading baseline.
-
-The implementation uses DataFrame expressions and Spark SQL windows. The trailing range is
-`(time - 120 seconds, time]`; it never crosses a recording or sequence break. Means skip null
-clean readings, counts expose incomplete history, and sample standard deviation needs two
-values. Changes remain null when either adjacent clean reading is missing. Invalid-opening
-duration uses the original readings, so an estimated clean repair does not hide a continuing
-raw fault. The [contract](SILVER_CONTRACT.md) defines the exact fields and reset behaviour.
-
-The one-million-row recording batches, direct Parquet writes and exact comparisons from
-Milestone 14 remain. The rules file now records the feature history and sensor list. Temporary
-Python benchmarks/probes and the optional choke-evaluation script were removed; historical
-JSON results remain. Correctness checks stay in the normal `tests/` suite.
-
-Unit checks cover the exact time boundary, missing readings, segment resets, invalid-duration
-resets and future-data isolation. All **279 offline regression tests passed**; lint and formatting
-passed. The normal Silver CLI processed all **30 recordings / 1,931,052 observations** in
-three batches and passed **32 reconciliation checks**. Independent Parquet footer checks
-confirmed all seven totals and 106 columns in every observation file. Raw quality totals and
-the existing cleaning counts matched the 76-column result.
-
-The run saved about **235 MB of Parquet**. Sampled temporary-plus-output storage peaked at
-**544 MB**, and scratch usage was zero after completion. The 302 MB peak in Milestone 14
-belongs to the 76-column build. These values exclude Bronze and older retained outputs.
-Local runtime was about **13 minutes**, while regression tests ran concurrently; it is not
-a controlled speed comparison. Adding temporal features increases computation and saved
-storage, while recording batches keep temporary work bounded.
-
-See [the current dev evidence](../evidence/silver/v2/features_106_dev.json). Simple row scaling
-suggests about 9.3 GB of saved Parquet for the full dataset, plus working space. Full VM
-storage/runtime and the features' contribution to Gold classification remain to be evaluated.
-
