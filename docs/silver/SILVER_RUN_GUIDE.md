@@ -20,19 +20,24 @@ The sample contains 30 recordings and 1,931,052 observations. To inspect Bronze 
 
 ## Run on the full dataset on the VM
 
-Commit and push local changes before updating the VM checkout. Run one job at a time and reuse the existing production Bronze table:
+The [recorded 106-column VM run](../evidence/silver/v2/prod_run1/silver_run_1_,metrics.json) passed all 32 checks over 2,228 recordings and 76,587,318 observations. It published 10.53 GB of Parquet across seven tables in 6 hours 10 minutes. Each new run retains its own complete output copy; allow additional space for Spark temporary data.
+
+The attached volume is mounted at `/mnt/silver-data`; [VM storage](VM_STORAGE.md) describes the layout. Run one job at a time and reuse the existing production Bronze table. For a reproducibility pair, keep the same commit, clean working tree, dependencies, input, rules and configuration; do not pull or change batch size between the two runs. Production deployment remains restricted to `main`; development changes belong on `dev`.
 
 ```bash
 cd ~/3w-pipeline
-git pull --ff-only
 source .venv/bin/activate
-df -h /home/ubuntu/3w-data
+mountpoint /mnt/silver-data
+df -h / /mnt/silver-data
 
+SPARK_LOCAL_DIRS=/mnt/silver-data/spark-tmp \
+TMPDIR=/mnt/silver-data/spark-tmp \
 python -u -m threew.silver.run \
   --env prod \
-  --output-root /home/ubuntu/3w-data/silver-v2
+  --output-root /mnt/silver-data/3w-data/silver-v2
 ```
 
+Run the build only after `mountpoint` confirms the volume is mounted. This foreground command requires the SSH session to stay connected. The original baseline remains under `/home/ubuntu/3w-data/silver-v2/`; each new attempt gets its own run directory on the volume. The `--output-root` override leaves the configured Bronze input path unchanged.
 
 ## What batches mean
 
@@ -62,7 +67,7 @@ python - <<'PY'
 import json
 from pathlib import Path
 
-root = Path("/home/ubuntu/3w-data/silver-v2")
+root = Path("/mnt/silver-data/3w-data/silver-v2")
 ready = json.loads((root / "silver_ready.json").read_text())
 report_path = Path(ready["report"])
 print("Run:", ready["run_id"])
@@ -83,9 +88,12 @@ HF_HUB_OFFLINE=1 python -m pytest -q
 
 Equal row counts alone do not establish equal contents. Compare the seven tables only when both runs' outputs are still present. This separate comparison reads whole tables and needs extra shuffle space; the runner's batch limit does not apply. Do not run it on the constrained VM without enough room for both outputs and the comparison.
 
-From the VM checkout with `.venv` active:
+From the VM checkout with `.venv` active, compare the explicit original baseline with the latest published mounted-volume run. The guard rejects a copied baseline marker if no new successful run has been published. The two run reports retain their actual table paths, even when the report itself was copied.
 
 ```bash
+export SPARK_LOCAL_DIRS=/mnt/silver-data/spark-tmp
+export TMPDIR=/mnt/silver-data/spark-tmp
+
 python -u - <<'PY'
 import json
 from pathlib import Path
@@ -94,17 +102,28 @@ from threew.config import load_config
 from threew.silver.reconcile import same_rows
 from threew.silver.run import spark_session
 
-root = Path("/home/ubuntu/3w-data/silver-v2")
-reports = [json.loads(path.read_text()) for path in sorted((root / "_runs").glob("*.json"))]
-successful = [r for r in reports if r.get("status") == "SUCCESS" and r.get("published") is True]
-if len(successful) < 2:
-    raise SystemExit("Two successful runs are needed.")
-first, second = successful[-2:]
+baseline_id = "20261017T232322182032Z-ba450086"
+first_path = Path("/home/ubuntu/3w-data/silver-v2/_runs") / f"{baseline_id}.json"
+root = Path("/mnt/silver-data/3w-data/silver-v2")
+ready = json.loads((root / "silver_ready.json").read_text())
+first = json.loads(first_path.read_text())
+second = json.loads(Path(ready["report"]).read_text())
+if first["run_id"] == second["run_id"]:
+    raise SystemExit("The marker still selects the copied baseline; a new successful run is needed.")
+for report in (first, second):
+    if report.get("status") != "SUCCESS" or report.get("published") is not True:
+        raise SystemExit("Both reports must describe successful published runs.")
+    if report["reconcile"].get("passed") is not True or not all(report["reconcile"]["checks"].values()):
+        raise SystemExit("Both runs must have passed all reconciliation checks.")
+if ready["run_id"] != second["run_id"] or ready["tables"] != second["tables"]:
+    raise SystemExit("The ready marker and selected report disagree.")
 print("Runs:", first["run_id"], second["run_id"])
 print("Code:", first["code"], second["code"])
-for field in ("source", "config_sha256", "contract", "reference_version", "quality_rules"):
+for field in ("code", "source", "config_sha256", "contract", "reference_version", "quality_rules", "execution"):
     if first[field] != second[field]:
         raise SystemExit(f"Runs differ in {field}; review before comparing.")
+if first["code"].get("dirty") is not False or second["code"].get("dirty") is not False:
+    raise SystemExit("Use clean checkouts for the identical-code claim.")
 if set(first["tables"]) != set(second["tables"]) or len(first["tables"]) != 7:
     raise SystemExit("Runs must contain the same seven tables.")
 with spark_session(load_config("prod")) as spark:
@@ -118,4 +137,4 @@ print("All seven tables match.")
 PY
 ```
 
-Save the output alongside the two original reports. `same_rows` compares duplicate multiplicities and nulls while ignoring row order. Review the recorded commits and dirty states separately before claiming the code was unchanged. The [historical v1 comparison](../evidence/silver/comparison.log) demonstrates this check for those earlier outputs.
+Save the execution and comparison logs, both original reports, and separately named snapshots of both ready markers under `/mnt/silver-data/evidence/silver-v2/`. Small reviewed evidence files can be committed under `docs/evidence/silver/v2/` on `dev`; datasets, Spark scratch files and virtual environments stay outside Git. `same_rows` compares duplicate multiplicities and nulls while ignoring row order. The [historical v1 comparison](../evidence/silver/comparison.log) demonstrates this check for those earlier outputs; it does not establish equality for later v2 runs.

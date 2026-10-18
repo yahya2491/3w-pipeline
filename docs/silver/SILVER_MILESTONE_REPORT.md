@@ -4,9 +4,35 @@
 
 Milestones 1–11 record the original preservation and quality implementation. The [contract](SILVER_CONTRACT.md) defines the current 106-column output. Commands belong in the [run guide](SILVER_RUN_GUIDE.md), and data handling is defined in the [quality rules](QUALITY_RULES.md).
 
-The [106-column dev run](../evidence/silver/v2/features_106_dev.json) passed all 32 checks on 30 recordings, saving 235 MB of Parquet with a sampled temporary-plus-output peak of 544 MB. The [earlier 76-column VM run](../evidence/silver/v2/old_v2_evidence/run_,metrics.json) passed 32 checks across 82 batches and saved 4.75 GB. Full VM validation of the 106-column build and Gold model evaluation remain pending.
+The [106-column full VM run](../evidence/silver/v2/prod_run1/silver_run_1_,metrics.json) passed all 32 checks across 2,228 recordings and 76,587,318 observations. It published all seven tables, saving 10.53 GB of Parquet in 6 hours 10 minutes across 82 batches. Gold model implementation and evaluation remain planned work.
+
+The [106-column dev run](../evidence/silver/v2/features_106_dev.json) passed all 32 checks on 30 recordings, saving 235 MB of Parquet with a sampled temporary-plus-output peak of 544 MB. The [earlier 76-column VM run](../evidence/silver/v2/old_v2_evidence/run_,metrics.json) passed 32 checks across 82 batches and saved 4.75 GB. These earlier reports describe their respective schemas and run environments.
+
+## Full-dataset v2 validation
+
+Run `20261017T232322182032Z-ba450086` validated the 106-column implementation at commit `98868ccc685526e1ead42ed43c1cff72bef4353c`, with a clean checkout. The [original VM report](../evidence/silver/v2/prod_run1/silver_run_1_,metrics.json) records `SUCCESS`, successful reconciliation and publication, and all 32 checks passing.
+
+The run started at 23:23:22 UTC on 17 October 2026 and finished at 05:33:47 UTC on 18 October. It used four local Spark cores, a 4 GB driver and a target of one million observations per batch, with complete recordings kept together.
+
+| Table | Rows |
+|---|---:|
+| `silver_observations` | 76,587,318 |
+| `instance_quality` | 2,228 |
+| `sensor_availability` | 60,156 |
+| `quality_issues` | 4,195,465 |
+| `quality_quarantine` | 167,065 |
+| `event_reference` | 10 |
+| `sensor_reference` | 27 |
+
+The seven tables contain 10,534,195,883 bytes of Parquet (10.53 GB, decimal). Transformation and writing took 9,273.619 seconds; read-back and validation took 12,518.428 seconds; input checks took 326.691 seconds. Total runtime was 22,225.411 seconds. The report measures saved Parquet size; it does not measure peak temporary disk usage.
+
+The isolated Silver root was `/home/ubuntu/3w-data/silver-v2/`, with this run's tables under `runs/20261017T232322182032Z-ba450086/`. Gold should resolve the selected successful run through its ready marker and keep its table paths together. This report establishes one successful full-dataset v2 run; comparison of repeated v2 runs is separate evidence.
 
 ## Pipeline
+
+The storage decisions behind the current build are recorded in Git. The initial v2 extension (`2569412`) reached 193 observation columns. Storage pressure led to reductions to 135 (`ddccb80`) and then 76 (`d3f70f1`). Commit `b3ccd25` added complete-recording batches, removed the full observation cache and streamlined exact comparisons. Commit `98868cc` restored a focused set of 120-second features, reaching the current 106 columns while retaining bounded batch processing. These revisions changed the derived columns; original sensor readings remained available.
+
+The VM subsequently received the attached volume described in [VM storage](VM_STORAGE.md). Existing pipeline data was copied under `/mnt/silver-data/3w-data/`; new Silver output uses its `silver-v2/` directory and Spark scratch uses `/mnt/silver-data/spark-tmp/`. The measured 6-hour-10-minute run above preceded this storage change. The mount provides capacity for retained outputs and temporary data; no measured speedup or completed repeated v2 comparison is inferred from it.
 
 ```text
 Original dataset files

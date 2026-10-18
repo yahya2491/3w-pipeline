@@ -2,11 +2,11 @@
 
 ## 1 Project statement
 
-`How effectively can a Spark MLlib Random Forest use Silver-prepared sensor data to detect and classify undesirable operating conditions in Petrobras 3W data?`
+`How do Random Forest and XGBoost compare in detecting and classifying undesirable operating conditions across labelled Petrobras 3W event categories using Silver-prepared sensor values and 120-second features?`
 
 We build a batch data pipeline on Spark that turns the raw Petrobras 3W dataset (v2.0.0) into trusted, analysis-ready data for detecting and classifying undesirable events in offshore oil wells. The pipeline follows the Medallion architecture (Bronze, Silver, Gold) and runs end to end through GitHub Actions on our UiS OpenStack VM.
 
-The planned Gold output is a labelled, window-level feature table for a Spark MLlib Random Forest. Silver also serves as a reusable prepared dataset for other analyses.
+The planned Gold output is a labelled, window-level feature table for comparing Random Forest and XGBoost on the same examples and feature sets. Silver also serves as a reusable prepared dataset for other analyses.
 
 Out of scope: real-time or streaming ingestion, live well data, and dashboards beyond what is needed to validate the outputs.
 
@@ -75,7 +75,7 @@ We preserve original readings in `silver_observations` and add one `_clean` valu
 
 For a finite choke opening outside the documented range of 0–100%, Silver can use the most recent original valid reading from the same uninterrupted sequence, if it is no more than three seconds old. The repaired value is flagged and its source age is recorded. Missing, NaN, infinite, long-gap, and sequence-boundary values are not repaired. If there is no eligible earlier reading, the clean value stays null. The original value is kept unchanged; Silver does not clip an opening such as 120% to 100%.
 
-Silver keeps one observation per original row and now stores 106 columns: 36 Bronze fields, 3 catalogue fields, and 67 added fields. These include 120-second means, sample standard deviations, previous-reading changes and usable counts for seven pressure, temperature and gas-lift-flow sensors, plus two durations describing consecutive invalid original choke readings. Features use current and earlier clean values within the same sequence segment. Gold will select labelled examples and use these prepared features with the Random Forest; it can calculate additional statistics if its design requires them.
+Silver keeps one observation per original row and now stores 106 columns: 36 Bronze fields, 3 catalogue fields, and 67 added fields. These include 120-second means, sample standard deviations, previous-reading changes and usable counts for seven pressure, temperature and gas-lift-flow sensors, plus two durations describing consecutive invalid original choke readings. Features use current and earlier clean values within the same sequence segment. Gold will select labelled examples and compare Random Forest and XGBoost using these prepared values; it can calculate additional statistics if its design requires them.
 
 **`instance_quality`: quality of each recording**
 
@@ -155,4 +155,4 @@ Another engineer can clone the repository and use `README.md` for setup and pipe
 
 During development we will use a 30 sample file; production configuration processes the full dataset on the UiS OpenStack VM. Changes are reviewed by the other group memberthrough pull requests before promotion to `main` (production). A self-hosted VM runner executes Bronze. The intended schedule is Monday at 03:17 UTC. Silver has been validated using production input in an isolated output folder. 
 
-We treat 3W as a fixed batch dataset and use its documented definitions for validation. We leave missing labels unknown and report uneven sensor coverage. Gold will use Silver's clean readings and 120-second features to build labelled examples for a Spark MLlib Random Forest that detects and classifies undesirable events. We will hold out recordings for evaluation and report per-class precision and recall, macro F1, and a majority-class baseline. Gold and the complete scheduled Bronze-to-Gold workflow are planned work.
+We treat 3W as a fixed batch dataset and use its documented definitions for validation. We leave missing labels unknown and report uneven sensor coverage. Gold will use Silver's clean readings and 120-second features to build labelled examples for Random Forest and XGBoost. We will evaluate both on the same held-out recordings and report per-event precision and recall, macro F1, test support and a majority-class baseline. Gold and the complete scheduled Bronze-to-Gold workflow are planned work.
