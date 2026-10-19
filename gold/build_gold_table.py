@@ -1,11 +1,11 @@
-"""Build the Gold table from Silver: labelled rows, per-sensor complete windows, stride, class cap.
+"""Build the Gold table from Silver: labelled rows, per-sensor complete windows, stride, recording split, class cap.
 
 Usage (on the VM, from the repo root):
     SPARK_LOCAL_DIRS=/mnt/silver-data/spark-tmp PYSPARK_PYTHON=~/venvs/3w/bin/python \
         ~/venvs/3w/bin/spark-submit --driver-memory 3g gold/build_gold_table.py
 """
 
-from pyspark.sql import SparkSession
+from pyspark.sql import SparkSession, Window
 from pyspark.sql import functions as F
 
 spark = SparkSession.builder.appName("gold_table").getOrCreate()
@@ -16,6 +16,7 @@ STRIDE = 60
 RARE_LABEL, RARE_STRIDE = 2, 10
 CAP = 200_000
 SEED = 42
+TEST_FRACTION = 0.2
 
 obs = spark.read.parquet(SILVER)
 
@@ -48,6 +49,20 @@ df = df.filter(F.col("_row_in_file") % stride == 0)
 
 keep = ["_source_path", "source_type", "well_id", "_row_in_file", "class_code", "label"] + feature_cols
 df = df.select(*keep).withColumnRenamed("_source_path", "recording_id").cache()
+
+# one row per recording: its event (highest label) and its source
+rec = df.groupBy("recording_id").agg(
+    F.max("label").alias("recording_event"),
+    F.first("source_type").alias("rec_source"),
+)
+
+# within each (event, source) group, order recordings by a seeded hash; the first 20% go to test
+w = Window.partitionBy("recording_event", "rec_source").orderBy(F.xxhash64("recording_id", F.lit(SEED)))
+rec = rec.withColumn("rank", F.percent_rank().over(w))
+rec = rec.withColumn("split", F.when(F.col("rank") < TEST_FRACTION, "test").otherwise("train"))
+
+# broadcast keeps df's partitions and row order (no shuffle), so sampleBy below picks the same rows every run
+df = df.join(F.broadcast(rec.select("recording_id", "recording_event", "split")), on="recording_id")
 
 # cap each class at about CAP rows; classes under the cap keep everything
 counts = {r["label"]: r["count"] for r in df.groupBy("label").count().collect()}
