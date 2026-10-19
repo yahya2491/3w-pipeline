@@ -6,11 +6,11 @@ Milestones 1–11 record the original preservation and quality implementation. T
 
 The [two 106-column full VM runs](../evidence/silver/v2/README.md) each passed all 32 checks across 2,228 recordings and 76,587,318 observations. Each published all seven tables and saved 10.53 GB of Parquet across 82 batches. The [v2 comparison log](../evidence/silver/v2/comparison.log) confirms equal schemas and complete contents for all seven tables, including duplicates and nulls. Gold model implementation and evaluation remain planned work.
 
-The [106-column dev run](../evidence/silver/v2/features_106_dev.json) passed all 32 checks on 30 recordings, saving 235 MB of Parquet with a sampled temporary-plus-output peak of 544 MB. The [earlier 76-column VM run](../evidence/silver/v2/old_v2_evidence/run_,metrics.json) passed 32 checks across 82 batches and saved 4.75 GB. These earlier reports describe their respective schemas and run environments.
+The [106-column dev run](../evidence/silver/v2/features_106_dev.json) passed all 32 checks on 30 recordings, saving 235 MB of Parquet with a sampled temporary-plus-output peak of 544 MB. The [earlier 76-column VM run](../evidence/silver/v2/old_v2_evidence/run_metrics.json) passed 32 checks across 82 batches and saved 4.75 GB. These earlier reports describe their respective schemas and run environments.
 
 ## Full-dataset v2 validation
 
-The [first VM report](../evidence/silver/v2/prod_run1/silver_run_1_,metrics.json) and [second VM report](../evidence/silver/v2/prod_run2/silver_run_2_,metrics.json) both record `SUCCESS`, publication and all 32 reconciliation checks passing. Their saved [ready-marker snapshots](../evidence/silver/v2/README.md#evidence-files) agree with the respective reports. Both used four local Spark cores, a 4 GB driver, eight shuffle partitions and a target of one million observations per batch, keeping complete recordings together in 82 batches.
+The [first VM report](../evidence/silver/v2/prod_run1/silver_run_1_metrics.json) and [second VM report](../evidence/silver/v2/prod_run2/silver_run_2_metrics.json) both record `SUCCESS`, publication and all 32 reconciliation checks passing. Their saved [ready-marker snapshots](../evidence/silver/v2/README.md#evidence-files) agree with the respective reports. Both used four local Spark cores, a 4 GB driver, eight shuffle partitions and a target of one million observations per batch, keeping complete recordings together in 82 batches.
 
 | Measurement | First run | Second run |
 |---|---|---|
@@ -421,7 +421,7 @@ The dev sample is small. This milestone checks Silver against the full Bronze ta
 python -m threew.silver.run --env prod --output-root /home/ubuntu/3w-data/silver-oh
 ```
 
-The [first v1 run](../evidence/silver/v1/prod_run1/silver_run_1_,metrics.json) and [second v1 run](../evidence/silver/v1/prod_run2/silver_run_2_,metrics.json) both passed 29 checks. Each saved 2.76 GB of Parquet containing 76,587,318 observations, 2,228 recording summaries, 60,156 sensor summaries, 10 event references, and 27 sensor references. Runtimes were 58.3 and 53.9 minutes. The [v1 comparison log](../evidence/silver/v1/comparison.log) records matching contents for all seven tables. These results validate the original v1 schema.
+The [first v1 run](../evidence/silver/v1/prod_run1/silver_run_1_metrics.json) and [second v1 run](../evidence/silver/v1/prod_run2/silver_run_2_metrics.json) both passed 29 checks. Each saved 2.76 GB of Parquet containing 76,587,318 observations, 2,228 recording summaries, 60,156 sensor summaries, 10 event references, and 27 sensor references. Runtimes were 58.3 and 53.9 minutes. The [v1 comparison log](../evidence/silver/v1/comparison.log) records matching contents for all seven tables. These results validate the original v1 schema.
 
 The `silver-oh` folder is just a test destination. The command still reads production Bronze; it does not write to the official production Silver folder. See the [run guide](SILVER_RUN_GUIDE.md) for how to compare the outputs.
 

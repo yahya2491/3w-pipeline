@@ -212,7 +212,7 @@
     "ruff_format_check": "passed"
   },
   "limitations": [
-    "This report measures the local dev sample; subsequent full VM measurements are recorded in prod_run1/silver_run_1_,metrics.json.",
+    "This report measures the local dev sample; subsequent full VM measurements are recorded in prod_run1/silver_run_1_metrics.json.",
     "Each run retains a complete output copy.",
     "Gold model performance has not been evaluated."
   ]

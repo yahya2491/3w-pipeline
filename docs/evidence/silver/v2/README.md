@@ -6,9 +6,9 @@ The two final 106-column builds completed on the VM and published all seven tabl
 
 | Evidence | File |
 |---|---|
-| First full run report | [prod_run1/silver_run_1_,metrics.json](prod_run1/silver_run_1_,metrics.json) |
+| First full run report | [prod_run1/silver_run_1_metrics.json](prod_run1/silver_run_1_metrics.json) |
 | First run ready-marker snapshot | [prod_run1/silver_ready.json](prod_run1/silver_ready.json) |
-| Second full run report | [prod_run2/silver_run_2_,metrics.json](prod_run2/silver_run_2_,metrics.json) |
+| Second full run report | [prod_run2/silver_run_2_metrics.json](prod_run2/silver_run_2_metrics.json) |
 | Second run ready-marker snapshot | [prod_run2/silver_ready.json](prod_run2/silver_ready.json) |
 | Seven-table content comparison | [comparison.log](comparison.log) |
 
