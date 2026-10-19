@@ -1,0 +1,301 @@
+{
+  "scope": "Local Linux dev sample, actual edited runner; not a full production VM run.",
+  "code": {
+    "commit": "d3f70f16376929d59ebc07c5a391481d5d0af64e",
+    "dirty": true,
+    "packages": {
+      "huggingface_hub": "2.2.0",
+      "pyarrow": "25.0.1",
+      "pyspark": "3.5.0",
+      "threew": "0.1.0"
+    },
+    "python": "3.11.17"
+  },
+  "run_id": "20261017T185314130152Z-c9d060a3",
+  "status": "SUCCESS",
+  "source": {
+    "bronze_run_id": "20261010T134325Z-54db46",
+    "repo_id": "Yahya2491/3w-pipeline",
+    "revision": "c1a7e8d0cfefc0875974ea079d11349a37fa0c56"
+  },
+  "spark": {
+    "app_name": "3w-bronze",
+    "driver_memory": "4g",
+    "master": "local[2]",
+    "shuffle_partitions": 8
+  },
+  "execution": {
+    "batch_count": 3,
+    "batch_rows": 1000000,
+    "complete_recordings": true
+  },
+  "contract_version": 2,
+  "original_run_contract_version": 3,
+  "version_label_note": "The current implementation is named contract v2. This measurement was collected before that label was changed; the original saved run report remains unchanged. Processing and measurements are unchanged.",
+  "observation_columns": 76,
+  "duration_seconds": 400.573,
+  "timing_note": "Regression tests ran concurrently; use this as run evidence, not a controlled speed benchmark.",
+  "reconcile": {
+    "passed": true,
+    "checks": {
+      "bronze_rows_match_ready_marker": true,
+      "bronze_recordings_match_ready_marker": true,
+      "bronze_recording_counts_match_manifest": true,
+      "bronze_observation_keys_are_unique_and_non_null": true,
+      "bronze_row_positions_are_non_negative": true,
+      "silver_schema_matches_contract": true,
+      "instance_quality_schema_matches_contract": true,
+      "sensor_availability_schema_matches_contract": true,
+      "silver_required_fields_are_non_null": true,
+      "silver_observation_keys_are_unique_and_non_null": true,
+      "silver_observation_keys_match_bronze": true,
+      "silver_observation_rows_match_bronze": true,
+      "silver_observation_row_counts_match_per_recording": true,
+      "silver_preserved_values_match_bronze": true,
+      "silver_recording_and_event_details_match": true,
+      "instance_quality_has_one_matching_row_per_recording": true,
+      "sensor_availability_has_27_unique_sensors_per_recording": true,
+      "instance_quality_values_match_observations": true,
+      "sensor_availability_values_match_observations": true,
+      "silver_prepared_values_match_rules": true,
+      "quality_issues_schema_matches": true,
+      "quality_issues_values_match": true,
+      "quality_quarantine_schema_matches": true,
+      "quality_quarantine_values_match": true,
+      "event_reference_schema_matches": true,
+      "event_reference_values_match": true,
+      "sensor_reference_schema_matches": true,
+      "sensor_reference_values_match": true,
+      "quality_issue_keys_are_unique_and_non_null": true,
+      "all_batches_verified": true,
+      "batch_totals_match_bronze": true,
+      "bronze_marker_unchanged": true
+    },
+    "counts": {
+      "bronze_rows": 1931052,
+      "bronze_recordings": 30,
+      "silver_observation_rows": 1931052,
+      "silver_recordings": 30,
+      "instance_quality_rows": 30,
+      "sensor_availability_rows": 810,
+      "quality_issues_rows": 76431,
+      "quality_quarantine_rows": 831,
+      "event_reference_rows": 10,
+      "sensor_reference_rows": 27
+    }
+  },
+  "batches": [
+    {
+      "batch": 1,
+      "recordings": 21,
+      "expected_rows": 664694,
+      "status": "SUCCESS",
+      "duration_seconds": 152.449,
+      "table_rows": {
+        "event_reference": 10,
+        "instance_quality": 21,
+        "quality_issues": 54469,
+        "quality_quarantine": 469,
+        "sensor_availability": 567,
+        "sensor_reference": 27,
+        "silver_observations": 664694
+      },
+      "checks": {
+        "bronze_observation_keys_are_unique_and_non_null": true,
+        "bronze_recording_counts_match_manifest": true,
+        "bronze_recordings_match_ready_marker": true,
+        "bronze_row_positions_are_non_negative": true,
+        "bronze_rows_match_ready_marker": true,
+        "event_reference_schema_matches": true,
+        "event_reference_values_match": true,
+        "instance_quality_has_one_matching_row_per_recording": true,
+        "instance_quality_schema_matches_contract": true,
+        "instance_quality_values_match_observations": true,
+        "quality_issue_keys_are_unique_and_non_null": true,
+        "quality_issues_schema_matches": true,
+        "quality_issues_values_match": true,
+        "quality_quarantine_schema_matches": true,
+        "quality_quarantine_values_match": true,
+        "sensor_availability_has_27_unique_sensors_per_recording": true,
+        "sensor_availability_schema_matches_contract": true,
+        "sensor_availability_values_match_observations": true,
+        "sensor_reference_schema_matches": true,
+        "sensor_reference_values_match": true,
+        "silver_observation_keys_are_unique_and_non_null": true,
+        "silver_observation_keys_match_bronze": true,
+        "silver_observation_row_counts_match_per_recording": true,
+        "silver_observation_rows_match_bronze": true,
+        "silver_prepared_values_match_rules": true,
+        "silver_preserved_values_match_bronze": true,
+        "silver_recording_and_event_details_match": true,
+        "silver_required_fields_are_non_null": true,
+        "silver_schema_matches_contract": true
+      }
+    },
+    {
+      "batch": 2,
+      "recordings": 5,
+      "expected_rows": 824139,
+      "status": "SUCCESS",
+      "duration_seconds": 146.672,
+      "table_rows": {
+        "event_reference": 10,
+        "instance_quality": 5,
+        "quality_issues": 11162,
+        "quality_quarantine": 362,
+        "sensor_availability": 135,
+        "sensor_reference": 27,
+        "silver_observations": 824139
+      },
+      "checks": {
+        "bronze_observation_keys_are_unique_and_non_null": true,
+        "bronze_recording_counts_match_manifest": true,
+        "bronze_recordings_match_ready_marker": true,
+        "bronze_row_positions_are_non_negative": true,
+        "bronze_rows_match_ready_marker": true,
+        "event_reference_schema_matches": true,
+        "event_reference_values_match": true,
+        "instance_quality_has_one_matching_row_per_recording": true,
+        "instance_quality_schema_matches_contract": true,
+        "instance_quality_values_match_observations": true,
+        "quality_issue_keys_are_unique_and_non_null": true,
+        "quality_issues_schema_matches": true,
+        "quality_issues_values_match": true,
+        "quality_quarantine_schema_matches": true,
+        "quality_quarantine_values_match": true,
+        "sensor_availability_has_27_unique_sensors_per_recording": true,
+        "sensor_availability_schema_matches_contract": true,
+        "sensor_availability_values_match_observations": true,
+        "sensor_reference_schema_matches": true,
+        "sensor_reference_values_match": true,
+        "silver_observation_keys_are_unique_and_non_null": true,
+        "silver_observation_keys_match_bronze": true,
+        "silver_observation_row_counts_match_per_recording": true,
+        "silver_observation_rows_match_bronze": true,
+        "silver_prepared_values_match_rules": true,
+        "silver_preserved_values_match_bronze": true,
+        "silver_recording_and_event_details_match": true,
+        "silver_required_fields_are_non_null": true,
+        "silver_schema_matches_contract": true
+      }
+    },
+    {
+      "batch": 3,
+      "recordings": 4,
+      "expected_rows": 442219,
+      "status": "SUCCESS",
+      "duration_seconds": 88.634,
+      "table_rows": {
+        "event_reference": 10,
+        "instance_quality": 4,
+        "quality_issues": 10800,
+        "quality_quarantine": 0,
+        "sensor_availability": 108,
+        "sensor_reference": 27,
+        "silver_observations": 442219
+      },
+      "checks": {
+        "bronze_observation_keys_are_unique_and_non_null": true,
+        "bronze_recording_counts_match_manifest": true,
+        "bronze_recordings_match_ready_marker": true,
+        "bronze_row_positions_are_non_negative": true,
+        "bronze_rows_match_ready_marker": true,
+        "event_reference_schema_matches": true,
+        "event_reference_values_match": true,
+        "instance_quality_has_one_matching_row_per_recording": true,
+        "instance_quality_schema_matches_contract": true,
+        "instance_quality_values_match_observations": true,
+        "quality_issue_keys_are_unique_and_non_null": true,
+        "quality_issues_schema_matches": true,
+        "quality_issues_values_match": true,
+        "quality_quarantine_schema_matches": true,
+        "quality_quarantine_values_match": true,
+        "sensor_availability_has_27_unique_sensors_per_recording": true,
+        "sensor_availability_schema_matches_contract": true,
+        "sensor_availability_values_match_observations": true,
+        "sensor_reference_schema_matches": true,
+        "sensor_reference_values_match": true,
+        "silver_observation_keys_are_unique_and_non_null": true,
+        "silver_observation_keys_match_bronze": true,
+        "silver_observation_row_counts_match_per_recording": true,
+        "silver_observation_rows_match_bronze": true,
+        "silver_prepared_values_match_rules": true,
+        "silver_preserved_values_match_bronze": true,
+        "silver_recording_and_event_details_match": true,
+        "silver_required_fields_are_non_null": true,
+        "silver_schema_matches_contract": true
+      }
+    }
+  ],
+  "storage": {
+    "measurement": "Allocated file blocks, sampled every 0.25 seconds in isolated Spark scratch and output directories. Not whole-machine disk use.",
+    "previous_cached_runner_peak_bytes": 950853632,
+    "actual_batched_runner_peak_bytes": 301944832,
+    "peak_reduction_percent": 68.24,
+    "components": {
+      "cache": 0,
+      "shuffle": 202338304,
+      "other_scratch": 39190528,
+      "parquet": 117764096,
+      "output_other": 1118208,
+      "total": 301944832
+    },
+    "after_run": {
+      "cache": 0,
+      "shuffle": 0,
+      "other_scratch": 0,
+      "parquet": 117764096,
+      "output_other": 1138688,
+      "total": 118902784
+    }
+  },
+  "matches_previous_unbatched_dev": {
+    "quality_summary": true,
+    "preparation_summary": true,
+    "quality_rules": true,
+    "contract_version": true,
+    "counts": true
+  },
+  "independent_footer_counts": {
+    "event_reference": {
+      "rows": 10,
+      "parquet_files": 2
+    },
+    "instance_quality": {
+      "rows": 30,
+      "parquet_files": 8
+    },
+    "quality_issues": {
+      "rows": 76431,
+      "parquet_files": 8
+    },
+    "quality_quarantine": {
+      "rows": 831,
+      "parquet_files": 4
+    },
+    "sensor_availability": {
+      "rows": 810,
+      "parquet_files": 8
+    },
+    "sensor_reference": {
+      "rows": 27,
+      "parquet_files": 2
+    },
+    "silver_observations": {
+      "rows": 1931052,
+      "parquet_files": 8
+    }
+  },
+  "tests": {
+    "focused_suite_passed": 59,
+    "focused_suite_seconds": 743.36,
+    "final_catalogue_guard_tests_passed": 6,
+    "lint": "passed",
+    "format": "passed"
+  },
+  "limitations": [
+    "Production VM peak and duration still require a full run.",
+    "A recording larger than the batch target runs alone.",
+    "Each run retains its full saved output; batching bounds temporary work, not total retained output."
+  ]
+}

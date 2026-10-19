@@ -1,11 +1,27 @@
 """The one place Spark sessions are created, so every job gets the same, correct setup."""
 
+import logging
 import os
 import sys
+from collections.abc import Callable
+from typing import Any
 
 from pyspark.sql import SparkSession
 
 from threew.config import Config
+
+
+def cleanup_spark(action: Callable[[], Any], description: str) -> None:
+    """Keep a cleanup failure from masking the exception that triggered cleanup."""
+    already_failed = sys.exc_info()[0] is not None
+    try:
+        action()
+    except Exception:
+        if not already_failed:
+            raise
+        logging.getLogger(__name__).warning(
+            "Spark cleanup failed (%s); preserving original error", description, exc_info=True
+        )
 
 
 def get_spark(cfg: Config) -> SparkSession:

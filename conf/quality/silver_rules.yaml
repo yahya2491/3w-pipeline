@@ -1,0 +1,24 @@
+# Executed by threew.silver.rules; resolved settings are saved with every run.
+version: 1
+domains:
+  opening_min_pct: 0.0
+  opening_max_pct: 100.0
+  valve_states: [0.0, 0.5, 1.0]
+cleaning:
+  choke_forward_fill_max_seconds: 3
+  missing_classes: preserve_unknown
+  missing_sensors: preserve_missing
+  other_invalid_sensors: null_in_clean_column
+sequence:
+  # Expected spacing used to flag timestamp-sequence breaks and limit choke repairs.
+  expected_interval_seconds: 1
+features:
+  window_seconds: 120
+  sensors:
+    - downhole_pdg_pressure_pa
+    - subsea_tree_tpt_pressure_pa
+    - production_choke_upstream_pressure_pa
+    - gas_lift_choke_downstream_pressure_pa
+    - subsea_tree_tpt_temperature_c
+    - production_choke_downstream_temperature_c
+    - gas_lift_flow_rate_m3_s

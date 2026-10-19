@@ -1,0 +1,219 @@
+{
+  "scope": "Actual 106-column Silver CLI, all 30 dev recordings; no prototype transformations.",
+  "run_id": "20261017T203532441048Z-479caacd",
+  "status": "SUCCESS",
+  "code": {
+    "commit": "b3ccd251c6e08a7b85b15917df190fc575d49caa",
+    "dirty": true,
+    "packages": {
+      "huggingface_hub": "2.2.0",
+      "pyarrow": "25.0.1",
+      "pyspark": "3.5.0",
+      "threew": "0.1.0"
+    },
+    "python": "3.11.17"
+  },
+  "source": {
+    "bronze_run_id": "20261010T134325Z-54db46",
+    "repo_id": "Yahya2491/3w-pipeline",
+    "revision": "c1a7e8d0cfefc0875974ea079d11349a37fa0c56"
+  },
+  "contract": {
+    "sha256": "730cf519bd76008cd0b610d10029919d187dd54414bc79cab5c3395a9a7b3edf",
+    "version": 2
+  },
+  "observation_columns": 106,
+  "added_sensor_features": 30,
+  "spark": {
+    "app_name": "3w-bronze",
+    "driver_memory": "4g",
+    "master": "local[2]",
+    "shuffle_partitions": 8
+  },
+  "execution": {
+    "batch_count": 3,
+    "batch_rows": 1000000,
+    "complete_recordings": true
+  },
+  "quality_rules": {
+    "resolved": {
+      "choke_forward_fill_max_seconds": 3,
+      "expected_interval_seconds": 1,
+      "feature_sensors": [
+        "downhole_pdg_pressure_pa",
+        "subsea_tree_tpt_pressure_pa",
+        "production_choke_upstream_pressure_pa",
+        "gas_lift_choke_downstream_pressure_pa",
+        "subsea_tree_tpt_temperature_c",
+        "production_choke_downstream_temperature_c",
+        "gas_lift_flow_rate_m3_s"
+      ],
+      "feature_window_seconds": 120,
+      "opening_max_pct": 100.0,
+      "opening_min_pct": 0.0,
+      "valve_states": [
+        0.0,
+        0.5,
+        1.0
+      ],
+      "version": 1
+    },
+    "sha256": "85967b9053c64dc0a411c610086d47d19b6ea177805b5d54c860a8374986e44c",
+    "version": 1
+  },
+  "reconcile": {
+    "checks": {
+      "all_batches_verified": true,
+      "batch_totals_match_bronze": true,
+      "bronze_marker_unchanged": true,
+      "bronze_observation_keys_are_unique_and_non_null": true,
+      "bronze_recording_counts_match_manifest": true,
+      "bronze_recordings_match_ready_marker": true,
+      "bronze_row_positions_are_non_negative": true,
+      "bronze_rows_match_ready_marker": true,
+      "event_reference_schema_matches": true,
+      "event_reference_values_match": true,
+      "instance_quality_has_one_matching_row_per_recording": true,
+      "instance_quality_schema_matches_contract": true,
+      "instance_quality_values_match_observations": true,
+      "quality_issue_keys_are_unique_and_non_null": true,
+      "quality_issues_schema_matches": true,
+      "quality_issues_values_match": true,
+      "quality_quarantine_schema_matches": true,
+      "quality_quarantine_values_match": true,
+      "sensor_availability_has_27_unique_sensors_per_recording": true,
+      "sensor_availability_schema_matches_contract": true,
+      "sensor_availability_values_match_observations": true,
+      "sensor_reference_schema_matches": true,
+      "sensor_reference_values_match": true,
+      "silver_observation_keys_are_unique_and_non_null": true,
+      "silver_observation_keys_match_bronze": true,
+      "silver_observation_row_counts_match_per_recording": true,
+      "silver_observation_rows_match_bronze": true,
+      "silver_prepared_values_match_rules": true,
+      "silver_preserved_values_match_bronze": true,
+      "silver_recording_and_event_details_match": true,
+      "silver_required_fields_are_non_null": true,
+      "silver_schema_matches_contract": true
+    },
+    "counts": {
+      "bronze_recordings": 30,
+      "bronze_rows": 1931052,
+      "event_reference_rows": 10,
+      "instance_quality_rows": 30,
+      "quality_issues_rows": 76431,
+      "quality_quarantine_rows": 831,
+      "sensor_availability_rows": 810,
+      "sensor_reference_rows": 27,
+      "silver_observation_rows": 1931052,
+      "silver_recordings": 30
+    },
+    "passed": true
+  },
+  "preparation_summary": {
+    "downhole_pdg_pressure_pa_complete_120s_rows": 1830004,
+    "gas_lift_choke_downstream_pressure_pa_complete_120s_rows": 1124257,
+    "gas_lift_choke_opening_pct_repaired": 0,
+    "gas_lift_choke_opening_pct_unresolved": 0,
+    "gas_lift_flow_rate_m3_s_complete_120s_rows": 1047340,
+    "production_choke_downstream_temperature_c_complete_120s_rows": 1198065,
+    "production_choke_opening_pct_repaired": 0,
+    "production_choke_opening_pct_unresolved": 0,
+    "production_choke_upstream_pressure_pa_complete_120s_rows": 1870542,
+    "rows": 1931052,
+    "rows_without_observed_valid_sensors": 831,
+    "rows_without_usable_time": 0,
+    "subsea_tree_tpt_pressure_pa_complete_120s_rows": 1830004,
+    "subsea_tree_tpt_temperature_c_complete_120s_rows": 1899302
+  },
+  "preservation_checks": {
+    "quality_summary_unchanged": true,
+    "table_counts_unchanged": true,
+    "existing_preparation_counts_unchanged": true
+  },
+  "tables": {
+    "event_reference": {
+      "rows": 10,
+      "parquet_bytes": 6205
+    },
+    "instance_quality": {
+      "rows": 30,
+      "parquet_bytes": 66563
+    },
+    "quality_issues": {
+      "rows": 76431,
+      "parquet_bytes": 228308
+    },
+    "quality_quarantine": {
+      "rows": 831,
+      "parquet_bytes": 15631
+    },
+    "sensor_availability": {
+      "rows": 810,
+      "parquet_bytes": 50809
+    },
+    "sensor_reference": {
+      "rows": 27,
+      "parquet_bytes": 7594
+    },
+    "silver_observations": {
+      "rows": 1931052,
+      "parquet_bytes": 234848114
+    }
+  },
+  "parquet_bytes": 235223224,
+  "duration_seconds": 797.575,
+  "timing_note": "Local Linux run while the full regression suite ran concurrently; not a controlled speed comparison.",
+  "phase_seconds": {
+    "input": 0.021,
+    "input_checks": 21.115,
+    "lock": 0.001,
+    "read_back_and_check": 409.986,
+    "transform_and_write": 359.553
+  },
+  "batches": [
+    {
+      "batch": 1,
+      "expected_rows": 664694,
+      "recordings": 21,
+      "status": "SUCCESS",
+      "duration_seconds": 250.452
+    },
+    {
+      "batch": 2,
+      "expected_rows": 824139,
+      "recordings": 5,
+      "status": "SUCCESS",
+      "duration_seconds": 347.342
+    },
+    {
+      "batch": 3,
+      "expected_rows": 442219,
+      "recordings": 4,
+      "status": "SUCCESS",
+      "duration_seconds": 187.901
+    }
+  ],
+  "storage": {
+    "measurement": "Allocated scratch and output file blocks sampled every 0.25 seconds; excludes input Bronze and historical outputs.",
+    "sample_interval_seconds": 0.25,
+    "sampled_peak_allocated_bytes": 543780864,
+    "final_scratch_bytes": 0,
+    "final_output_allocated_bytes": 237359104,
+    "row_scaled_production_parquet_bytes": 9329171797.275906,
+    "projection_note": "Row scaling of saved Parquet only, not a production VM measurement or a peak estimate."
+  },
+  "verification": {
+    "independent_parquet_footer_counts": true,
+    "all_observation_files_have_106_columns": true,
+    "offline_pytest_passed": 279,
+    "offline_pytest_seconds": 770.58,
+    "ruff_check": "passed",
+    "ruff_format_check": "passed"
+  },
+  "limitations": [
+    "This report measures the local dev sample; subsequent full VM measurements are recorded in prod_run1/silver_run_1_,metrics.json.",
+    "Each run retains a complete output copy.",
+    "Gold model performance has not been evaluated."
+  ]
+}

@@ -1,7 +1,29 @@
 import os
 import sys
 
-from threew.spark import get_spark
+import pytest
+
+from threew.spark import cleanup_spark, get_spark
+
+
+def test_cleanup_failure_propagates_without_original_error():
+    def fail():
+        raise RuntimeError("cleanup failed")
+
+    with pytest.raises(RuntimeError, match="cleanup failed"):
+        cleanup_spark(fail, "test")
+
+
+def test_cleanup_preserves_original_failure(caplog):
+    def fail():
+        raise RuntimeError("cleanup failed")
+
+    with pytest.raises(ValueError, match="original failure"):
+        try:
+            raise ValueError("original failure")
+        finally:
+            cleanup_spark(fail, "test")
+    assert "preserving original error" in caplog.text
 
 
 def test_session_uses_config(spark, spark_cfg):

@@ -101,7 +101,7 @@ def _prior_marker(cfg):
 def test_run_silver_reconciles_all_outputs_and_repeat_run_is_identical(spark, silver_input):
     cfg = silver_input
     first = _run(cfg, spark)
-    second = _run(cfg, spark)
+    second = _run(cfg, spark, batch_rows=2)
     assert first["run_id"] != second["run_id"]
     assert all(second["reconcile"]["checks"].values())
     assert second["reconcile"]["counts"] == {
@@ -117,6 +117,16 @@ def test_run_silver_reconciles_all_outputs_and_repeat_run_is_identical(spark, si
         "sensor_reference_rows": 27,
     }
     summary = second["quality_summary"]
+    assert second["quality_summary"] == first["quality_summary"]
+    assert second["preparation_summary"] == first["preparation_summary"]
+    with open(second["report"]) as saved_report:
+        report = json.load(saved_report)
+    assert report["execution"]["batch_count"] == 3
+    assert [batch["status"] for batch in report["batches"]] == ["SUCCESS"] * 3
+    assert second["contract_version"] == 2
+    assert second["quality_rules"]["resolved"]["expected_interval_seconds"] == 1
+    assert second["quality_rules"]["sha256"]
+    assert second["preparation_summary"]["rows"] == 6
     assert summary["rows_with_issues"] == 6
     assert summary["rows_with_quarantine_issues"] == 6
     assert summary["quarantine_row_percent"] == 100.0
@@ -129,10 +139,12 @@ def test_run_silver_reconciles_all_outputs_and_repeat_run_is_identical(spark, si
         right = spark.read.parquet(second["tables"][name]["path"])
         assert same_rows(left, right)
     saved = spark.read.parquet(second["tables"]["silver_observations"]["path"])
+    assert len(saved.columns) == 106
     assert saved.filter("source_type = 'REAL' AND _row_in_file = 0").first()["timestamp"].microsecond == 500000
     assert saved.filter("source_type = 'REAL' AND _row_in_file = 0").first()["gas_lift_choke_opening_pct"] == 0.0
     for report in _reports(cfg.storage.silver):
         assert report["status"] == "SUCCESS"
+        assert report["contract"]["version"] == 2
         assert report["contract"]["sha256"]
         assert report["config_sha256"]
         assert report["duration_seconds"] > 0
@@ -176,6 +188,21 @@ def test_corrupted_observations_cannot_be_published(spark, silver_input, monkeyp
     assert report["status"] == "FAILED"
     assert report["reconcile"]["checks"][failed_check] is False
     assert report["error"]["phase"] == "read_back_and_check"
+
+
+@pytest.mark.parametrize("column", ["downhole_pdg_pressure_pa_clean", "downhole_pdg_pressure_pa_mean_120s"])
+def test_corrupted_clean_reading_or_feature_prevents_publication(spark, silver_input, monkeypatch, column):
+    from threew.silver.prepare import prepare_observations
+
+    previous = _prior_marker(silver_input)
+
+    def broken(observations, rules):
+        return prepare_observations(observations, rules).withColumn(column, F.lit(999.0))
+
+    monkeypatch.setattr("threew.silver.run.prepare_observations", broken)
+    with pytest.raises(RuntimeError, match="silver_prepared_values_match_rules"):
+        _run(silver_input, spark)
+    assert silver_input.storage.silver_ready.read_text() == previous
 
 
 @pytest.mark.parametrize(
@@ -293,6 +320,29 @@ def test_write_failure_is_reported_and_leaves_previous_marker(spark, silver_inpu
     assert cfg.storage.silver_ready.read_text() == previous
 
 
+def test_later_batch_failure_keeps_previous_marker(spark, silver_input, monkeypatch):
+    previous = _prior_marker(silver_input)
+    write = DataFrameWriter.parquet
+    observation_writes = 0
+
+    def fail_second_batch(writer, path, *args, **kwargs):
+        nonlocal observation_writes
+        if path.endswith("/silver_observations"):
+            observation_writes += 1
+            if observation_writes == 2:
+                raise OSError("injected later batch failure")
+        return write(writer, path, *args, **kwargs)
+
+    monkeypatch.setattr(DataFrameWriter, "parquet", fail_second_batch)
+    with pytest.raises(OSError, match="later batch failure"):
+        _run(silver_input, spark, batch_rows=2)
+    assert silver_input.storage.silver_ready.read_text() == previous
+    report = _reports(silver_input.storage.silver)[0]
+    assert report["published"] is False
+    assert report["status"] == "FAILED"
+    assert [batch["status"] for batch in report["batches"]] == ["SUCCESS", "FAILED"]
+
+
 def test_production_input_requires_isolated_destination(spark_cfg, tmp_path):
     cfg = replace(spark_cfg, env="prod", storage=StorageConfig(root=tmp_path / "input"))
     with pytest.raises(ValueError, match="explicit isolated"):
@@ -358,8 +408,8 @@ def test_milestone8_corrupted_additional_output_cannot_be_published(spark, silve
     previous = _prior_marker(cfg)
     if table in ("event_reference", "sensor_reference"):
 
-        def broken_references(session):
-            tables = build_reference_tables(session)
+        def broken_references(session, rules=None):
+            tables = build_reference_tables(session, rules)
             field = "event_name" if table == "event_reference" else "unit"
             tables[table] = tables[table].withColumn(field, F.lit("wrong"))
             return tables
@@ -367,8 +417,8 @@ def test_milestone8_corrupted_additional_output_cannot_be_published(spark, silve
         monkeypatch.setattr("threew.silver.run.build_reference_tables", broken_references)
     elif table.startswith("quality_issues"):
 
-        def broken_issues(observations):
-            issues = build_quality_issues(observations)
+        def broken_issues(observations, rules=None):
+            issues = build_quality_issues(observations, rules)
             if table == "quality_issues_schema":
                 return issues.drop("field_name")
             return issues.withColumn("reason", F.lit("wrong"))

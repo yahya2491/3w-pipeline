@@ -6,7 +6,7 @@ from pyspark.sql.types import StructField, StructType
 
 from threew.silver.issues import build_quality_issues, quarantine_issues, summarize_quality
 from threew.silver.quality import build_quality_summaries
-from threew.silver.reconcile import OBSERVATION_TYPES
+from threew.silver.reconcile import BASE_OBSERVATION_TYPES
 from threew.silver.reference import SENSOR_DEFINITIONS, build_reference_tables
 
 
@@ -43,7 +43,7 @@ def observations(spark):
     rows[4]["gas_lift_choke_opening_pct"] = 101.0
     rows[6]["downhole_pdg_pressure_pa"] = None
     return spark.createDataFrame(
-        rows, StructType([StructField(name, kind, True) for name, kind in OBSERVATION_TYPES.items()])
+        rows, StructType([StructField(name, kind, True) for name, kind in BASE_OBSERVATION_TYPES.items()])
     )
 
 

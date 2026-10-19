@@ -13,7 +13,35 @@ Silver progress is documented in the [milestone report](docs/silver/SILVER_MILES
 See the [Silver contract](docs/silver/SILVER_CONTRACT.md) for table definitions.
 The [Silver run guide](docs/silver/SILVER_RUN_GUIDE.md) covers commands, failures and comparison of saved runs.
 
-All pipeline dates and times are UTC.
+Silver contract v2 standardizes observations, adds cleaned sensor columns and three-second bounded
+repairs of finite invalid choke openings, and records quality, event references and sensor references.
+Its 106 observation columns include 120-second sensor features and invalid-choke durations.
+Gold selects labelled examples and trains/evaluates its Spark model from those prepared values. Read
+[Silver assumptions](docs/silver/SILVER_ASSUMPTIONS.md) and
+[quality rules](docs/silver/QUALITY_RULES.md). Original measurements and all seven tables remain.
+With Bronze ready, run `python -m threew.silver.run --env dev` in the locked Linux environment.
+Gold anomaly classification consumes the prepared output; the model is planned work and is not
+implemented by this Silver milestone.
+
+Both [106-column full VM runs](docs/evidence/silver/v2/README.md) passed all 32 checks across
+2,228 recordings and 76,587,318 observations. Each published seven tables and saved 10.53 GB
+of Parquet; runtimes were 6 h 10 min 25 s and 6 h 5 min 32 s. The
+[v2 comparison log](docs/evidence/silver/v2/comparison.log) confirms matching schemas and
+complete contents for all seven tables, including duplicates and nulls. See the
+[full-dataset v2 validation](docs/silver/SILVER_MILESTONE_REPORT.md#full-dataset-v2-validation) for details.
+
+Silver v2 is the existing Silver implementation extended with review feedback and prepared
+sensor features. The work is on `silver-fixes`; commit scopes such as `feat(silverv2)` name
+that revision, and `silver-v2/` is its VM output folder. The Python entry point remains
+`threew.silver.run`. The [Gold handover](docs/gold/GOLD_HANDOVER.md) explains the versions and paths.
+
+The VM's attached volume is mounted at `/mnt/silver-data`. Existing pipeline data has been copied
+under `/mnt/silver-data/3w-data/`; new Silver runs save to its `silver-v2/` directory and use
+`/mnt/silver-data/spark-tmp/` for Spark temporary data. Production Bronze input remains configured
+under `/home/ubuntu/3w-data/`. See [VM storage](docs/silver/VM_STORAGE.md) and the
+[Silver run guide](docs/silver/SILVER_RUN_GUIDE.md) for the exact paths and commands.
+
+Pipeline run dates and times are UTC. Source observation clocks remain timezone-free and unchanged.
 
 ## Layout
 

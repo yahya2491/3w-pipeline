@@ -1,0 +1,89 @@
+{
+  "silver_run_id": "20261017T112729409558Z-018a1538",
+  "quality_rules": {
+    "resolved": {
+      "choke_forward_fill_max_seconds": 3,
+      "expected_interval_seconds": 1,
+      "long_window_seconds": 300,
+      "minimum_observed_fraction": 0.5,
+      "opening_max_pct": 100.0,
+      "opening_min_pct": 0.0,
+      "sensors": [
+        "downhole_pdg_pressure_pa",
+        "subsea_tree_tpt_pressure_pa",
+        "production_choke_upstream_pressure_pa",
+        "production_choke_downstream_pressure_pa",
+        "production_choke_downstream_temperature_c",
+        "gas_lift_flow_rate_m3_s",
+        "production_choke_opening_pct"
+      ],
+      "short_window_seconds": 120,
+      "valve_states": [
+        0.0,
+        0.5,
+        1.0
+      ],
+      "version": 1
+    },
+    "sha256": "e732ee6446e30db42fb1f71c564b55e07b2e3a560e34de578147c96f89c38107",
+    "version": 1
+  },
+  "method": "Mask short stretches after every 600th original row (or longer if configured).",
+  "limitations": "Known-valid masked readings are not actual sensor faults; results do not validate event forecasting.",
+  "results": [
+    {
+      "sensor": "gas_lift_choke_opening_pct",
+      "source_type": "REAL",
+      "_gap_seconds": 1.0,
+      "masked_valid_measurements": 90,
+      "mean_absolute_error_pct_points": 0.00020488888888902718,
+      "root_mean_squared_error_pct_points": 0.0013596690773860396,
+      "maximum_absolute_error_pct_points": 0.012229999999998853
+    },
+    {
+      "sensor": "gas_lift_choke_opening_pct",
+      "source_type": "REAL",
+      "_gap_seconds": 2.0,
+      "masked_valid_measurements": 90,
+      "mean_absolute_error_pct_points": 0.00040977777777809383,
+      "root_mean_squared_error_pct_points": 0.002718332822399191,
+      "maximum_absolute_error_pct_points": 0.024449999999998084
+    },
+    {
+      "sensor": "gas_lift_choke_opening_pct",
+      "source_type": "REAL",
+      "_gap_seconds": 3.0,
+      "masked_valid_measurements": 90,
+      "mean_absolute_error_pct_points": 0.0006150000000002444,
+      "root_mean_squared_error_pct_points": 0.004077026558112631,
+      "maximum_absolute_error_pct_points": 0.03667000000000087
+    },
+    {
+      "sensor": "production_choke_opening_pct",
+      "source_type": "REAL",
+      "_gap_seconds": 1.0,
+      "masked_valid_measurements": 1021,
+      "mean_absolute_error_pct_points": 0.0009807345739471032,
+      "root_mean_squared_error_pct_points": 0.03129587800208911,
+      "maximum_absolute_error_pct_points": 1.0
+    },
+    {
+      "sensor": "production_choke_opening_pct",
+      "source_type": "REAL",
+      "_gap_seconds": 2.0,
+      "masked_valid_measurements": 1021,
+      "mean_absolute_error_pct_points": 0.0019615670910871578,
+      "root_mean_squared_error_pct_points": 0.06259175605268684,
+      "maximum_absolute_error_pct_points": 2.0
+    },
+    {
+      "sensor": "production_choke_opening_pct",
+      "source_type": "REAL",
+      "_gap_seconds": 3.0,
+      "masked_valid_measurements": 1021,
+      "mean_absolute_error_pct_points": 0.0029423408423114557,
+      "root_mean_squared_error_pct_points": 0.0938876340219153,
+      "maximum_absolute_error_pct_points": 3.0
+    }
+  ]
+}

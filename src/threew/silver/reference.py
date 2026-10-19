@@ -10,6 +10,8 @@ from pyspark.sql import SparkSession
 REFERENCE_VERSION = 1
 REFERENCE_SOURCE = "docs/bronze/BRONZE_REFERENCE.md sections 6 and 7"
 SOURCE_TYPES = ("REAL", "SIMULATED", "DRAWN")
+RECORDING_KEY = ("_source_path", "_file_sha256")
+OBSERVATION_KEY = (*RECORDING_KEY, "_row_in_file")
 
 SENSOR_RENAMES = {
     "ABER-CKGL": "gas_lift_choke_opening_pct",
@@ -40,7 +42,8 @@ SENSOR_RENAMES = {
     "T-PDG": "downhole_pdg_temperature_c",
     "T-TPT": "subsea_tree_tpt_temperature_c",
 }
-
+SENSOR_FIELDS = tuple(SENSOR_RENAMES.values())
+OPENINGS = tuple(target for source, target in SENSOR_RENAMES.items() if source.startswith("ABER-"))
 
 EVENT_NAMES = {
     0: "Normal Operation",
@@ -92,6 +95,23 @@ def sensor_definition(source_name: str, sensor_name: str) -> dict:
 
 
 SENSOR_DEFINITIONS = tuple(sensor_definition(source, name) for source, name in SENSOR_RENAMES.items())
+
+
+def sensor_definitions(rules=None):
+    """Resolve domain rules once for validation, cleaning and published references."""
+    if rules is None:
+        return SENSOR_DEFINITIONS
+    return tuple(
+        {
+            **definition,
+            "allowed_values": list(rules.valve_states) if definition["allowed_values"] is not None else None,
+            "minimum": rules.opening_min_pct if definition["minimum"] is not None else None,
+            "maximum": rules.opening_max_pct if definition["maximum"] is not None else None,
+        }
+        for definition in SENSOR_DEFINITIONS
+    )
+
+
 EVENT_REFERENCE_SCHEMA = (
     "event_code int, event_name string, supports_normal boolean, supports_steady boolean, "
     "supports_transient boolean, steady_class_code int, transient_class_code int, "
@@ -103,7 +123,7 @@ SENSOR_REFERENCE_SCHEMA = (
 )
 
 
-def build_reference_tables(spark: SparkSession) -> dict:
+def build_reference_tables(spark: SparkSession, rules=None) -> dict:
     """Ten event definitions and 27 sensor definitions, ready for Spark/SQL consumers."""
     events = [
         {
@@ -121,5 +141,5 @@ def build_reference_tables(spark: SparkSession) -> dict:
     ]
     return {
         "event_reference": spark.createDataFrame(events, EVENT_REFERENCE_SCHEMA),
-        "sensor_reference": spark.createDataFrame(list(SENSOR_DEFINITIONS), SENSOR_REFERENCE_SCHEMA),
+        "sensor_reference": spark.createDataFrame(list(sensor_definitions(rules)), SENSOR_REFERENCE_SCHEMA),
     }

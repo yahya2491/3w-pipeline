@@ -1,14 +1,55 @@
 # Gold layer handover
 
-This explains what Silver gives you and how you can use it in Gold. It describes the inputs, decisions, and possible outputs; the Gold implementation is yours to design. For column definitions and implementation details, use the [Silver reference](../silver/SILVER_REFERENCE.md) and [contract](../silver/SILVER_CONTRACT.md).
+This explains which Silver version to use, where its saved tables are on the VM, and how they support the planned Random Forest/XGBoost comparison in the [project description](../3W_Project_Description_full.md). Gold has not been implemented yet. For field definitions, use the [contract](../silver/SILVER_CONTRACT.md); for validation, use the [milestone report](../silver/SILVER_MILESTONE_REPORT.md).
 
 ## Where we are
 
-Silver is implemented. Two full-dataset runs each passed all 29 build checks, and their schemas and complete contents matched across all seven tables. The result has 76,587,318 observations from 2,228 recordings.
+Use the final **106-column Silver v2** for Gold. It provides clean readings for all 27 sensors, bounded choke-opening estimates, sequence and quality details, 120-second features for seven sensors, and two invalid-opening durations. Original measurements, labels and row identities remain available. Read [Silver assumptions](../silver/SILVER_ASSUMPTIONS.md) for the limits of cleaning and feature selection.
 
-The [comparison log](../evidence/silver/comparison.log) and reports linked from the [Silver reference](../silver/SILVER_REFERENCE.md) contain the evidence. The quality inspection on 12 October confirmed missing labels, observations without finite sensor readings, and out-of-range openings. We kept the existing rules and original values.
+Both [full VM runs](../evidence/silver/v2/README.md) passed all 32 checks and published all seven tables. Each covers 2,228 recordings and 76,587,318 observations across 82 batches, saving 10.53 GB of Parquet. The [v2 comparison log](../evidence/silver/v2/comparison.log) confirms matching schemas and complete contents for every table, including duplicates and nulls. Runtimes were 6 h 10 min 25 s and 6 h 5 min 32 s; this is not a controlled storage-performance benchmark.
 
-Gold has not been implemented. The current full Silver result is in the separate VM test destination, `/home/ubuntu/3w-data/silver-oh/`.
+The current saved input is the second run on the attached volume: `/mnt/silver-data/3w-data/silver-v2/runs/20261018T091117552005Z-3280e5d3/`. The original baseline remains under `/home/ubuntu/3w-data/silver-v2/runs/20261017T232322182032Z-ba450086/`. Resolve one successful ready marker and keep that run's paths together, as explained below.
+
+## What Silver v2 and silver-fixes mean
+
+Silver v2 is the existing Silver v1 implementation extended with review feedback and additional prepared columns. It is the next revision of the same Silver layer, with the same observation grain and seven table roles. There is no separate `silver-v2` Python package: both revisions use `threew.silver` and `python -m threew.silver.run`.
+
+| Name seen in the project | Meaning |
+|---|---|
+| Silver v1 | The original preservation, readable-metadata and quality implementation. It had 43 observation columns and its own [two-run evidence](../evidence/silver/v1/). Its VM output is `silver-oh/`. |
+| `silver-fixes` | The Git branch containing the feedback changes and current handover work. This is the review branch, not a data directory. |
+| `feat(silverv2)` / `feat(silver(v2))` | Commit-message scopes used while implementing and adjusting that feedback on `silver-fixes`. They describe the Silver revision; they do not imply a differently named branch or package. |
+| Silver contract v2 | The revised output contract. The final observation table has 106 columns; earlier intermediate v2 builds had different column counts. |
+| `silver-v2/` | The explicit VM output folder used to retain revised Silver runs separately from v1. It now sits under `/mnt/silver-data/3w-data/`. |
+
+The upstream dataset version `3W v2.0.0` is a separate version name; it does not identify the Silver contract.
+
+The Git history makes the feedback progression visible:
+
+| Commit | What it records |
+|---|---|
+| `2569412`, `c14e733` | `feat(silverv2)` commits implementing supervisor feedback: clean sensor values, repair provenance and derived behaviour features. The initial observation extension reached 193 columns. |
+| `ddccb80`, `d3f70f1` | Reduce derived columns after VM storage failures, first to 135 and then 76. |
+| `b3ccd25` | Bound temporary work by complete-recording batches and remove the full prepared-table cache. |
+| `98868cc` | Restore a focused set of 120-second features, giving the final 106-column schema; first full run revision. |
+| `fd4579f`, `330496f` | Code cleanup, validation refactoring and clearer documentation; second full run revision is `330496f`. |
+| `55175a8` | Add saved run reports and evidence to the branch; the seven-table comparison is now saved as well. |
+
+V1 already carried 36 Bronze fields, three catalogue fields and four event descriptions. V2 retains them and adds 63 fields. The complete breakdown is:
+
+| Column group | Count | Use in Gold |
+|---|---:|---|
+| Original Bronze fields | 36 | 27 original sensor readings plus nine time, label, state and lineage fields; use originals for inspection and lineage for grouping. |
+| Recording catalogue fields | 3 | `instance_id`, `well_id`, `instance_start`; context and split bookkeeping. |
+| Event descriptions | 4 | Readable supplied labels and consistency status; exclude from predictors. |
+| Clean sensor readings | 27 | One `<sensor>_clean` value per sensor. |
+| Choke repair details | 4 | Two `_was_imputed` flags and two `_source_age_seconds` fields. |
+| Sequence details | 2 | `sequence_usable`, `sequence_segment_id`; keep histories within recording segments. |
+| Recent sensor behaviour | 28 | Mean, sample standard deviation, previous-reading change and usable count for each of seven sensors. |
+| Invalid-opening durations | 2 | Duration of consecutive finite invalid original openings; candidate quality indicators. |
+| **Total** | **106** | Gold selects a suitable subset for its model examples. |
+
+Relative to Bronze, this is 70 additional columns: three catalogue fields and 67 Silver fields. Relative to the 43-column v1 observation table, it is 63 additional columns. Definitions, types and the seven featured sensors are in the [contract](../silver/SILVER_CONTRACT.md). Historical v1 and reduced-column v2 runs remain evidence for those schemas; Gold should use the validated final 106-column run.
 
 ## The seven folders and how Gold can use them
 
@@ -16,7 +57,7 @@ Each folder holds a Parquet table. **All event categories 0–9 remain together 
 
 | Folder/table | What it contains | Possible use in Gold |
 |---|---|---|
-| `silver_observations` | Every original observation, all 27 renamed sensor columns, recording/event details, and source keys. | The measurements for your calculations, filtered according to the fields and quality rules your question needs. |
+| `silver_observations` | Original observations, 27 clean sensors, 30 sensor-behaviour features, repair/sequence details, metadata and source keys. | Select labelled model examples from prepared features; retain ordered clean sequences for CNNs. |
 | `instance_quality` | One summary per recording: observation count, missing labels/state, time problems, and sensor coverage. | Check recording quality and length; summarise limitations by source type or event. |
 | `sensor_availability` | One row per recording and sensor, showing finite-reading counts and percentages. | Choose sensors and recordings with useful coverage. Finite presence does not guarantee that every value passes a domain rule. |
 | `quality_issues` | All detected warnings and errors, with row keys, affected fields/uses, observed values, reasons, and suggested actions. | Match problems to observations, decide which fields are suitable for the calculation, and explain exclusions. |
@@ -30,7 +71,7 @@ The observations also identify the source as `REAL`, `SIMULATED`, or `DRAWN` in 
 
 ## How to use the saved quality tables with observations
 
-**Preserving readings and identifying questionable fields is the chosen Silver design.** Silver's output is the observations together with their quality information. A successful build means these outputs passed their checks; it does not mean every reading is suitable for every calculation.
+**Use the prepared columns explicitly.** `<sensor>_clean` coexists with the original columns. Opening replacements carry `_was_imputed` and `_source_age_seconds`. Raw quality issues remain even after a repair, so do not automatically reject a permitted clean replacement just because its raw measurement is quarantined. Conversely, a repair does not make the original measurement valid. Review sequence timing, sensor availability and target eligibility for the chosen task.
 
 Gold can read the existing `quality_issues` or `quality_quarantine` Parquet table alongside `silver_observations`. It does not need to rerun Silver or rediscover the same problems.
 
@@ -40,7 +81,7 @@ Gold can read the existing `quality_issues` or `quality_quarantine` Parquet tabl
 4. Use `field_name`, `affected_use`, and `recommended_action` to decide whether that particular measurement or label belongs in the result.
 5. Keep other readings when their issues are unrelated to the question. Record how many inputs were included and excluded.
 
-For example, an observation may have a missing class and an opening of −99.99%, while another sensor has a finite reading with no detected issue. Gold can use that other sensor for a calculation that does not require a class, exclude the opening from an opening calculation, and exclude the observation from a comparison requiring a known row class. The original Silver observation remains unchanged.
+For example, an observation may have a missing class and an original opening of −99.99%, while another sensor has a suitable finite reading. Gold can use that other sensor without a class label. The opening's clean value may be a permitted bounded estimate or null; inspect its repair flag and age. The unknown class cannot become confirmed evaluation ground truth. Original columns remain unchanged.
 
 The issue tables describe problems; the full measurements still come from `silver_observations`. Their `observed_value` field is text for inspection, not a replacement numeric sensor table.
 
@@ -52,10 +93,24 @@ One observation can have several issue entries. Matching every issue directly to
 |---|---|---|
 | Missing row class | 4,028,400 observations, about 5.26%. | Readings remain available for work that does not require a row class. Do not infer the missing class from the whole-recording event label. |
 | No finite sensor readings | 5,193 observations. | They cannot supply sensor measurements; their source rows and labels remain preserved. |
-| Production-choke opening outside 0–100% | 161,872 readings: 161,538 below zero and 334 above 100. Flagged range: −99.99 to 100.4375. | Exclude these opening measurements from calculations and keep the issue counts visible. Do not clip them or guess replacements. |
+| Production-choke opening outside 0–100% | 161,872 original readings: 161,538 below zero and 334 above 100. Flagged range: −99.99 to 100.4375. | Retain raw issue counts; Silver clean columns provide a bounded estimate or null with repair provenance. |
 | Time and label consistency | No missing/duplicate timestamps, backward intervals, gaps over one second, or class/recording mismatches were detected by the implemented checks. | Use the reported results, while preserving original row order and source time meaning. |
 
-Repeated −99.99 values appeared in the opening examples, but their source meaning is unconfirmed. We have not converted them to missing or assumed that all negative readings equal −99.99.
+Repeated −99.99 values appeared in the historical opening examples, but their source meaning is unconfirmed. Silver applies the same out-of-range rule to every finite invalid opening, without interpreting a particular number as a confirmed missing-value marker. The clean value is a bounded estimate or null; originals remain unchanged.
+
+## Planned Gold classification model
+
+Compare Spark MLlib `RandomForestClassifier` and XGBoost using the same labelled examples, Silver features and held-out recording split. Evaluate all event categories with labelled examples and report each event's test support and scores. Save the selected features, true label, each model's prediction and evaluation results as Gold outputs. Include a simple majority-class baseline and a clean-sensor-only feature comparison to test whether the added temporal features help.
+
+One option is one Gold example at each chosen 120-second interval endpoint, using that observation's trailing features and supported `class_code` as its target. This is a labelled history ending at a particular observation, not a claim that every row in the history has the same class. Agree the sampling frequency, required history and coverage before training. Class 0 means normal; nonzero supported codes describe event and phase. Map transient codes 101–109 to event identities 1–9 for event-type scoring, while retaining the original phase code for separate analysis. Exclude unknown or inconsistent targets from supervised evaluation. Keep labels, `instance_label` and event-derived metadata out of predictor columns.
+
+Read `<sensor>_mean_120s`, `_stddev_120s`, `_change` and `_count_120s` from Silver. Partial history and missing sensors remain visible through the counts; a count of 120 means that sensor has a full history. Features are null at unusable times and restart at segment boundaries. The choke-duration fields are candidate quality indicators, not confirmed well-event labels. Gold must decide whether they help its task. Fit any missing-feature treatment on training data only.
+
+Use `instance_quality` and `sensor_availability` to assess recordings, and `quality_issues`/`quality_quarantine` to inspect affected fields and rows. Explain inclusion rules and report kept/excluded examples. Keep recording-level summaries and event metadata out of predictors. Gold may calculate additional statistics from clean readings when its design needs them.
+
+The removed derived columns do not remove source measurements. Gold can calculate the earlier 300-second means, short-versus-long trends, deviations from prior readings, and production-choke pressure differences from the saved clean readings. Preserve recording and sequence boundaries and use current/past values when deriving temporal features. Validity indicators can be derived from original values and the saved rules; usable indicators can be derived from clean values. The existing 120-second counts also support coverage calculations. Some earlier fields overlap with current features: during an uninterrupted one-second sequence, the per-second rate equals the existing previous-reading change. Additional features remain candidates whose model benefit needs evaluation; the full VM validation establishes the saved data's conformity to Silver's implemented rules.
+
+Split whole recordings into training and held-out test sets before fitting preprocessing or models; never put windows from one recording in both sets. Withhold test labels from all predictors and training, then compare predictions to the saved true labels. Report a confusion matrix, per-event precision and recall, macro F1 and test support so rare events are visible. All real recordings have missing row-level classes, so they cannot provide supervised training or verified test labels; score them separately as unverified inference if useful. An event with no labelled examples in the held-out test split has no measured test score. This evaluates detection at the window endpoint, not prediction before an event begins.
 
 Four sensor columns have no finite readings anywhere in these full runs: `service_pump_downstream_pressure_pa`, `production_shutdown_valve_upstream_pressure_pa`, `subsea_production_line_pressure_pa`, and `service_pump_flow_rate_m3_s`. Other sensors have different coverage across recordings. Check availability before choosing inputs.
 
@@ -95,12 +150,40 @@ Keep `REAL`, `SIMULATED`, and `DRAWN` separate by default unless combining them 
 | Item | Location |
 |---|---|
 | Local dev Silver root | `data/dev/silver/` |
-| Current full-dataset VM Silver root | `/home/ubuntu/3w-data/silver-oh/` |
+| Historical full-dataset v1 Silver root | `/home/ubuntu/3w-data/silver-oh/` |
+| Original validated v2 baseline root | `/home/ubuntu/3w-data/silver-v2/` |
+| Current mounted v2 output root | `/mnt/silver-data/3w-data/silver-v2/` |
+| Second validated v2 run | `/mnt/silver-data/3w-data/silver-v2/runs/20261018T091117552005Z-3280e5d3/` |
+| Copied pipeline data, including Bronze | `/mnt/silver-data/3w-data/` |
+| Spark temporary data on the volume | `/mnt/silver-data/spark-tmp/` |
+| Saved repository evidence | `docs/evidence/silver/v2/` |
 | Ready marker | `silver_ready.json` under the selected root |
 | Actual tables | `runs/<run_id>/<table_name>/` under that root |
 | Individual run reports | `_runs/<run_id>.json` under that root |
 
-Read the ready marker once at the beginning, check that it describes a successful result for the chosen environment, and use its table paths throughout the Gold run. Do not read the whole `runs` directory or combine tables from different Silver runs. The default configured Silver path is `silver/`; it does not automatically change to the test destination `silver-oh/`.
+After connecting to `group20` as `ubuntu`, access the mount as a normal directory inside the VM:
+
+```bash
+mountpoint /mnt/silver-data
+df -h /mnt/silver-data
+cd /mnt/silver-data/3w-data/silver-v2
+ls
+ls runs/20261018T091117552005Z-3280e5d3
+```
+
+The final command lists the seven table folders. For example, the current observations are at `/mnt/silver-data/3w-data/silver-v2/runs/20261018T091117552005Z-3280e5d3/silver_observations/`. These are Parquet datasets; read the entire selected table folder with Spark, rather than choosing one part file.
+
+Read `/mnt/silver-data/3w-data/silver-v2/silver_ready.json` once at the beginning of Gold. The [saved second-run marker](../evidence/silver/v2/prod_run2/silver_ready.json) selects `20261018T091117552005Z-3280e5d3`, has contract version 2, and records successful reconciliation. Its linked [report](../evidence/silver/v2/prod_run2/silver_run_2_,metrics.json) records `SUCCESS` and `published: true`. Use its `tables[<name>]["path"]` values throughout the Gold run. If the live marker later selects a newer run, validate that selection before using it. Do not read the whole `runs` directory or combine tables from different Silver runs. The configured default Silver path is `silver/`; it does not automatically change to this explicit volume output root.
+
+The attached 100 GB `/dev/vdb` volume is mounted at `/mnt/silver-data`; the original approximately 40 GB `/dev/vda` contains `/home/ubuntu/`. The volume's name does not restrict it to Silver data. Existing pipeline files were copied under `/mnt/silver-data/3w-data/`, and the second build wrote new output there. Copying does not rewrite absolute paths inside old reports or markers, so the copied first-run marker can still point to `/home/ubuntu/3w-data/`. Use the saved second run or its verified current marker when selecting volume input.
+
+SSH logout leaves the mount and its files available. Data persists on the volume; automatic mounting after a VM reboot depends on `/etc/fstab`. The supplied evidence has not confirmed that configuration or a reboot test. Check `mountpoint` before writes after a restart; see [VM storage](../silver/VM_STORAGE.md) for the UUID and layout.
+
+`conf/prod.yaml` still reads Bronze from `/home/ubuntu/3w-data/`; `--output-root` changes only the Silver destination. Gold should use the selected Silver ready marker rather than deriving its input root from this Bronze configuration. See [VM storage](../silver/VM_STORAGE.md) for the volume layout, persistence and evidence locations.
+
+Earlier v2 builds used different column sets. Check that the required feature columns are
+present in the 106-column table, and that the saved rules describe the 120-second history;
+the version number alone is not sufficient.
 
 Develop on the 30-file dev sample, which contains 1,931,052 observations. Use the repo's locked Python 3.11/PySpark 3.5.0 environment and Java 8 or 17. Use your own VM checkout because the VM account is shared. Setup, sample preparation, and checking commands are in the [Silver run guide](../silver/SILVER_RUN_GUIDE.md).
 
@@ -108,4 +191,67 @@ Use small offline test inputs with known expected results. Check that quality ma
 
 Record the selected Silver run ID, source, reference version, chosen inputs, inclusion rules, and output counts. Check repeated results by their contents, not just equal counts. Work on a short-lived branch and use a PR with the repo's lint/test checks.
 
-Gold still needs its own runner, storage configuration, and agreed output definitions. The [Silver reference](../silver/SILVER_REFERENCE.md) contains the existing schemas, design decisions, and full-run evidence.
+Gold still needs its own runner, storage configuration, and agreed output definitions. The [Silver contract](../silver/SILVER_CONTRACT.md) defines the saved fields; the [milestone report](../silver/SILVER_MILESTONE_REPORT.md) records validation.
+
+# VM storage for Silver and Gold
+
+## Mounted volume and paths
+
+The UiS OpenStack VM is `group20`, running Ubuntu 24.04 as `ubuntu`. Its original disk is `/dev/vda` (about 40 GB). The attached OpenStack volume `group20-silver` is `/dev/vdb` (100 GB), formatted as ext4 and mounted at `/mnt/silver-data`. This mount is a directory inside the VM filesystem. It holds copied landing, Bronze and Silver data despite its Silver-specific name.
+
+The VM reported about 93 GB available before the copy and second run. Check current capacity with `df`; that earlier figure is not current free space.
+
+| Purpose | Location inside the VM |
+|---|---|
+| Attached volume | `/mnt/silver-data/` |
+| Copied existing pipeline data | `/mnt/silver-data/3w-data/` |
+| Current Silver v2 output root | `/mnt/silver-data/3w-data/silver-v2/` |
+| Second validated v2 run | `/mnt/silver-data/3w-data/silver-v2/runs/20261018T091117552005Z-3280e5d3/` |
+| Spark temporary data | `/mnt/silver-data/spark-tmp/` |
+| Original v2 baseline | `/home/ubuntu/3w-data/silver-v2/runs/20261017T232322182032Z-ba450086/` |
+| Historical v1 output | `/home/ubuntu/3w-data/silver-oh/` (also copied under `/mnt/silver-data/3w-data/silver-oh/`) |
+| Configured production Bronze input | `/home/ubuntu/3w-data/bronze/3w_observations/` |
+| VM comparison log | `/mnt/silver-data/comparison-20261017-vs-20261018.log` |
+
+The copied `3w-data/` contains `_staging/`, `landing/`, `bronze/`, `silver-oh/` and `silver-v2/`. The earlier empty `/mnt/silver-data/silver-v2/` is not the selected output root. Its presence or removal does not change the nested path used here.
+
+## Access from the VM
+
+After connecting through SSH, use normal directory commands:
+
+```bash
+mountpoint /mnt/silver-data
+df -h / /mnt/silver-data
+cd /mnt/silver-data/3w-data/silver-v2
+ls
+ls runs/20261018T091117552005Z-3280e5d3
+```
+
+The last directory contains seven Parquet table folders. For example, observations are at `runs/20261018T091117552005Z-3280e5d3/silver_observations/`. Read the complete table folder with Spark or PyArrow. The [Gold handover](../gold/GOLD_HANDOVER.md#where-the-input-is-and-how-to-work) describes selecting all input paths from one ready marker.
+
+To inspect data and scratch sizes:
+
+```bash
+du -sh /mnt/silver-data/3w-data/*
+du -sh /mnt/silver-data/spark-tmp
+```
+
+## Silver output and Gold input
+
+`conf/prod.yaml` still sets the production storage root to `/home/ubuntu/3w-data`. Copying data does not change the configured Bronze input. Silver selects its volume destination using `--output-root /mnt/silver-data/3w-data/silver-v2`, with both `SPARK_LOCAL_DIRS` and `TMPDIR` pointing to `/mnt/silver-data/spark-tmp`. The [run guide](SILVER_RUN_GUIDE.md) contains the complete launch command.
+
+The second run report confirms successful publication to the volume. Gold should resolve `/mnt/silver-data/3w-data/silver-v2/silver_ready.json` once and use that run's recorded table paths. Its saved snapshot selects `20261018T091117552005Z-3280e5d3`. Reports are in `_runs/`; tables are in `runs/<run_id>/<table_name>/`. Copying an older report or marker does not rewrite its absolute paths, so copied baseline evidence can still refer to the original root disk.
+
+## Persistence
+
+Disconnecting SSH does not unmount the volume or erase its files. Data remains on the volume across a VM reboot; automatic remounting requires the filesystem configuration. The known UUID is `94ea1fc0-7bdf-4495-9222-d115b5cb029a`, with this intended `/etc/fstab` entry:
+
+```text
+UUID=94ea1fc0-7bdf-4495-9222-d115b5cb029a /mnt/silver-data ext4 defaults,nofail 0 2
+```
+
+The supplied evidence confirms the mounted volume and a successful build there. It does not establish that this entry has been installed or a reboot tested. Check for an existing entry, back up `/etc/fstab` before any edit, and validate with `sudo findmnt --verify --verbose`. Do not format this volume again. Check that it is mounted before large writes, especially after a reboot.
+
+## Saved evidence
+
+The repository contains both [v2 run reports, ready-marker snapshots and the comparison log](../evidence/silver/v2/README.md). All seven tables matched in the recorded comparison. These are data-output checks; the mount adds capacity, and no controlled speedup is claimed. Keep Parquet datasets, Spark temporary files, virtual environments and filesystem backups outside Git.
