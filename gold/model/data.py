@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+import numpy as np
 import pandas as pd
 from sklearn.utils.class_weight import compute_sample_weight
 
@@ -33,14 +34,20 @@ def load_gold(path=GOLD_PATH):
     test = df[df["split"] == "test"]
     assert not set(train["recording_id"]) & set(test["recording_id"]), "a recording is in both splits"
 
+    X_train = train[feature_cols].astype("float32")
+    X_test = test[feature_cols].astype("float32")
+    # NaN is allowed (missing data), infinity is not
+    assert not np.isinf(X_train.to_numpy()).any(), "infinite value in train features"
+    assert not np.isinf(X_test.to_numpy()).any(), "infinite value in test features"
+
     y_train = train["label"].astype(int)
 
     return GoldData(
-        X_train=train[feature_cols].astype("float32"),
+        X_train=X_train,
         y_train=y_train,
         w_train=pd.Series(compute_sample_weight("balanced", y_train), index=y_train.index),
         groups_train=train["recording_id"],
-        X_test=test[feature_cols].astype("float32"),
+        X_test=X_test,
         y_test=test["label"].astype(int),
         meta_test=test[["recording_id", "source_type"]],
         feature_cols=feature_cols,

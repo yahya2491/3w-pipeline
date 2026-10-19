@@ -1,4 +1,4 @@
-"""Build the Gold table from Silver: labelled rows, per-sensor complete windows, stride, recording split, class cap.
+"""Build the Gold table from Silver: labelled rows, complete and plausible windows, stride, recording split, class cap.
 
 Usage (on the VM, from the repo root):
     SPARK_LOCAL_DIRS=/mnt/silver-data/spark-tmp PYSPARK_PYTHON=~/venvs/3w/bin/python \
@@ -17,6 +17,7 @@ RARE_LABEL, RARE_STRIDE = 2, 10
 CAP = 200_000
 SEED = 42
 TEST_FRACTION = 0.2
+VALUE_LIMIT = 1e12  # Silver keeps corrupt readings such as -1.18e42 Pa; beyond this a feature counts as missing
 
 obs = spark.read.parquet(SILVER)
 
@@ -31,17 +32,23 @@ df = df.withColumn(
     F.when(F.col("class_code") >= 100, F.col("class_code") - 100).otherwise(F.col("class_code")).cast("int"),
 )
 
-# per-sensor completeness: a sensor's features are null unless its 120-second window is complete
+# per sensor: its features are null unless the 120-second window is complete and no value is beyond VALUE_LIMIT
 feature_cols = []
 for s in sensors:
-    complete = F.col(f"{s}_count_120s") == 120
-    for stat in ["mean_120s", "stddev_120s", "change"]:
-        name = f"{s}_{stat}"
-        df = df.withColumn(name, F.when(complete, F.col(name)))  # null if window incomplete
-        feature_cols.append(name)
+    names = [f"{s}_{stat}" for stat in ["mean_120s", "stddev_120s", "change"]]
 
-# drop rows where no sensor has a complete window
-df = df.filter(F.greatest(*[F.col(f"{s}_count_120s") for s in sensors]) == 120)
+    ok = F.col(f"{s}_count_120s") == 120
+    for name in names:
+        # a null value counts as fine here, otherwise one null would wipe the other two
+        ok = ok & F.coalesce(F.abs(F.col(name)) <= VALUE_LIMIT, F.lit(True))
+
+    # withColumns replaces all three at once, so ok is checked against the original values;
+    # one withColumn at a time would check the second and third against an already-nulled mean
+    df = df.withColumns({name: F.when(ok, F.col(name)) for name in names})
+    feature_cols += names
+
+# drop rows where every feature is null
+df = df.filter(F.coalesce(*[F.col(c) for c in feature_cols]).isNotNull())
 
 # stride: every 60th row, every 10th for the rare class
 stride = F.when(F.col("label") == RARE_LABEL, RARE_STRIDE).otherwise(STRIDE)
