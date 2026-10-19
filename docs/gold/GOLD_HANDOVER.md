@@ -110,7 +110,23 @@ Use `instance_quality` and `sensor_availability` to assess recordings, and `qual
 
 The removed derived columns do not remove source measurements. Gold can calculate the earlier 300-second means, short-versus-long trends, deviations from prior readings, and production-choke pressure differences from the saved clean readings. Preserve recording and sequence boundaries and use current/past values when deriving temporal features. Validity indicators can be derived from original values and the saved rules; usable indicators can be derived from clean values. The existing 120-second counts also support coverage calculations. Some earlier fields overlap with current features: during an uninterrupted one-second sequence, the per-second rate equals the existing previous-reading change. Additional features remain candidates whose model benefit needs evaluation; the full VM validation establishes the saved data's conformity to Silver's implemented rules.
 
-Split whole recordings into training and held-out test sets before fitting preprocessing or models; never put windows from one recording in both sets. Withhold test labels from all predictors and training, then compare predictions to the saved true labels. Report a confusion matrix, per-event precision and recall, macro F1 and test support so rare events are visible. All real recordings have missing row-level classes, so they cannot provide supervised training or verified test labels; score them separately as unverified inference if useful. An event with no labelled examples in the held-out test split has no measured test score. This evaluates detection at the window endpoint, not prediction before an event begins.
+Split whole recordings into training and held-out test sets before fitting preprocessing or models; never put windows from one recording in both sets. Withhold test labels from all predictors and training, then compare predictions to the saved true labels. Report a confusion matrix, per-event precision and recall, macro F1 and test support so rare events are visible. Real recordings provide labelled examples too; see [Labels in real recordings](#labels-in-real-recordings). An event with no labelled examples in the held-out test split has no measured test score. This evaluates detection at the window endpoint, not prediction before an event begins.
+
+### Labels in real recordings
+
+Real recordings can be used for training and testing. Each of the 1,119 real recordings has some rows without a class, but none is entirely unlabelled: 28,843,850 of the 32,872,250 real rows (87.75%) have a class. All simulated and drawn rows have a class.
+
+Leaving real data out would remove these labelled rows:
+
+| Row class | Real | Simulated | Drawn |
+|---|---:|---:|---:|
+| 0 (normal) | 14,570,142 | 2,381,896 | 353,231 |
+| 4 (no 104 rows exist) | 2,454,883 | 0 | 0 |
+| 7 and 107 | 6,700,921 | 0 | 2,151,707 |
+
+Event 4 appears only in real data. Class 0 appears in every source, but real recordings hold about 84% of the normal rows, and the only ones from real wells. Without real data, event 7 would come from the 10 drawn recordings alone. Counts are from `silver_observations` and `instance_quality` in run `20261018T091117552005Z-3280e5d3`.
+
+Proposed: rows with no class stay in Silver but are excluded from Gold training and evaluation, as are inconsistent classes. Keep each recording in either the training or the test split, never both; consider grouping real recordings by well. To be confirmed in the Gold design.
 
 Four sensor columns have no finite readings anywhere in these full runs: `service_pump_downstream_pressure_pa`, `production_shutdown_valve_upstream_pressure_pa`, `subsea_production_line_pressure_pa`, and `service_pump_flow_rate_m3_s`. Other sensors have different coverage across recordings. Check availability before choosing inputs.
 
@@ -173,7 +189,7 @@ ls runs/20261018T091117552005Z-3280e5d3
 
 The final command lists the seven table folders. For example, the current observations are at `/mnt/silver-data/3w-data/silver-v2/runs/20261018T091117552005Z-3280e5d3/silver_observations/`. These are Parquet datasets; read the entire selected table folder with Spark, rather than choosing one part file.
 
-Read `/mnt/silver-data/3w-data/silver-v2/silver_ready.json` once at the beginning of Gold. The [saved second-run marker](../evidence/silver/v2/prod_run2/silver_ready.json) selects `20261018T091117552005Z-3280e5d3`, has contract version 2, and records successful reconciliation. Its linked [report](../evidence/silver/v2/prod_run2/silver_run_2_,metrics.json) records `SUCCESS` and `published: true`. Use its `tables[<name>]["path"]` values throughout the Gold run. If the live marker later selects a newer run, validate that selection before using it. Do not read the whole `runs` directory or combine tables from different Silver runs. The configured default Silver path is `silver/`; it does not automatically change to this explicit volume output root.
+Read `/mnt/silver-data/3w-data/silver-v2/silver_ready.json` once at the beginning of Gold. The [saved second-run marker](../evidence/silver/v2/prod_run2/silver_ready.json) selects `20261018T091117552005Z-3280e5d3`, has contract version 2, and records successful reconciliation. Its linked [report](../evidence/silver/v2/prod_run2/silver_run_2_metrics.json) records `SUCCESS` and `published: true`. Use its `tables[<name>]["path"]` values throughout the Gold run. If the live marker later selects a newer run, validate that selection before using it. Do not read the whole `runs` directory or combine tables from different Silver runs. The configured default Silver path is `silver/`; it does not automatically change to this explicit volume output root.
 
 The attached 100 GB `/dev/vdb` volume is mounted at `/mnt/silver-data`; the original approximately 40 GB `/dev/vda` contains `/home/ubuntu/`. The volume's name does not restrict it to Silver data. Existing pipeline files were copied under `/mnt/silver-data/3w-data/`, and the second build wrote new output there. Copying does not rewrite absolute paths inside old reports or markers, so the copied first-run marker can still point to `/home/ubuntu/3w-data/`. Use the saved second run or its verified current marker when selecting volume input.
 
@@ -192,66 +208,3 @@ Use small offline test inputs with known expected results. Check that quality ma
 Record the selected Silver run ID, source, reference version, chosen inputs, inclusion rules, and output counts. Check repeated results by their contents, not just equal counts. Work on a short-lived branch and use a PR with the repo's lint/test checks.
 
 Gold still needs its own runner, storage configuration, and agreed output definitions. The [Silver contract](../silver/SILVER_CONTRACT.md) defines the saved fields; the [milestone report](../silver/SILVER_MILESTONE_REPORT.md) records validation.
-
-# VM storage for Silver and Gold
-
-## Mounted volume and paths
-
-The UiS OpenStack VM is `group20`, running Ubuntu 24.04 as `ubuntu`. Its original disk is `/dev/vda` (about 40 GB). The attached OpenStack volume `group20-silver` is `/dev/vdb` (100 GB), formatted as ext4 and mounted at `/mnt/silver-data`. This mount is a directory inside the VM filesystem. It holds copied landing, Bronze and Silver data despite its Silver-specific name.
-
-The VM reported about 93 GB available before the copy and second run. Check current capacity with `df`; that earlier figure is not current free space.
-
-| Purpose | Location inside the VM |
-|---|---|
-| Attached volume | `/mnt/silver-data/` |
-| Copied existing pipeline data | `/mnt/silver-data/3w-data/` |
-| Current Silver v2 output root | `/mnt/silver-data/3w-data/silver-v2/` |
-| Second validated v2 run | `/mnt/silver-data/3w-data/silver-v2/runs/20261018T091117552005Z-3280e5d3/` |
-| Spark temporary data | `/mnt/silver-data/spark-tmp/` |
-| Original v2 baseline | `/home/ubuntu/3w-data/silver-v2/runs/20261017T232322182032Z-ba450086/` |
-| Historical v1 output | `/home/ubuntu/3w-data/silver-oh/` (also copied under `/mnt/silver-data/3w-data/silver-oh/`) |
-| Configured production Bronze input | `/home/ubuntu/3w-data/bronze/3w_observations/` |
-| VM comparison log | `/mnt/silver-data/comparison-20261017-vs-20261018.log` |
-
-The copied `3w-data/` contains `_staging/`, `landing/`, `bronze/`, `silver-oh/` and `silver-v2/`. The earlier empty `/mnt/silver-data/silver-v2/` is not the selected output root. Its presence or removal does not change the nested path used here.
-
-## Access from the VM
-
-After connecting through SSH, use normal directory commands:
-
-```bash
-mountpoint /mnt/silver-data
-df -h / /mnt/silver-data
-cd /mnt/silver-data/3w-data/silver-v2
-ls
-ls runs/20261018T091117552005Z-3280e5d3
-```
-
-The last directory contains seven Parquet table folders. For example, observations are at `runs/20261018T091117552005Z-3280e5d3/silver_observations/`. Read the complete table folder with Spark or PyArrow. The [Gold handover](../gold/GOLD_HANDOVER.md#where-the-input-is-and-how-to-work) describes selecting all input paths from one ready marker.
-
-To inspect data and scratch sizes:
-
-```bash
-du -sh /mnt/silver-data/3w-data/*
-du -sh /mnt/silver-data/spark-tmp
-```
-
-## Silver output and Gold input
-
-`conf/prod.yaml` still sets the production storage root to `/home/ubuntu/3w-data`. Copying data does not change the configured Bronze input. Silver selects its volume destination using `--output-root /mnt/silver-data/3w-data/silver-v2`, with both `SPARK_LOCAL_DIRS` and `TMPDIR` pointing to `/mnt/silver-data/spark-tmp`. The [run guide](SILVER_RUN_GUIDE.md) contains the complete launch command.
-
-The second run report confirms successful publication to the volume. Gold should resolve `/mnt/silver-data/3w-data/silver-v2/silver_ready.json` once and use that run's recorded table paths. Its saved snapshot selects `20261018T091117552005Z-3280e5d3`. Reports are in `_runs/`; tables are in `runs/<run_id>/<table_name>/`. Copying an older report or marker does not rewrite its absolute paths, so copied baseline evidence can still refer to the original root disk.
-
-## Persistence
-
-Disconnecting SSH does not unmount the volume or erase its files. Data remains on the volume across a VM reboot; automatic remounting requires the filesystem configuration. The known UUID is `94ea1fc0-7bdf-4495-9222-d115b5cb029a`, with this intended `/etc/fstab` entry:
-
-```text
-UUID=94ea1fc0-7bdf-4495-9222-d115b5cb029a /mnt/silver-data ext4 defaults,nofail 0 2
-```
-
-The supplied evidence confirms the mounted volume and a successful build there. It does not establish that this entry has been installed or a reboot tested. Check for an existing entry, back up `/etc/fstab` before any edit, and validate with `sudo findmnt --verify --verbose`. Do not format this volume again. Check that it is mounted before large writes, especially after a reboot.
-
-## Saved evidence
-
-The repository contains both [v2 run reports, ready-marker snapshots and the comparison log](../evidence/silver/v2/README.md). All seven tables matched in the recorded comparison. These are data-output checks; the mount adds capacity, and no controlled speedup is claimed. Keep Parquet datasets, Spark temporary files, virtual environments and filesystem backups outside Git.
