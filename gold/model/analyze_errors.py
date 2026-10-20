@@ -39,3 +39,15 @@ for label in [0, 8]:
     err = p[(p["y_true"] == label) & ~p["correct"]]
     share = err["recording_id"].value_counts().head(3).sum() / len(err)
     print(f"\nlabel {label}: {len(err)} wrong rows, the 3 worst recordings hold {share:.0%} of them")
+
+# 5. false alarms on normal rows: in normal recordings vs before a fault in event recordings
+n = p[p["y_true"] == 0].copy()
+n["kind"] = n["recording_event"].eq(0).map({True: "normal recording", False: "pre-fault"})
+n["alarm"] = n["y_pred"] != 0
+n["own_event"] = n["y_pred"] == n["recording_event"]
+
+pre = n.groupby(["source_type", "kind"]).agg(rows=("alarm", "size"), false_alarm=("alarm", "mean"))
+pre["alarms_as_own_event"] = n[n["alarm"]].groupby(["source_type", "kind"])["own_event"].mean()
+pre = pre.round(3)
+pre.to_csv(os.path.join(out, "errors_prefault.csv"))
+print("\nfalse alarms on normal rows:\n", pre.to_string())
