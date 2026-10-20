@@ -57,7 +57,11 @@ evaluate(
     model.predict(d.X_test),
     d.meta_test,
     extra={
-        "best_params": {"max_depth": best_depth, "n_estimators": n_trees, **{k: v for k, v in COMMON.items() if k != "n_jobs"}},
+        "best_params": {
+            "max_depth": best_depth,
+            "n_estimators": n_trees,
+            **{k: v for k, v in COMMON.items() if k != "n_jobs"},
+        },
         "tuning": {str(k): v for k, v in tuning.items()},
         "tune_seconds": tune_s,
         "fit_seconds": fit_s,
