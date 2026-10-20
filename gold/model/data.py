@@ -15,7 +15,7 @@ class GoldData:
     groups_train: pd.Series  # recording_id, for grouped cross-validation later
     X_test: pd.DataFrame
     y_test: pd.Series
-    meta_test: pd.DataFrame  # recording_id and source_type, for per-source results
+    meta_test: pd.DataFrame  # recording_id, source_type, well_id, recording_event: for error analysis
     feature_cols: list
 
 
@@ -49,6 +49,6 @@ def load_gold(path=GOLD_PATH):
         groups_train=train["recording_id"],
         X_test=X_test,
         y_test=test["label"].astype(int),
-        meta_test=test[["recording_id", "source_type"]],
+        meta_test=test[["recording_id", "source_type", "well_id", "recording_event"]],
         feature_cols=feature_cols,
     )

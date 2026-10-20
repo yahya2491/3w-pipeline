@@ -1,5 +1,6 @@
 import json
 import os
+import subprocess
 
 import numpy as np
 import pandas as pd
@@ -50,6 +51,18 @@ def evaluate(model_name, y_true, y_pred, meta, extra=None):
         ),
         **(extra or {}),
     }
+    try:
+        commit = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], text=True).strip()
+    except (OSError, subprocess.CalledProcessError):  # git not installed, or not run inside a git checkout
+        commit = "unknown"
+    metrics["git_commit"] = commit
+
+    # row-level predictions for error analysis; output data, not committed (*.parquet is in .gitignore)
+    preds = meta.copy()
+    preds["y_true"] = y_true
+    preds["y_pred"] = y_pred
+    preds.to_parquet(os.path.join(out, "predictions.parquet"), index=False)
+
     with open(os.path.join(out, "metrics.json"), "w") as f:
         json.dump(metrics, f, indent=2, default=float)
 
