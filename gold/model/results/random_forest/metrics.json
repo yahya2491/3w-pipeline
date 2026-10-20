@@ -94,7 +94,8 @@
     "{'max_features': 0.5, 'min_samples_leaf': 20}": 0.9095496702139713,
     "{'max_features': 0.5, 'min_samples_leaf': 50}": 0.9092754576093
   },
-  "tune_seconds": 511.37762093544006,
-  "fit_seconds": 80.86085963249207,
-  "sklearn_version": "1.9.1"
+  "tune_seconds": 511.3503613471985,
+  "fit_seconds": 80.94339108467102,
+  "sklearn_version": "1.9.1",
+  "git_commit": "f360354"
 }
