@@ -62,6 +62,14 @@ and workflow_dispatch require the workflow to exist on the default branch:
 No production workflow is started from silver-v3. Existing runner/environment
 protections remain in effect. This change does not provision a new VM runner.
 
+Every Silver job fetches the latest main branch from GitHub when checkout starts,
+cleans the runner workspace, and rebuilds its locked environment from that checkout.
+It verifies HEAD against the fetched origin/main and records the actual source
+commit in the Actions job summary and out/git-revision.txt artifact. Checkout or
+revision-check failures stop the build. This also applies to queued and retried
+jobs. The code stays fixed for the duration of a build; later merges are picked
+up by a subsequent job.
+
 The job checks that /mnt/silver-data is mounted, uses a per-job scratch directory, installs requirements.lock, and invokes:
 
     python -u -m threew.silver.run --env prod --output-root /mnt/silver-data/silver-schedule --skip-unchanged --min-free-gib 20 --report-copy out/

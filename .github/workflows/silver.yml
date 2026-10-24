@@ -42,9 +42,12 @@ jobs:
       FORCE_REBUILD: ${{ inputs.force || false }}
       SILVER_BATCH_ROWS: ${{ inputs.batch_rows || '1000000' }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Fetch the latest main from GitHub
+        uses: actions/checkout@v4
         with:
-          ref: main # Always trusted merged code, never an upstream PR/artifact.
+          ref: main # Fetch the branch at job start, including for queued/retried runs.
+          clean: true # Remove old tracked/untracked runtime files before checkout.
+          fetch-depth: 1
           persist-credentials: false
 
       - name: Check the VM volume and prepare scratch
@@ -52,6 +55,13 @@ jobs:
           mountpoint -q /mnt/silver-data
           mkdir -p "$SPARK_LOCAL_DIRS" out
           echo "TMPDIR=$SPARK_LOCAL_DIRS" >> "$GITHUB_ENV"
+
+      - name: Record the checked-out source revision
+        run: |
+          revision=$(git rev-parse HEAD)
+          test "$revision" = "$(git rev-parse refs/remotes/origin/main)"
+          printf '%s\n' "$revision" > out/git-revision.txt
+          echo "Silver source commit: $revision" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Build the locked Python environment
         run: |
