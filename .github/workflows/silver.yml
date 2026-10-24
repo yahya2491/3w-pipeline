@@ -37,7 +37,7 @@ jobs:
     timeout-minutes: 720 # The historical full build took just over six hours.
     env:
       PYTHONUNBUFFERED: "1"
-      SILVER_ROOT: /mnt/silver-data/3w-data/silver-v3
+      SILVER_ROOT: /mnt/silver-data/silver-schedule
       SPARK_LOCAL_DIRS: /mnt/silver-data/spark-tmp/silver-${{ github.run_id }}-${{ github.run_attempt }}
       FORCE_REBUILD: ${{ inputs.force || false }}
       SILVER_BATCH_ROWS: ${{ inputs.batch_rows || '1000000' }}

@@ -1,7 +1,7 @@
 """Build Gold from the current validated clean-only Silver publication.
 
 Run on the VM with the locked pipeline environment:
-    python gold/build_gold_table.py --silver-root /mnt/silver-data/3w-data/silver-v3
+    python gold/build_gold_table.py --silver-root /mnt/silver-data/silver-schedule
 """
 
 import argparse
@@ -13,7 +13,7 @@ from pyspark.sql import functions as F
 
 from threew.silver.output import CONTRACT_VERSION
 
-SILVER_ROOT = Path("/mnt/silver-data/3w-data/silver-v3")
+SILVER_ROOT = Path("/mnt/silver-data/silver-schedule")
 GOLD = "/mnt/silver-data/gold/gold_table"
 STRIDE = 60
 RARE_LABEL, RARE_STRIDE = 2, 10

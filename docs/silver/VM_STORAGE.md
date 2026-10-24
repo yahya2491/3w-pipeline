@@ -10,7 +10,8 @@ The VM reported about 93 GB available before the copy and second run. Check curr
 |---|---|
 | Attached volume | `/mnt/silver-data/` |
 | Copied existing pipeline data | `/mnt/silver-data/3w-data/` |
-| Current Silver v2 output root | `/mnt/silver-data/3w-data/silver-v2/` |
+| Scheduled Silver output root | `/mnt/silver-data/silver-schedule/` |
+| Historical Silver output root | `/mnt/silver-data/3w-data/silver-v2/` |
 | Second validated v2 run | `/mnt/silver-data/3w-data/silver-v2/runs/20261018T091117552005Z-3280e5d3/` |
 | Spark temporary data | `/mnt/silver-data/spark-tmp/` |
 | Original v2 baseline | `/home/ubuntu/3w-data/silver-v2/runs/20261017T232322182032Z-ba450086/` |
@@ -43,9 +44,47 @@ du -sh /mnt/silver-data/spark-tmp
 
 ## Silver output and Gold input
 
-`conf/prod.yaml` still sets the production storage root to `/home/ubuntu/3w-data`. Copying data does not change the configured Bronze input. Silver selects its volume destination using `--output-root /mnt/silver-data/3w-data/silver-v2`, with both `SPARK_LOCAL_DIRS` and `TMPDIR` pointing to `/mnt/silver-data/spark-tmp`. The [run guide](SILVER_RUN_GUIDE.md) contains the complete launch command.
+`conf/prod.yaml` keeps the production storage root at `/home/ubuntu/3w-data`.
+Bronze's workflow and its landing files, manifests, reports and converted data
+remain unchanged. Silver consumes `/home/ubuntu/3w-data/bronze/bronze_ready.json`
+and uses the explicit destination `--output-root /mnt/silver-data/silver-schedule`.
+Gold defaults to this Silver root. The scheduled Silver job places
+`SPARK_LOCAL_DIRS` and `TMPDIR` in its own job directory under
+`/mnt/silver-data/spark-tmp` and fails if the volume is not mounted.
 
-The second run report confirms successful publication to the volume. Gold should resolve `/mnt/silver-data/3w-data/silver-v2/silver_ready.json` once and use that run's recorded table paths. Its saved snapshot selects `20261018T091117552005Z-3280e5d3`. Reports are in `_runs/`; tables are in `runs/<run_id>/<table_name>/`. Copying an older report or marker does not rewrite its absolute paths, so copied baseline evidence can still refer to the original root disk.
+The Silver destination becomes active after merging to main through a PR.
+Dispatch Silver manually or wait for the next successful Bronze or CI run to
+populate it. The existing Bronze publication can be reused; no new Bronze root
+is needed. Existing data under `/mnt/silver-data/3w-data/` is not automatically
+moved or deleted. The [run guide](SILVER_RUN_GUIDE.md) contains the launch commands.
+
+For the historical 106-column baseline, the second run report confirms successful publication to the volume. Its saved input marker is `/mnt/silver-data/3w-data/silver-v2/silver_ready.json`; use that run's recorded table paths. Its saved snapshot selects `20261018T091117552005Z-3280e5d3`. Reports are in `_runs/`; tables are in `runs/<run_id>/<table_name>/`. Copying an older report or marker does not rewrite its absolute paths, so copied baseline evidence can still refer to the original root disk.
+
+## Cleanup after the scheduled builds are validated
+
+Do not erase or format the mount. Keep at least one validated historical Silver
+run and its evidence until the replacement Silver publication has
+passed its checks and downstream readers have switched to the new marker.
+Preserve `/mnt/silver-data/gold/` and any model/results folders still in use.
+
+After checking actual disk usage and reader references, cleanup candidates are
+old duplicate landing/Bronze copies under `3w-data/`, surplus historical Silver
+run directories, and abandoned staging or Spark scratch directories. Remove
+scratch only when its job has stopped; do not delete a whole scratch root while
+any pipeline is running. The previously empty top-level `silver-v2/` is removable
+only if it is still empty. Reports and copied markers may reference old absolute
+paths, so inspect them before removing the corresponding data.
+
+The Silver workflow removes only its own scratch. Weekly Bronze reuses its manifest;
+Silver skips unchanged verified output. New or forced Silver builds retain
+separate outputs, so these changes do not establish automatic data retention.
+To inventory the mount without changing it:
+
+```bash
+mountpoint /mnt/silver-data
+df -h /mnt/silver-data
+du -h --max-depth=2 /mnt/silver-data | sort -h
+```
 
 ## Persistence
 

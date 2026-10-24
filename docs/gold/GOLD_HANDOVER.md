@@ -6,7 +6,7 @@ This explains the saved Silver inputs and the assumptions behind future Silver b
 
 New Silver builds have **79 columns**, including only clean sensor values and
 class_code_clean with class_was_inferred. Source readings remain in Bronze.
-The Gold builder resolves the ready marker under /mnt/silver-data/3w-data/silver-v3
+The Gold builder resolves the ready marker under /mnt/silver-data/silver-schedule
 and reads clean targets. It keeps inferred classes for training and excludes
 them from held-out evaluation. The inference flag is never a predictor. The
 saved full VM baseline below has 106 columns and is unchanged; publish a new
@@ -231,7 +231,7 @@ The attached 100 GB `/dev/vdb` volume is mounted at `/mnt/silver-data`; the orig
 
 SSH logout leaves the mount and its files available. Data persists on the volume; automatic mounting after a VM reboot depends on `/etc/fstab`. The supplied evidence has not confirmed that configuration or a reboot test. Check `mountpoint` before writes after a restart; see [VM storage](../silver/VM_STORAGE.md) for the UUID and layout.
 
-`conf/prod.yaml` still reads Bronze from `/home/ubuntu/3w-data/`; `--output-root` changes only the Silver destination. Gold should use the selected Silver ready marker rather than deriving its input root from this Bronze configuration. See [VM storage](../silver/VM_STORAGE.md) for the volume layout, persistence and evidence locations.
+`conf/prod.yaml` continues to read Bronze from `/home/ubuntu/3w-data/bronze/3w_observations/`. Scheduled Silver publishes under `/mnt/silver-data/silver-schedule/`, which is also the Gold builder's default input root. The new Silver destination takes effect on the VM after merging to main and running the workflow. Gold resolves the selected Silver ready marker rather than deriving its input root from the Bronze configuration. See [VM storage](../silver/VM_STORAGE.md) for the volume layout, persistence and evidence locations.
 
 Earlier v2 builds used different column sets. Check that the required feature columns are
 present in the 106-column table, and that the saved rules describe the 120-second history;

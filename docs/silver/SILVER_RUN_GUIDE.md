@@ -22,7 +22,7 @@ The sample contains 30 recordings and 1,931,052 observations. To inspect Bronze 
 
 The [two recorded 106-column VM runs](../evidence/silver/v2/README.md) each passed all 32 checks over 2,228 recordings and 76,587,318 observations. Each published 10.53 GB of Parquet across seven tables; runtimes were 6 h 10 min 25 s and 6 h 5 min 32 s. Their [saved comparison log](../evidence/silver/v2/comparison.log) reports matching schemas and complete contents for all seven tables. Each new run retains its own complete output copy; allow additional space for Spark temporary data.
 
-The attached volume is mounted at `/mnt/silver-data`; [VM storage](VM_STORAGE.md) describes the layout. Run one job at a time and reuse the existing production Bronze table. For a reproducibility pair, keep the same commit, clean working tree, dependencies, input, rules and configuration; do not pull or change batch size between the two runs. Production deployment remains restricted to `main`; feature changes reach it through pull requests.
+The attached volume is mounted at `/mnt/silver-data`; [VM storage](VM_STORAGE.md) describes the layout. Run one job at a time and reuse the existing production Bronze table under `/home/ubuntu/3w-data/`. For a reproducibility pair, keep the same commit, clean working tree, dependencies, input, rules and configuration; do not pull or change batch size between the two runs. Production deployment remains restricted to `main`; feature changes reach it through pull requests.
 
 ```bash
 cd ~/3w-pipeline
@@ -34,10 +34,10 @@ SPARK_LOCAL_DIRS=/mnt/silver-data/spark-tmp \
 TMPDIR=/mnt/silver-data/spark-tmp \
 python -u -m threew.silver.run \
   --env prod \
-  --output-root /mnt/silver-data/3w-data/silver-v3
+  --output-root /mnt/silver-data/silver-schedule
 ```
 
-Run the build only after `mountpoint` confirms the volume is mounted. This foreground command requires the SSH session to stay connected. The original baseline remains under `/home/ubuntu/3w-data/silver-v2/`; each new attempt gets its own run directory on the volume. The `--output-root` override leaves the configured Bronze input path unchanged.
+Run the build only after `mountpoint` confirms the volume is mounted. This foreground command requires the SSH session to stay connected. The original baseline remains under `/home/ubuntu/3w-data/silver-v2/`; each new attempt gets its own run directory on the volume. Silver reads the ready marker at `/home/ubuntu/3w-data/bronze/bronze_ready.json`; its output root is separate from that Bronze storage root.
 
 ## Automated VM builds
 
@@ -45,7 +45,16 @@ Run the build only after `mountpoint` confirms the volume is mounted. This foreg
 only trusted main code on the self-hosted uis-openstack runner in the production
 environment, after successful Bronze or CI runs on main. Manual dispatch has a
 force option and a batch-row target. The normal weekly cadence comes from the
-Bronze schedule; no separate competing Silver cron is needed.
+Bronze schedule: Mondays at 03:17 UTC; no separate competing Silver cron is needed.
+Bronze's workflow and storage remain unchanged under /home/ubuntu/3w-data.
+Silver reads that existing Bronze ready marker and publishes under
+/mnt/silver-data/silver-schedule. The Silver job requires the volume to be mounted
+and uses its own temporary directory under /mnt/silver-data/spark-tmp.
+
+After merging to main, manually dispatch Silver to populate the new output root,
+or let the next successful Bronze or CI run trigger it. No new Bronze build or
+copy is required when its existing ready marker is valid. An empty Silver output
+folder is sufficient; the Silver runner creates its own run and report directories.
 
 The workflow must first be merged into main through a PR. GitHub workflow_run
 and workflow_dispatch require the workflow to exist on the default branch:
@@ -55,7 +64,7 @@ protections remain in effect. This change does not provision a new VM runner.
 
 The job checks that /mnt/silver-data is mounted, uses a per-job scratch directory, installs requirements.lock, and invokes:
 
-    python -u -m threew.silver.run --env prod --output-root /mnt/silver-data/3w-data/silver-v3 --skip-unchanged --min-free-gib 20 --report-copy out/
+    python -u -m threew.silver.run --env prod --output-root /mnt/silver-data/silver-schedule --skip-unchanged --min-free-gib 20 --report-copy out/
 
 A 12-hour self-hosted job timeout accommodates the historical six-hour builds.
 Concurrency never cancels an active Silver build. Pipeline locks also protect
@@ -102,7 +111,7 @@ python - <<'PY'
 import json
 from pathlib import Path
 
-root = Path("/mnt/silver-data/3w-data/silver-v3")
+root = Path("/mnt/silver-data/silver-schedule")
 ready = json.loads((root / "silver_ready.json").read_text())
 report_path = Path(ready["report"])
 print("Run:", ready["run_id"])

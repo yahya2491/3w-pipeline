@@ -2,7 +2,7 @@
 
 Usage:
     python -m threew.silver.run --env dev
-    python -m threew.silver.run --env prod --output-root /mnt/silver-data/3w-data/silver-v3
+    python -m threew.silver.run --env prod --output-root /mnt/silver-data/silver-schedule
 """
 
 import argparse
