@@ -1,0 +1,111 @@
+{
+  "review_date": "2026-10-24",
+  "scope": "Cached class-only source prefixes: every originally missing class and its first known source anchor. This is a component benchmark, not a full Silver rebuild or an overall-runtime forecast.",
+  "checked_rows": 4029519,
+  "inferred_rows": 4028400,
+  "changed_observed_labels": 0,
+  "inferred_rows_by_class": {
+    "4": 1234800,
+    "0": 2678400,
+    "3": 115200
+  },
+  "timings": [
+    {
+      "method": "window_before_cleanup",
+      "seconds": 5.4106
+    },
+    {
+      "method": "aggregate_broadcast",
+      "seconds": 3.625
+    },
+    {
+      "method": "aggregate_broadcast",
+      "seconds": 2.3688
+    },
+    {
+      "method": "window_before_cleanup",
+      "seconds": 2.9259
+    }
+  ],
+  "median_seconds": {
+    "window_before_cleanup": 4.16825,
+    "aggregate_broadcast": 2.9969
+  },
+  "execution": {
+    "cores": 2,
+    "shuffle_partitions": 4,
+    "input_cached": true,
+    "measurement_order": "old,new,new,old"
+  },
+  "optimized_implementation_sha256": "d8c94dfbfa594d29d80f4b7b6ad3c008242fd3c4a41bcd995ec46dbc1bfaaf70",
+  "previous_implementation_sha256": "f545f3f7aa80013e91200ad276487c3110dc8195fac523ce45c52639a4380b19",
+  "quality_rules": {
+    "version": 1,
+    "sha256": "603c362a1c26a4a054ad0bce37ef6b924932b41b40dbbed631bcd4349db4a334",
+    "resolved": {
+      "version": 1,
+      "opening_min_pct": 0.0,
+      "opening_max_pct": 100.0,
+      "valve_states": [
+        0.0,
+        0.5,
+        1.0
+      ],
+      "choke_forward_fill_max_seconds": 360,
+      "expected_interval_seconds": 1,
+      "feature_window_seconds": 120,
+      "feature_sensors": [
+        "downhole_pdg_pressure_pa",
+        "subsea_tree_tpt_pressure_pa",
+        "production_choke_upstream_pressure_pa",
+        "gas_lift_choke_downstream_pressure_pa",
+        "subsea_tree_tpt_temperature_c",
+        "production_choke_downstream_temperature_c",
+        "gas_lift_flow_rate_m3_s"
+      ],
+      "missing_classes": "backfill_leading"
+    }
+  },
+  "limitations": [
+    "Class-only cached timings omit full sensor processing, IO, writing and reconciliation.",
+    "Two measurements per method provide an indication, not a stable production benchmark.",
+    "Known-answer checks and per-class totals establish inference consistency here; label truth remains assumed."
+  ],
+  "cleanup": {
+    "removed_audit_helpers_and_tests": [
+      {
+        "path": "src/threew/silver/repair_review.py",
+        "bytes": 12246
+      },
+      {
+        "path": "src/threew/silver/repair_evaluation.py",
+        "bytes": 7039
+      },
+      {
+        "path": "tests/test_repair_review.py",
+        "bytes": 3971
+      },
+      {
+        "path": "tests/test_repair_evaluation.py",
+        "bytes": 2958
+      }
+    ],
+    "removed_temporary_directory": "data/repair-review",
+    "temporary_bytes_removed": 1933797576,
+    "removed_audit_bytecode": [
+      "src/threew/silver/__pycache__/repair_evaluation.cpython-311.pyc",
+      "src/threew/silver/__pycache__/repair_review.cpython-311.pyc",
+      "tests/__pycache__/test_repair_review.cpython-311-pytest-9.1.1.pyc",
+      "tests/__pycache__/test_repair_evaluation.cpython-311-pytest-9.1.1.pyc"
+    ],
+    "retained": "Production label inference, choke-repair regressions, publication tests and compact evidence reports."
+  },
+  "regression_tests": {
+    "command": "HF_HUB_OFFLINE=1 .venv/bin/pytest -q tests/test_silver_labels.py tests/test_silver_prepare.py tests/test_silver_run.py::test_run_silver_reconciles_all_outputs_and_repeat_run_is_identical",
+    "passed": 21,
+    "failed": 0,
+    "duration_seconds": 153.17
+  },
+  "lint_passed": true,
+  "formatting_passed": true
+}

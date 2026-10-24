@@ -1,0 +1,405 @@
+{
+  "method": "Count finite out-of-range original openings reachable from earlier original valid openings in the same one-second sequence segment.",
+  "limitations": "Eligibility measures estimation coverage only. It does not establish reconstruction accuracy. No original or published Silver data is modified.",
+  "totals": {
+    "recordings": 2228,
+    "observations": 76587318,
+    "original_null": 64260860,
+    "original_nonfinite": 0,
+    "original_valid": 12164586,
+    "invalid_openings": 161872,
+    "above_100": 334,
+    "below_zero": 161538
+  },
+  "invalid_by_source_type": {
+    "REAL": 161872
+  },
+  "invalid_values": [
+    {
+      "value": -99.99,
+      "readings": 161538
+    },
+    {
+      "value": 100.4375,
+      "readings": 226
+    },
+    {
+      "value": 100.375,
+      "readings": 25
+    },
+    {
+      "value": 100.4374,
+      "readings": 17
+    },
+    {
+      "value": 100.3749,
+      "readings": 5
+    },
+    {
+      "value": 100.198,
+      "readings": 1
+    },
+    {
+      "value": 100.2532,
+      "readings": 1
+    },
+    {
+      "value": 100.2574,
+      "readings": 1
+    },
+    {
+      "value": 100.2616,
+      "readings": 1
+    },
+    {
+      "value": 100.2657,
+      "readings": 1
+    },
+    {
+      "value": 100.2699,
+      "readings": 1
+    },
+    {
+      "value": 100.2741,
+      "readings": 1
+    },
+    {
+      "value": 100.2783,
+      "readings": 1
+    },
+    {
+      "value": 100.2824,
+      "readings": 1
+    },
+    {
+      "value": 100.2866,
+      "readings": 1
+    },
+    {
+      "value": 100.2908,
+      "readings": 1
+    },
+    {
+      "value": 100.2949,
+      "readings": 1
+    },
+    {
+      "value": 100.2991,
+      "readings": 1
+    },
+    {
+      "value": 100.3033,
+      "readings": 1
+    },
+    {
+      "value": 100.3074,
+      "readings": 1
+    },
+    {
+      "value": 100.3116,
+      "readings": 1
+    },
+    {
+      "value": 100.3158,
+      "readings": 1
+    },
+    {
+      "value": 100.3199,
+      "readings": 1
+    },
+    {
+      "value": 100.3241,
+      "readings": 1
+    },
+    {
+      "value": 100.3283,
+      "readings": 1
+    },
+    {
+      "value": 100.3325,
+      "readings": 1
+    },
+    {
+      "value": 100.3366,
+      "readings": 1
+    },
+    {
+      "value": 100.3408,
+      "readings": 1
+    },
+    {
+      "value": 100.345,
+      "readings": 1
+    },
+    {
+      "value": 100.3491,
+      "readings": 1
+    },
+    {
+      "value": 100.3533,
+      "readings": 1
+    },
+    {
+      "value": 100.3575,
+      "readings": 1
+    },
+    {
+      "value": 100.3616,
+      "readings": 1
+    },
+    {
+      "value": 100.3658,
+      "readings": 1
+    },
+    {
+      "value": 100.37,
+      "readings": 1
+    },
+    {
+      "value": 100.3742,
+      "readings": 1
+    },
+    {
+      "value": 100.3768,
+      "readings": 1
+    },
+    {
+      "value": 100.3788,
+      "readings": 1
+    },
+    {
+      "value": 100.3809,
+      "readings": 1
+    },
+    {
+      "value": 100.383,
+      "readings": 1
+    },
+    {
+      "value": 100.3851,
+      "readings": 1
+    },
+    {
+      "value": 100.3872,
+      "readings": 1
+    },
+    {
+      "value": 100.3892,
+      "readings": 1
+    },
+    {
+      "value": 100.3913,
+      "readings": 1
+    },
+    {
+      "value": 100.3934,
+      "readings": 1
+    },
+    {
+      "value": 100.3955,
+      "readings": 1
+    },
+    {
+      "value": 100.3976,
+      "readings": 1
+    },
+    {
+      "value": 100.3996,
+      "readings": 1
+    },
+    {
+      "value": 100.4017,
+      "readings": 1
+    },
+    {
+      "value": 100.4038,
+      "readings": 1
+    },
+    {
+      "value": 100.4059,
+      "readings": 1
+    },
+    {
+      "value": 100.408,
+      "readings": 1
+    },
+    {
+      "value": 100.41,
+      "readings": 1
+    },
+    {
+      "value": 100.4121,
+      "readings": 1
+    },
+    {
+      "value": 100.4142,
+      "readings": 1
+    },
+    {
+      "value": 100.4163,
+      "readings": 1
+    },
+    {
+      "value": 100.4184,
+      "readings": 1
+    },
+    {
+      "value": 100.4205,
+      "readings": 1
+    },
+    {
+      "value": 100.4225,
+      "readings": 1
+    },
+    {
+      "value": 100.4246,
+      "readings": 1
+    },
+    {
+      "value": 100.4267,
+      "readings": 1
+    },
+    {
+      "value": 100.4288,
+      "readings": 1
+    },
+    {
+      "value": 100.4309,
+      "readings": 1
+    },
+    {
+      "value": 100.4329,
+      "readings": 1
+    },
+    {
+      "value": 100.435,
+      "readings": 1
+    },
+    {
+      "value": 100.4371,
+      "readings": 1
+    }
+  ],
+  "window_coverage": [
+    {
+      "maximum_age_seconds": 3,
+      "eligible_readings": 3
+    },
+    {
+      "maximum_age_seconds": 10,
+      "eligible_readings": 10
+    },
+    {
+      "maximum_age_seconds": 30,
+      "eligible_readings": 30
+    },
+    {
+      "maximum_age_seconds": 60,
+      "eligible_readings": 60
+    },
+    {
+      "maximum_age_seconds": 120,
+      "eligible_readings": 120
+    },
+    {
+      "maximum_age_seconds": 300,
+      "eligible_readings": 300
+    },
+    {
+      "maximum_age_seconds": 600,
+      "eligible_readings": 334
+    },
+    {
+      "maximum_age_seconds": 1800,
+      "eligible_readings": 334
+    },
+    {
+      "maximum_age_seconds": 3600,
+      "eligible_readings": 334
+    },
+    {
+      "maximum_age_seconds": 14400,
+      "eligible_readings": 334
+    },
+    {
+      "maximum_age_seconds": 86400,
+      "eligible_readings": 334
+    }
+  ],
+  "unlimited_past_only_eligible_readings": 334,
+  "maximum_previous_valid_age_seconds": 334.0,
+  "half_target_readings": 80936,
+  "minimum_age_limit_for_half_seconds": null,
+  "affected_recordings": [
+    {
+      "source_path": "8/WELL-00025_20200629194141.parquet",
+      "source_type": "REAL",
+      "observations": 722192,
+      "original_null_readings": 1319,
+      "invalid_readings": 334,
+      "original_valid_readings": 720539,
+      "with_previous_valid_reading": 334,
+      "with_next_valid_reading": 0,
+      "without_valid_reading_in_segment": 0,
+      "source_sha256": "d95c64a7b6cff6e6a9f0b517a960fa8a2235647692d636a6a98dc709abc915c8"
+    },
+    {
+      "source_path": "8/WELL-00030_20141108012623.parquet",
+      "source_type": "REAL",
+      "observations": 161538,
+      "original_null_readings": 0,
+      "invalid_readings": 161538,
+      "original_valid_readings": 0,
+      "with_previous_valid_reading": 0,
+      "with_next_valid_reading": 0,
+      "without_valid_reading_in_segment": 161538,
+      "source_sha256": "abf57fc53470686c0f0322a66dd8b02916a7dc21a51f3bbc6d983a8c1ea0c63f"
+    }
+  ],
+  "invalid_episodes": [
+    {
+      "source_path": "8/WELL-00025_20200629194141.parquet",
+      "start_row": 721858,
+      "end_row": 722191,
+      "segment": 0,
+      "readings": 334,
+      "minimum": 100.198,
+      "maximum": 100.4375,
+      "previous_valid_row": 721857,
+      "previous_valid_value": 99.95956,
+      "first_previous_valid_age_seconds": 1.0,
+      "next_valid_row": null,
+      "next_valid_value": null,
+      "valid_readings_in_segment": 720539
+    },
+    {
+      "source_path": "8/WELL-00030_20141108012623.parquet",
+      "start_row": 0,
+      "end_row": 161537,
+      "segment": 0,
+      "readings": 161538,
+      "minimum": -99.99,
+      "maximum": -99.99,
+      "previous_valid_row": null,
+      "previous_valid_value": null,
+      "first_previous_valid_age_seconds": null,
+      "next_valid_row": null,
+      "next_valid_value": null,
+      "valid_readings_in_segment": 0
+    }
+  ],
+  "source": {
+    "repo_id": "Yahya2491/3w-pipeline",
+    "revision": "c1a7e8d0cfefc0875974ea079d11349a37fa0c56",
+    "manifest_sha256": "4be6017d63bd84aea87e51ea9e0b2d4c32f1fda616e3e5e9d8baf79e473f56ff",
+    "manifest_recordings": 2228,
+    "manifest_hashes_verified": true,
+    "verified_bytes": 1873131359
+  },
+  "historical_baseline": {
+    "run_id": "20261017T232322182032Z-ba450086",
+    "observation_count_matches": true,
+    "three_second_repair_count_matches": true
+  },
+  "review_implementation_sha256": "a08fb336307e97a231899e55cc8832d3e40e210ad0191e38cfa6c08700288578"
+}

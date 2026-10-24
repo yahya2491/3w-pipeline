@@ -1,0 +1,58 @@
+{
+  "review_date": "2026-10-24",
+  "quality_rules": {
+    "version": 1,
+    "sha256": "2799aec6380c2c58c906734aec6ca83d9ac8fa0b9812b5da503a3e864b2881ec",
+    "resolved": {
+      "version": 1,
+      "opening_min_pct": 0.0,
+      "opening_max_pct": 100.0,
+      "valve_states": [
+        0.0,
+        0.5,
+        1.0
+      ],
+      "choke_forward_fill_max_seconds": 360,
+      "expected_interval_seconds": 1,
+      "feature_window_seconds": 120,
+      "feature_sensors": [
+        "downhole_pdg_pressure_pa",
+        "subsea_tree_tpt_pressure_pa",
+        "production_choke_upstream_pressure_pa",
+        "gas_lift_choke_downstream_pressure_pa",
+        "subsea_tree_tpt_temperature_c",
+        "production_choke_downstream_temperature_c",
+        "gas_lift_flow_rate_m3_s"
+      ]
+    }
+  },
+  "offline_full_test_suite": {
+    "command": "HF_HUB_OFFLINE=1 .venv/bin/pytest -q",
+    "passed": 289,
+    "failed": 0,
+    "duration_seconds": 709.85
+  },
+  "targeted_repair_tests": {
+    "command": ".venv/bin/pytest -q tests/test_silver_prepare.py tests/test_repair_evaluation.py tests/test_repair_review.py",
+    "passed": 26,
+    "failed": 0,
+    "duration_seconds": 44.1
+  },
+  "final_evaluation_metadata_tests": {
+    "command": ".venv/bin/pytest -q tests/test_repair_evaluation.py",
+    "passed": 3,
+    "failed": 0
+  },
+  "ruff_check": {
+    "command": ".venv/bin/ruff check .",
+    "passed": true
+  },
+  "ruff_format": {
+    "command": ".venv/bin/ruff format --check .",
+    "passed": true,
+    "files": 95
+  },
+  "spark_verification": "spark_verification.json",
+  "masking_evaluation": "masking_evaluation.json",
+  "publication": "No new full seven-table build or publication; historical full VM outputs retain their saved three-second policy."
+}

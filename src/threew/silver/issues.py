@@ -21,7 +21,7 @@ USAGE_POLICY = {
     "duplicate_identity": "Stop on repeated source-path/file-hash/row-position keys, including identical copies.",
     "duplicate_timestamp": "Keep distinct observations; flag every row sharing a timestamp within its recording.",
     "missing_sensors": "Individual missing sensors stay in availability summaries. A row with no finite sensors is flagged for sensor use.",
-    "missing_class": "Keep sensor readings; exclude this label from analyses requiring a known class.",
+    "missing_class": "Preserve source unknowns. class_code_clean may supply assumed training targets; original labels identify observed evaluation targets.",
     "quarantine": "Review error issues for their affected field/use; join their keys to observations for complete readings.",
     "source_versions": "Use Bronze's current manifest; a new file hash is a new source version, not a row duplicate.",
     "domains": "Check versioned valve/opening domains; clean columns with repair flags supplement unchanged source values.",
@@ -61,7 +61,7 @@ def build_quality_issues(observations: DataFrame, rules=None) -> DataFrame:
         "warning",
         "labeled_analysis",
         "No class label was supplied.",
-        "Keep readings; exclude the label from tasks requiring known classes.",
+        "Keep readings; class_code_clean may supply an assumed label. Source labels remain unknown.",
         F.col("class_code"),
     )
     add(

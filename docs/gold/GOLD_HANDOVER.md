@@ -1,10 +1,22 @@
 # Gold layer handover
 
-This explains which Silver version to use, where its saved tables are on the VM, and how they support the planned Random Forest/XGBoost comparison in the [project description](../3W_Project_Description_full.md). Gold has not been implemented yet. For field definitions, use the [contract](../silver/SILVER_CONTRACT.md); for validation, use the [milestone report](../silver/SILVER_MILESTONE_REPORT.md).
+This explains the saved Silver inputs and the assumptions behind future Silver builds. Gold now has a [table builder](../../gold/build_gold_table.py), model training scripts and [comparison results](../../gold/model/results/comparison_summary.csv). The design guidance below includes the original handover proposals. For field definitions, use the [contract](../silver/SILVER_CONTRACT.md); for validation, use the [milestone report](../silver/SILVER_MILESTONE_REPORT.md).
 
 ## Where we are
 
-Use the final **106-column Silver v2** for Gold. It provides clean readings for all 27 sensors, bounded choke-opening estimates, sequence and quality details, 120-second features for seven sensors, and two invalid-opening durations. Original measurements, labels and row identities remain available. Read [Silver assumptions](../silver/SILVER_ASSUMPTIONS.md) for the limits of cleaning and feature selection.
+New Silver builds have **108 columns**, adding `class_code_clean` and its
+boolean `class_was_inferred` flag under the
+[leading-class assumption](../evidence/silver/class-label-backfill/README.md).
+Use the clean class for assumed-label training; identify inferred rows using
+`class_was_inferred`. Keep this target-provenance flag out of predictor inputs. Report source-label evaluation separately from
+assumed-label evaluation. The saved full VM baseline described below has
+**106 columns** and needs rebuilding to include the new target field.
+
+The historical 106-column Silver baseline is available for Gold. It provides clean readings for all 27 sensors, bounded choke-opening estimates, sequence and quality details, 120-second features for seven sensors, and two invalid-opening durations. Original measurements, labels and row identities remain available. Read [Silver assumptions](../silver/SILVER_ASSUMPTIONS.md) for the limits of cleaning and feature selection.
+
+The saved full VM runs used a three-second repair age. The default for new
+runs is now 360 seconds; see the [extension review](../evidence/silver/repair-window-extension/README.md).
+A ready marker and its resolved rules identify which policy an output uses.
 
 Both [full VM runs](../evidence/silver/v2/README.md) passed all 32 checks and published all seven tables. Each covers 2,228 recordings and 76,587,318 observations across 82 batches, saving 10.53 GB of Parquet. The [v2 comparison log](../evidence/silver/v2/comparison.log) confirms matching schemas and complete contents for every table, including duplicates and nulls. Runtimes were 6 h 10 min 25 s and 6 h 5 min 32 s; this is not a controlled storage-performance benchmark.
 
@@ -35,7 +47,7 @@ The Git history makes the feedback progression visible:
 | `fd4579f`, `330496f` | Code cleanup, validation refactoring and clearer documentation; second full run revision is `330496f`. |
 | `55175a8` | Add saved run reports and evidence to the branch; the seven-table comparison is now saved as well. |
 
-V1 already carried 36 Bronze fields, three catalogue fields and four event descriptions. V2 retains them and adds 63 fields. The complete breakdown is:
+V1 already carried 36 Bronze fields, three catalogue fields and four event descriptions. V2 retains them and adds 63 fields. The historical 106-column breakdown is:
 
 | Column group | Count | Use in Gold |
 |---|---:|---|
@@ -98,6 +110,22 @@ One observation can have several issue entries. Matching every issue directly to
 
 Repeated −99.99 values appeared in the historical opening examples, but their source meaning is unconfirmed. Silver applies the same out-of-range rule to every finite invalid opening, without interpreting a particular number as a confirmed missing-value marker. The clean value is a bounded estimate or null; originals remain unchanged.
 
+The subsequent [full-source repair audit](../evidence/silver/choke-repair-review/README.md)
+locates all 161,538 negative readings in
+`8/WELL-00030_20141108012623.parquet`: every row reports `-99.99`, and no valid
+production-choke opening exists anywhere in that recording. The other 334
+out-of-range readings occur at the end of one different recording and have an
+earlier valid opening. Even unlimited within-recording carry-forward can reach
+only those 334 readings (about 0.21% of the invalid openings). The default
+was extended to 360 seconds on 24 October 2026, and the
+[extension review](../evidence/silver/repair-window-extension/README.md) verifies
+334 estimates with the actual Spark transformation. Existing full VM exports
+still use their saved three-second policy; regenerate Silver to obtain the
+extended repairs. The age cutoff is not the main cause of the low coverage. Treat this
+sensor as unavailable in the entirely invalid recording; other measured fields
+remain available under their own quality rules. Any reconstruction using other
+sensors needs separate model evaluation.
+
 ## Planned Gold classification model
 
 Compare Spark MLlib `RandomForestClassifier` and XGBoost using the same labelled examples, Silver features and held-out recording split. Evaluate all event categories with labelled examples and report each event's test support and scores. Save the selected features, true label, each model's prediction and evaluation results as Gold outputs. Include a simple majority-class baseline and a clean-sensor-only feature comparison to test whether the added temporal features help.
@@ -115,6 +143,15 @@ Split whole recordings into training and held-out test sets before fitting prepr
 ### Labels in real recordings
 
 Real recordings can be used for training and testing. Each of the 1,119 real recordings has some rows without a class, but none is entirely unlabelled: 28,843,850 of the 32,872,250 real rows (87.75%) have a class. All simulated and drawn rows have a class.
+
+The [full-source class-label review](../evidence/silver/class-label-review/README.md)
+locates every missing class in the first 3,600 rows of each real recording.
+New Silver builds expose assumed targets through `class_code_clean` and mark
+them with `class_was_inferred`; original classes and the historical counts
+below are preserved. The current Gold builder still selects original
+`class_code` from the saved 106-column input. Using inferred targets requires
+an explicit future change to Gold input selection, with source-label and
+assumed-label evaluation reported separately.
 
 Leaving real data out would remove these labelled rows:
 

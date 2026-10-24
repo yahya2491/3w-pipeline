@@ -13,15 +13,24 @@ Silver progress is documented in the [milestone report](docs/silver/SILVER_MILES
 See the [Silver contract](docs/silver/SILVER_CONTRACT.md) for table definitions.
 The [Silver run guide](docs/silver/SILVER_RUN_GUIDE.md) covers commands, failures and comparison of saved runs.
 
-Silver contract v2 standardizes observations, adds cleaned sensor columns and three-second bounded
+Silver standardizes observations, adds cleaned sensor columns and six-minute bounded
 repairs of finite invalid choke openings, and records quality, event references and sensor references.
-Its 106 observation columns include 120-second sensor features and invalid-choke durations.
+New Silver builds have 108 observation columns, including `class_code_clean`,
+its boolean `class_was_inferred` flag,
+120-second sensor features and invalid-choke durations. Leading unknown classes
+are backfilled under an explicit persistence assumption. Internal gaps between
+equal consistent original classes are also filled; source labels remain available. See the [class-backfill review](docs/evidence/silver/class-label-backfill/README.md).
+The default choke repair age was extended from 3 to 360 seconds on 24 October 2026;
+[the extension review](docs/evidence/silver/repair-window-extension/README.md) verifies
+334 estimates on the affected source recordings. The historical full VM runs below
+used the earlier three-second setting and still contain three estimates.
 Gold selects labelled examples and trains/evaluates its Spark model from those prepared values. Read
 [Silver assumptions](docs/silver/SILVER_ASSUMPTIONS.md) and
 [quality rules](docs/silver/QUALITY_RULES.md). Original measurements and all seven tables remain.
 With Bronze ready, run `python -m threew.silver.run --env dev` in the locked Linux environment.
-Gold anomaly classification consumes the prepared output; the model is planned work and is not
-implemented by this Silver milestone.
+Gold table building, model training and comparison results are available under `gold/`.
+The current Gold builder uses the saved 106-column Silver input and original class labels;
+selecting the new assumed targets is separate follow-up work.
 
 Both [106-column full VM runs](docs/evidence/silver/v2/README.md) passed all 32 checks across
 2,228 recordings and 76,587,318 observations. Each published seven tables and saved 10.53 GB

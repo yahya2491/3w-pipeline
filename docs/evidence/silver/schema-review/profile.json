@@ -1,0 +1,93 @@
+{
+  "source_revision": "c1a7e8d0cfefc0875974ea079d11349a37fa0c56",
+  "total_rows_by_source": {
+    "REAL": 32872250,
+    "DRAWN": 2966410,
+    "SIMULATED": 40748658
+  },
+  "candidate_feature_coverage": {
+    "downhole_to_tree_pressure_difference_pa": {
+      "available_rows": 67372714,
+      "percent_all_rows": 87.96849890996313,
+      "available_rows_by_source": {
+        "REAL": 23657646,
+        "DRAWN": 2966410,
+        "SIMULATED": 40748658
+      },
+      "recordings_with_values": 1933
+    },
+    "production_choke_pressure_drop_pa": {
+      "available_rows": 22115960,
+      "percent_all_rows": 28.876791324642024,
+      "available_rows_by_source": {
+        "REAL": 3448901,
+        "DRAWN": 0,
+        "SIMULATED": 18667059
+      },
+      "recordings_with_values": 665
+    },
+    "gas_lift_choke_pressure_drop_pa": {
+      "available_rows": 308726,
+      "percent_all_rows": 0.4031032918530977,
+      "available_rows_by_source": {
+        "REAL": 308726,
+        "DRAWN": 0,
+        "SIMULATED": 0
+      },
+      "recordings_with_values": 2
+    },
+    "production_choke_temperature_difference_c": {
+      "available_rows": 18667059,
+      "percent_all_rows": 24.3735640409813,
+      "available_rows_by_source": {
+        "REAL": 0,
+        "DRAWN": 0,
+        "SIMULATED": 18667059
+      },
+      "recordings_with_values": 654
+    }
+  },
+  "development_parquet_storage": {
+    "run_id": "20261017T203532441048Z-479caacd",
+    "observations": 1931052,
+    "column_counts": [
+      106
+    ],
+    "parquet_files": 8,
+    "total_compressed_column_bytes": 234164515,
+    "repair_column_compressed_bytes": {
+      "gas_lift_choke_opening_pct_was_imputed": 14588,
+      "gas_lift_choke_opening_pct_source_age_seconds": 25453,
+      "production_choke_opening_pct_was_imputed": 14588,
+      "production_choke_opening_pct_source_age_seconds": 49806
+    },
+    "repair_columns_percent": 0.044598986315240806,
+    "compressed_bytes_by_group": {
+      "repair_provenance_4": 104435,
+      "rolling_features_28": 121606139,
+      "clean_sensors_27": 46428865,
+      "event_descriptions_4": 24793
+    }
+  },
+  "review_date": "2026-10-24",
+  "coverage_definition": "Both source inputs are finite; finite pressure and temperature readings are retained unchanged by the current cleaning rules.",
+  "limitations": [
+    "Coverage does not establish predictive usefulness.",
+    "Parquet sizes are measured on the saved 30-recording development build, not the full production output or Spark temporary storage.",
+    "No model training or feature ablation was performed."
+  ],
+  "downstream_review": {
+    "notebook": "data_science/3w_anomaly_detection.ipynb",
+    "model_values": "Selected clean sensor readings are used to construct model sequences.",
+    "window_statistics": [
+      "mean",
+      "std",
+      "min",
+      "max",
+      "slope",
+      "missing_fraction"
+    ],
+    "repair_fields_are_current_predictors": false,
+    "silver_120_second_fields_are_current_predictors": false
+  }
+}

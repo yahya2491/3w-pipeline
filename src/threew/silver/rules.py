@@ -32,6 +32,7 @@ class QualityRules:
     expected_interval_seconds: int
     feature_window_seconds: int = 120
     feature_sensors: tuple[str, ...] = FEATURE_SENSORS
+    missing_classes: str = "backfill_leading_and_matching"
 
     def snapshot(self) -> dict:
         resolved = asdict(self)
@@ -62,8 +63,11 @@ def load_rules(path: Path = DEFAULT_RULES_PATH) -> QualityRules:
     features = _mapping(raw["features"], ("window_seconds", "sensors"), "features")
     if not isinstance(features["sensors"], list) or tuple(features["sensors"]) != FEATURE_SENSORS:
         raise ValueError("Silver features.sensors must contain the seven contract sensors in the documented order")
+    if cleaning["missing_classes"] not in ("preserve_unknown", "backfill_leading", "backfill_leading_and_matching"):
+        raise ValueError(
+            "Silver rules cleaning.missing_classes: expected preserve_unknown, backfill_leading or backfill_leading_and_matching"
+        )
     for field, expected in (
-        ("missing_classes", "preserve_unknown"),
         ("missing_sensors", "preserve_missing"),
         ("other_invalid_sensors", "null_in_clean_column"),
     ):
@@ -97,4 +101,5 @@ def load_rules(path: Path = DEFAULT_RULES_PATH) -> QualityRules:
         opening_max_pct=float(bounds[1]),
         valve_states=tuple(float(v) for v in states),
         feature_sensors=tuple(features["sensors"]),
+        missing_classes=cleaning["missing_classes"],
     )

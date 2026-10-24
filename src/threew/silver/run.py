@@ -239,7 +239,7 @@ def run_silver(
         "code": code_info(),
         "config": config,
         "config_sha256": hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest(),
-        "contract": {"version": 2, "sha256": hashlib.sha256(contract.read_bytes()).hexdigest()},
+        "contract": {"version": 3, "sha256": hashlib.sha256(contract.read_bytes()).hexdigest()},
         "execution": {"batch_rows": batch_rows, "complete_recordings": True},
         "batches": [],
         "quality_rules": rules.snapshot(),
@@ -368,7 +368,7 @@ def run_silver(
                     "reference_version": report["reference_version"],
                     "quality_rules": report["quality_rules"],
                     "preparation_summary": report["preparation_summary"],
-                    "contract_version": 2,
+                    "contract_version": 3,
                     "execution": report["execution"],
                 }
                 _write_json_atomically(ready_path, marker)

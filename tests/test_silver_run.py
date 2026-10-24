@@ -123,10 +123,12 @@ def test_run_silver_reconciles_all_outputs_and_repeat_run_is_identical(spark, si
         report = json.load(saved_report)
     assert report["execution"]["batch_count"] == 3
     assert [batch["status"] for batch in report["batches"]] == ["SUCCESS"] * 3
-    assert second["contract_version"] == 2
+    assert second["contract_version"] == 3
     assert second["quality_rules"]["resolved"]["expected_interval_seconds"] == 1
     assert second["quality_rules"]["sha256"]
     assert second["preparation_summary"]["rows"] == 6
+    assert second["preparation_summary"]["class_code_inferred_rows"] == 3
+    assert second["preparation_summary"]["class_code_unresolved_rows"] == 0
     assert summary["rows_with_issues"] == 6
     assert summary["rows_with_quarantine_issues"] == 6
     assert summary["quarantine_row_percent"] == 100.0
@@ -139,12 +141,14 @@ def test_run_silver_reconciles_all_outputs_and_repeat_run_is_identical(spark, si
         right = spark.read.parquet(second["tables"][name]["path"])
         assert same_rows(left, right)
     saved = spark.read.parquet(second["tables"]["silver_observations"]["path"])
-    assert len(saved.columns) == 106
+    assert len(saved.columns) == 108
+    assert saved.filter("class_was_inferred").count() == 3
+    assert saved.filter("class_code IS NOT NULL AND class_was_inferred").count() == 0
     assert saved.filter("source_type = 'REAL' AND _row_in_file = 0").first()["timestamp"].microsecond == 500000
     assert saved.filter("source_type = 'REAL' AND _row_in_file = 0").first()["gas_lift_choke_opening_pct"] == 0.0
     for report in _reports(cfg.storage.silver):
         assert report["status"] == "SUCCESS"
-        assert report["contract"]["version"] == 2
+        assert report["contract"]["version"] == 3
         assert report["contract"]["sha256"]
         assert report["config_sha256"]
         assert report["duration_seconds"] > 0
@@ -190,14 +194,17 @@ def test_corrupted_observations_cannot_be_published(spark, silver_input, monkeyp
     assert report["error"]["phase"] == "read_back_and_check"
 
 
-@pytest.mark.parametrize("column", ["downhole_pdg_pressure_pa_clean", "downhole_pdg_pressure_pa_mean_120s"])
+@pytest.mark.parametrize(
+    "column", ["downhole_pdg_pressure_pa_clean", "downhole_pdg_pressure_pa_mean_120s", "class_code_clean"]
+)
 def test_corrupted_clean_reading_or_feature_prevents_publication(spark, silver_input, monkeypatch, column):
     from threew.silver.prepare import prepare_observations
 
     previous = _prior_marker(silver_input)
 
     def broken(observations, rules):
-        return prepare_observations(observations, rules).withColumn(column, F.lit(999.0))
+        prepared = prepare_observations(observations, rules)
+        return prepared.withColumn(column, F.lit(999.0).cast(prepared.schema[column].dataType))
 
     monkeypatch.setattr("threew.silver.run.prepare_observations", broken)
     with pytest.raises(RuntimeError, match="silver_prepared_values_match_rules"):

@@ -7,6 +7,7 @@ from pyspark.sql import functions as F
 from pyspark.sql.window import Window
 
 from threew.silver.features import add_sensor_features
+from threew.silver.labels import prepare_class_labels
 from threew.silver.quality import is_finite
 from threew.silver.reference import OPENINGS, RECORDING_KEY, SENSOR_FIELDS
 from threew.silver.rules import QualityRules
@@ -27,7 +28,9 @@ def prepare_observations(observations: DataFrame, rules: QualityRules) -> DataFr
     original = observations.columns
     ordered = Window.partitionBy(*RECORDING_KEY).orderBy("_row_in_file")
     prefix = ordered.rowsBetween(Window.unboundedPreceding, Window.currentRow)
-    df = observations.withColumn("_prep_us", F.unix_micros(F.col("timestamp").cast("timestamp")))
+    df = prepare_class_labels(observations, rules).withColumn(
+        "_prep_us", F.unix_micros(F.col("timestamp").cast("timestamp"))
+    )
     df = df.select(
         "*",
         F.lag("_prep_us").over(ordered).alias("_prep_prev_us"),
@@ -101,6 +104,8 @@ def summarize_preparation(observations: DataFrame, rules: QualityRules) -> dict:
     )
     expressions = [
         F.count("*").alias("rows"),
+        F.count(F.when(F.col("class_was_inferred"), 1)).alias("class_code_inferred_rows"),
+        F.count(F.when(F.col("class_code_clean").isNull(), 1)).alias("class_code_unresolved_rows"),
         F.count(F.when(~has_valid_sensor, 1)).alias("rows_without_observed_valid_sensors"),
         F.count(F.when(~F.col("sequence_usable"), 1)).alias("rows_without_usable_time"),
     ]

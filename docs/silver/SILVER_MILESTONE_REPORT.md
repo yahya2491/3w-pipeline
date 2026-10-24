@@ -2,7 +2,7 @@
 
 ## Where we are
 
-Milestones 1–11 record the original preservation and quality implementation. The [contract](SILVER_CONTRACT.md) defines the current 106-column output. Commands belong in the [run guide](SILVER_RUN_GUIDE.md), and data handling is defined in the [quality rules](QUALITY_RULES.md).
+Milestones 1–11 record the original preservation and quality implementation. The [contract](SILVER_CONTRACT.md) defines the current 108-column output. New builds add `class_code_clean` and the boolean `class_was_inferred` under the [leading-class assumption](../evidence/silver/class-label-backfill/README.md); the historical full VM runs below have 106 columns. Commands belong in the [run guide](SILVER_RUN_GUIDE.md), and data handling is defined in the [quality rules](QUALITY_RULES.md).
 
 The [two 106-column full VM runs](../evidence/silver/v2/README.md) each passed all 32 checks across 2,228 recordings and 76,587,318 observations. Each published all seven tables and saved 10.53 GB of Parquet across 82 batches. The [v2 comparison log](../evidence/silver/v2/comparison.log) confirms equal schemas and complete contents for all seven tables, including duplicates and nulls. Gold model implementation and evaluation remain planned work.
 
@@ -37,6 +37,20 @@ Each run contains the following rows:
 | `sensor_reference` | 27 |
 
 The reports measure saved Parquet size (10.53 GB decimal per run), not peak temporary disk usage. Both report three repaired production-choke readings, 161,869 unresolved production-choke readings, no gas-lift-opening repairs, 5,193 rows without an observed valid sensor and no unusable-time rows. Their preparation and quality summaries agree.
+
+A subsequent [audit of every original source recording](../evidence/silver/choke-repair-review/README.md)
+explains the limited imputation coverage. All 161,538 negative production-choke
+readings are `-99.99` in one recording with no valid opening anywhere in it. Only
+334 invalid openings in a different recording have a valid earlier reading.
+The historical three-second policy reached three of these. On 24 October 2026,
+the default was extended to 360 seconds. A targeted
+[Spark verification](../evidence/silver/repair-window-extension/README.md) on both
+affected recordings produces 334 estimates, about 0.21% of all invalid openings,
+and leaves 161,538 unresolved. This exhausts the same-recording past-valid-anchor
+coverage in this source. The saved full-run reports above still describe the
+original three-second rule; no new full seven-table publication is claimed. Successful pipeline execution
+and conformance to its rules do not demonstrate substantial reconstruction of
+invalid measurements.
 
 The first output remains under `/home/ubuntu/3w-data/silver-v2/runs/20261017T232322182032Z-ba450086/`. The second is under `/mnt/silver-data/3w-data/silver-v2/runs/20261018T091117552005Z-3280e5d3/`. The mounted run's ready marker records these new table paths. Gold should select one successful marker once and use its paths together; see the [Gold handover](../gold/GOLD_HANDOVER.md).
 
