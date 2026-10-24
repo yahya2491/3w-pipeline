@@ -123,7 +123,7 @@ def test_run_silver_reconciles_all_outputs_and_repeat_run_is_identical(spark, si
         report = json.load(saved_report)
     assert report["execution"]["batch_count"] == 3
     assert [batch["status"] for batch in report["batches"]] == ["SUCCESS"] * 3
-    assert second["contract_version"] == 3
+    assert second["contract_version"] == 4
     assert second["quality_rules"]["resolved"]["expected_interval_seconds"] == 1
     assert second["quality_rules"]["sha256"]
     assert second["preparation_summary"]["rows"] == 6
@@ -141,14 +141,30 @@ def test_run_silver_reconciles_all_outputs_and_repeat_run_is_identical(spark, si
         right = spark.read.parquet(second["tables"][name]["path"])
         assert same_rows(left, right)
     saved = spark.read.parquet(second["tables"]["silver_observations"]["path"])
-    assert len(saved.columns) == 108
+    assert len(saved.columns) == 79
     assert saved.filter("class_was_inferred").count() == 3
-    assert saved.filter("class_code IS NOT NULL AND class_was_inferred").count() == 0
+    assert saved.filter("NOT class_was_inferred").count() == 3
+    assert "class_code" not in saved.columns and "_ingest_run_id" not in saved.columns
     assert saved.filter("source_type = 'REAL' AND _row_in_file = 0").first()["timestamp"].microsecond == 500000
-    assert saved.filter("source_type = 'REAL' AND _row_in_file = 0").first()["gas_lift_choke_opening_pct"] == 0.0
+    assert saved.filter("source_type = 'REAL' AND _row_in_file = 0").first()["gas_lift_choke_opening_pct_clean"] == 0.0
+
+    def no_spark(_cfg):
+        raise AssertionError("Unchanged reuse must not start Spark")
+
+    previous = cfg.storage.silver_ready.read_bytes()
+    copied = cfg.storage.root / "ci-reports"
+    reused = run_silver(cfg, spark_factory=no_spark, batch_rows=2, skip_unchanged=True, report_copy=copied)
+    assert reused["run_id"] == second["run_id"]
+    assert cfg.storage.silver_ready.read_bytes() == previous
+    copied_reports = [json.loads(path.read_text()) for path in copied.glob("*.json")]
+    assert len(copied_reports) == 1 and copied_reports[0]["status"] == "SKIPPED"
+    assert copied_reports[0]["skip_reason"] == "unchanged"
     for report in _reports(cfg.storage.silver):
+        if report["status"] == "SKIPPED":
+            assert report["reused_run_id"] == second["run_id"]
+            continue
         assert report["status"] == "SUCCESS"
-        assert report["contract"]["version"] == 3
+        assert report["contract"]["version"] == 4
         assert report["contract"]["sha256"]
         assert report["config_sha256"]
         assert report["duration_seconds"] > 0
@@ -159,7 +175,7 @@ def test_run_silver_reconciles_all_outputs_and_repeat_run_is_identical(spark, si
     "corruption,failed_check",
     [
         ("duplicate_identity", "silver_observation_keys_are_unique_and_non_null"),
-        ("changed_value", "silver_preserved_values_match_bronze"),
+        ("changed_value", "silver_prepared_values_match_rules"),
         ("null_lineage", "silver_required_fields_are_non_null"),
         ("wrong_metadata", "silver_recording_and_event_details_match"),
         ("wrong_schema", "silver_schema_matches_contract"),
@@ -177,9 +193,9 @@ def test_corrupted_observations_cannot_be_published(spark, silver_input, monkeyp
         if corruption == "changed_value":
             return df.withColumn("gas_lift_flow_rate_m3_s", F.lit(456.0))
         if corruption == "null_lineage":
-            return df.withColumn("_ingest_run_id", F.lit(None).cast("string"))
+            return df.withColumn("source_type", F.lit(None).cast("string"))
         if corruption == "wrong_schema":
-            return df.withColumn("gas_lift_flow_rate_m3_s", F.col("gas_lift_flow_rate_m3_s").cast("string"))
+            return df.withColumn("state_code", F.col("state_code").cast("string"))
         if corruption == "null_key":
             return df.withColumn("_row_in_file", F.lit(None).cast("long"))
         return df.withColumn("instance_id", F.lit("wrong-recording"))

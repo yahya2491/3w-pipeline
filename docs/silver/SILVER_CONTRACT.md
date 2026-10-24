@@ -1,181 +1,166 @@
 # Silver contract
 
-This contract defines the current 108-column output (internal contract version 3). The [quality rules](QUALITY_RULES.md) describe how Silver handles problems; the [assumptions](SILVER_ASSUMPTIONS.md) explain the choices.
+The current observation export has **79 columns** (internal contract version 4).
+[Quality rules](QUALITY_RULES.md) define validation and repairs; the
+[assumptions](SILVER_ASSUMPTIONS.md) explain inferred values.
 
-## What Silver saves
+## Saved tables
 
-Silver writes seven Parquet tables:
-
-| Table | What a row is for |
+| Table | Purpose |
 |---|---|
-| `silver_observations` | One original sensor observation, with recording details and Silver's added columns. This is the main table. |
-| `instance_quality` | A summary of missing labels, timestamps, and sensor coverage for one recording. |
-| `sensor_availability` | A summary of one sensor's available readings in one recording. There are 27 rows per recording. |
-| `quality_issues` | A list of individual problems. One observation can have several entries. |
-| `quality_quarantine` | The error-level entries from `quality_issues`, for easier review. |
-| `event_reference` | The event names and class/phase combinations supported by the project. |
-| `sensor_reference` | The 27 sensor names, meanings, units, and applicable value rules. |
+| silver_observations | One original observation with one clean value per sensor and one clean class code. |
+| instance_quality | Original-source quality for each recording. |
+| sensor_availability | Original-source finite-reading coverage for each sensor/recording. |
+| quality_issues | Source problems, original bad values and observation keys. |
+| quality_quarantine | Error-level source issues. |
+| event_reference | Event names and supported class/phase combinations. |
+| sensor_reference | Logical sensor identifiers, original names, units and domains. |
 
-## The 108 columns in `silver_observations`
+Bronze preserves the original dataset. Silver does not export the 27 original
+sensor-value columns, original class_code, or repeated _ingest_run_id. Those 29
+columns were removed from the preceding 108-column draft. Original values remain
+available in Bronze through the source path, exact file hash and row position.
+The source Bronze run ID is recorded once in the Silver report and ready marker.
+Quality tables still describe source issues even when a clean value is inferred.
 
-Each row in `silver_observations` is still one original timestamped observation. It has 108 columns: 36 fields carried over from Bronze (some renamed), 3 recording fields matched from Bronze's catalogue, and 69 fields Silver adds. The new columns are explained below. They do not create extra rows, and some values can be null.
+## Observation columns
 
-| Where the columns come from | Count | What they contain |
+| Group | Count | Fields |
 |---|---:|---|
-| Bronze | 36 | 9 non-sensor fields and the 27 original sensor readings. Silver gives some of these clearer names. |
-| Bronze catalogue | 3 | `instance_id`, `well_id`, and `instance_start`, matched to the observation's source file. |
-| Added by Silver | 69 | 4 event descriptions, 1 clean class code, 1 class inference flag, 27 clean readings, 4 repair details, 2 sequence fields, 28 sensor features, and 2 invalid-opening durations. |
+| Recording, time and lineage context | 10 | source_type, instance_label, state_code, timestamp, _source_path, _file_sha256, _row_in_file, instance_id, well_id, instance_start |
+| Clean class and inference provenance | 2 | class_code_clean, class_was_inferred |
+| Event descriptions | 4 | instance_event_name, row_event_name, row_event_phase, class_label_status |
+| Clean sensor readings | 27 | One <sensor>_clean field per sensor. |
+| Choke repair provenance | 4 | Two was_imputed flags and two source_age_seconds fields. |
+| Sequence context | 2 | sequence_usable, sequence_segment_id |
+| Recent sensor behaviour | 28 | Four trailing features for each of seven sensors. |
+| Invalid-opening durations | 2 | One source-invalid streak duration for each choke opening. |
+| **Total** | **79** | One row per original observation. |
 
-The nine non-sensor Bronze fields are `source_type`, `label` (Silver calls it `instance_label`), `class` (`class_code`), `state` (`state_code`), `timestamp`, `_source_path`, `_file_sha256`, `_ingest_run_id`, and `_row_in_file`. The 27 sensor fields are renamed as shown below. Catalogue `instance_id` is required; `well_id` and `instance_start` can be null.
+_source_path, _file_sha256 and _row_in_file form the observation key. instance_id
+alone is not unique. Sort by _row_in_file within the source path/file hash when
+reading sequences; Parquet does not promise physical row order. instance_label
+is the recording event, not the row class. state_code is operational status,
+not an event class. These fields have distinct meanings and are retained.
 
-The observation key is the combination of `_source_path`, `_file_sha256`, and `_row_in_file`: it tells you which file, which version of that file, and which original row. `instance_id` alone is not unique. Parquet does not promise row order, so sort by `_row_in_file` when reading a sequence.
+## Class values and descriptions
 
-## Why Silver adds these columns
+class_code_clean is a nullable short integer. Supplied codes are retained.
+Leading nulls inherit the first supplied class when it is consistent with the
+recording event. Internal gaps receive a class only when their nearest original
+classes on both sides match and both are consistent. Inferred values never
+become new anchors. Different-class gaps, trailing gaps, entirely unlabelled
+recordings and inconsistent boundaries remain unfilled.
 
-The clean columns give Gold usable readings, including limited repairs of invalid choke openings. The 120-second features describe recent sensor behaviour for the planned Spark classifier. Repair flags and quality tables explain which values need care. Original readings remain available, so Gold can calculate additional features.
+class_was_inferred is a non-null boolean: true when an original null class was
+filled, otherwise false, including unresolved missing classes. The label rules
+use later labels under explicit continuity assumptions. Both class columns are
+target information and must stay out of classifier predictors.
 
-Raw copies in Silver allow direct comparison with clean values and help inspect repairs. Bronze remains the authoritative preserved source. Keeping both versions in Silver is an audit choice; it does not mean raw invalid values should enter model inputs. The temporal features are candidates for Random Forest and XGBoost; their usefulness still needs Gold evaluation.
+row_event_name and row_event_phase describe class_code_clean: 0 is normal, 1-9
+is steady, 101-109 is transient, null is unknown and other codes are unrecognized.
+class_label_status is unlabeled for a null clean class, consistent when the clean
+class agrees with its recording event, and inconsistent otherwise. It can be
+consistent while class_was_inferred is true. instance_event_name describes the
+recording event. These descriptions also stay out of predictors.
 
-## The 69 columns Silver adds
+The source profile found 4,028,400 leading null classes. Their
+[inference verification](../evidence/silver/class-label-backfill/README.md)
+records the assumed targets; these are not newly recovered expert annotations.
 
-### Event descriptions: 4 columns
+## Sensor values and repairs
 
-The recording label (`instance_label`) says which event the whole recording represents. The row class (`class_code`) says what class applies at that observation. Silver keeps both codes and adds these descriptions:
+Each <sensor>_clean is a nullable double, in the original units. Finite pressure,
+temperature and flow readings have no invented physical bounds. Valve states
+must be 0, 0.5 or 1. Missing, NaN, infinite and invalid valve-state readings give
+null clean values. Only the gas-lift and production choke openings can receive
+numerical replacements, for finite originals outside inclusive 0-100%.
 
-| New column | What it means | What it is useful for |
-|---|---|---|
-| `instance_event_name` | The readable event name for the recording, looked up from `instance_label`. It stays the same on every row in that recording. | Makes the recording-level label easier to understand and group by. |
-| `row_event_name` | The readable name for that row's `class_code`: 0 means normal operation; 1–9 map to their event; 101–109 map to events 1–9. Missing codes and codes outside those ranges have no name. | Shows the event, if any, described by this particular row. |
-| `row_event_phase` | `normal` for class 0, `steady` for 1–9, `transient` for 101–109, `unknown` for a missing class, and `unrecognized` for any other class. | Shows which phase the row class describes. |
-| `class_label_status` | `unlabeled` when the class is missing, `consistent` when it is supported for the recording's event, and `inconsistent` otherwise. | Helps identify rows whose class does not agree with the recording label. It does not fix the label. |
+The replacement is the most recent original valid opening in the same recording
+and continuous one-second segment, at an age greater than zero and at most
+360 seconds. Estimates never become anchors. Missing/non-finite originals are
+not filled; source/time/row-position breaks reset eligibility. Without an anchor,
+the clean value stays null. There is no clipping to 0 or 100%. For example,
+40, 120, 120 can produce 40, 40, 40 in the clean field.
 
-Event names and supported label/class combinations are listed in `event_reference`. These are descriptions of supplied labels, so they must stay out of the classifier's inputs.
+For each opening, <opening>_was_imputed identifies actual estimates and
+<opening>_source_age_seconds records anchor age. Age is zero for an original
+valid opening with usable time, and may exceed 360 on unresolved readings;
+interpret it with the flag. The [window review](../evidence/silver/repair-window-extension/README.md)
+verified 334 production-choke estimates instead of three. The other 161,538
+invalid openings have no valid opening anywhere in their recording.
 
-### Clean class code and inference flag: 2 columns
+## Sequence and temporal features
 
-`class_code_clean` is a nullable short integer. It keeps supplied `class_code`
-values unchanged. Leading nulls inherit the first supplied class in the same
-recording when that class is consistent with the recording event. Internal null
-gaps are filled only when the nearest supplied classes before and after the gap
-are equal and both consistent. All anchors are original supplied labels; inferred
-labels never become anchors. This assumes the class stayed unchanged through a
-matching-endpoint gap. Gaps between different classes, trailing gaps, entirely
-unlabelled recordings and inconsistent boundaries remain unfilled.
+sequence_usable requires a usable timestamp later than the previous timestamp
+(or a usable first timestamp). sequence_segment_id starts a new segment after
+missing, repeated or backward times, a cadence other than one second, or a
+break in original row positions. Segment IDs are scoped to one recording.
 
-Original `class_code`, event descriptions, source-quality warnings and original
-label-availability summaries remain unchanged. `class_was_inferred` is a non-null
-boolean: true exactly when `class_code IS NULL AND class_code_clean IS NOT NULL`.
-It is false for supplied labels and for missing labels that remain unresolved.
-It covers both leading backfill and matching-endpoint gap fills. Use it to filter
-or audit assumed labels; it is target provenance and must stay out of predictors.
-Use `class_code_clean` for assumed-label training. Source labels distinguish
-expert-labelled evaluation targets from inferred targets. This look-ahead is
-label inference and is never a sensor predictor feature.
+Seven sensors receive mean_120s, stddev_120s, change and count_120s:
+downhole_pdg_pressure_pa, subsea_tree_tpt_pressure_pa,
+production_choke_upstream_pressure_pa, gas_lift_choke_downstream_pressure_pa,
+subsea_tree_tpt_temperature_c, production_choke_downstream_temperature_c and
+gas_lift_flow_rate_m3_s. Feature prefixes are logical sensor identifiers;
+readings themselves are in the matching _clean fields.
 
-The [source verification](../evidence/silver/class-label-backfill/README.md)
-covers all 4,028,400 missing classes. Existing full VM exports have 106 columns
-and must be rebuilt to contain this new field.
+Trailing history is after current time minus 120 seconds through current time,
+within the same recording/segment. Means use available clean values, sample
+standard deviation needs two values, change needs both current and previous
+clean values, and count is 0-120 at one-second cadence. Empty windows have count
+zero and null mean/deviation. All features are null at unusable times. No sensor
+feature reads future values. Counts distinguish partial from complete history.
 
-### Clean sensor values: 27 columns
+Each <opening>_invalid_duration_seconds describes the source's consecutive finite
+out-of-range streak: the first invalid row is zero, then one, two and so on.
+Valid/missing/non-finite originals and segment boundaries reset the streak;
+unusable time gives null. It is a sensor-quality indicator, not a well-event label.
 
-Silver adds one column for **each of the 27 sensors**. Replace `<sensor>` with a sensor name from the mapping below. The clean field is a nullable double.
+## Validation and publications
 
-| New column pattern | What it means | What it is useful for |
-|---|---|---|
-| `<sensor>_clean` | The original reading when it passes that sensor's checks; otherwise null. Only the two choke-opening sensors can receive a six-minute carry-forward estimate for a finite out-of-range reading. | Gives downstream work one consistent sensor field to use. |
+Source-quality summaries and issues are recomputed from Bronze. The export is
+checked against freshly prepared clean values, retained source context, exact
+observation identities and recording counts. All seven tables must pass before
+a ready marker is atomically published. A failure preserves the previous marker.
+Preparation reports count repairs, inferred/unresolved classes and original
+sensor validity without exporting duplicate raw columns.
 
-Only these two sensors can receive the six-minute repair:
+Earlier 106-column full VM runs and 108-column development evidence describe
+their original schemas. A new build is required to publish the 79-column table.
+Gold resolves one current ready marker, uses clean class targets, retains the
+inference flag, and uses supplied labels for held-out evaluation.
 
-- `gas_lift_choke_opening_pct` — gas-lift choke opening.
-- `production_choke_opening_pct` — production choke opening.
+## Sensor-name mapping
 
-The current default age limit is 360 seconds. The
-[repair-window extension review](../evidence/silver/repair-window-extension/README.md)
-explains the coverage and masking checks. Earlier saved full runs used three
-seconds; a run's saved rules identify the policy used. Replacements are estimates,
-not confirmed measurements. Repairs are written to their `_clean` columns. The other 25 sensors are not filled from earlier readings. Missing, NaN and infinite readings have null clean values, and valve states outside their documented allowed codes also have null clean values. Finite pressure, temperature and flow readings are retained without invented physical limits.
+sensor_reference keeps logical base sensor identifiers for matching feature
+prefixes; the exported sensor value is always in the corresponding _clean field.
 
-An opening of `120` means **120%**, which is outside the allowed 0–100% range. Silver puts the repaired value in `production_choke_opening_pct_clean`: for example, 40 if the most recent original valid opening was 40% at most 360 seconds (six minutes) earlier in the same continuous segment. Without an eligible reading, the clean value becomes null. The original column keeps 120 only to record what the source reported; use the clean column for sensor analysis. Silver does not assume the correct value was 100% by clipping it. See the [quality rules](QUALITY_RULES.md).
-
-### Choke-repair details: 4 columns
-
-These fields describe repairs for the two choke openings listed above. Imputation fields are booleans; source ages are nullable doubles.
-
-| New column pattern | What it means | What it is useful for |
-|---|---|---|
-| `<opening>_was_imputed` | `true` when Silver carried forward an earlier valid opening to fill a finite out-of-range value; otherwise `false`. | Shows which clean values are estimates. |
-| `<opening>_source_age_seconds` | Zero for a valid opening with usable time. Otherwise, the age of the earlier original valid opening, or null when there is no anchor or usable time. An age above 360 seconds can be reported even though no repair was made. | Use with `_was_imputed` to inspect the age of a repair's source. |
-
-### Sequence details: 2 columns
-
-| New column | What it means | What it is useful for |
-|---|---|---|
-| `sequence_usable` | Boolean: the current timestamp exists and the previous source row's timestamp is either missing or earlier. Also true for the first row when it has a timestamp. | Identifies rows that can start or continue an ordered segment. A cadence gap still starts a new segment. |
-| `sequence_segment_id` | The ID of the uninterrupted time segment containing this row. Silver starts a new segment after a missing/bad time, a cadence break, or a break in row positions. | Keeps choke repairs within a continuous sequence and helps consumers identify gaps. |
-
-`sequence_segment_id` is a long integer scoped to one recording. Repairs and features restart at segment boundaries.
-
-### Recent sensor behaviour: 28 columns
-
-Each of these **seven sensors** gets the four fields in the following table:
-
-- `downhole_pdg_pressure_pa`
-- `subsea_tree_tpt_pressure_pa`
-- `production_choke_upstream_pressure_pa`
-- `gas_lift_choke_downstream_pressure_pa`
-- `subsea_tree_tpt_temperature_c`
-- `production_choke_downstream_temperature_c`
-- `gas_lift_flow_rate_m3_s`
-
-| New column pattern | What it means | What it is useful for |
-|---|---|---|
-| `<sensor>_mean_120s` | Average of the available clean readings during the trailing 120 seconds. Nullable double. | Describes the recent operating level. |
-| `<sensor>_stddev_120s` | Sample standard deviation of those readings; null with fewer than two values. Nullable double. | Describes recent variation. |
-| `<sensor>_change` | Current clean value minus the previous row's clean value in the same segment. Null when either value is missing or this is the segment's first row. Nullable double. | Shows sudden changes. |
-| `<sensor>_count_120s` | Number of non-null clean readings supporting the trailing statistics. Nullable long, from 0 to 120. | Lets Gold reject examples with insufficient sensor coverage. |
-
-The time range is **after `current time - 120 seconds`, through the current time**. At the documented one-second cadence, it holds at most 120 observations. Early rows use the available history; they do not wait for a full window. A missing current reading can still have a recent mean. A window with no usable readings has count 0 and null mean/standard deviation. All four fields are null when the row's time is unusable.
-
-These fields use only current and earlier readings within the same recording and sequence segment. They do not cross gaps, use future values, fill sensors, or create new window rows. Gold decides which observations become labelled model examples.
-
-### Persistent invalid choke readings: 2 columns
-
-| New column pattern | What it means | What it is useful for |
-|---|---|---|
-| `<opening>_invalid_duration_seconds` | Elapsed time in the current consecutive run of finite out-of-range **original** openings. Added for both choke-opening sensors. Nullable long. | Describes a persistent problem with the reported opening, even while a short clean repair is available. |
-
-The first invalid reading has duration 0; further consecutive invalid readings have 1, 2, and so on seconds. A valid, missing, NaN, or infinite reading resets the run to 0. A recording/sequence boundary also resets it, and unusable time gives null. For example, `40, 120, 120, 120, null, 120` gives durations `0, 0, 1, 2, 0, 0`. This column describes sensor reporting; it is not a confirmed undesirable well-event label.
-
-## Sensor names
-
-The original readings stay in their original units. These names make the sensor fields easier to read; `sensor_reference` also records each field's meaning and unit.
-
-| Bronze name | Silver column |
+| Original source sensor | Exported clean field |
 |---|---|
-| `ABER-CKGL` | `gas_lift_choke_opening_pct` |
-| `ABER-CKP` | `production_choke_opening_pct` |
-| `ESTADO-DHSV` | `downhole_safety_valve_state` |
-| `ESTADO-M1` | `production_master_valve_state` |
-| `ESTADO-M2` | `annulus_master_valve_state` |
-| `ESTADO-PXO` | `pig_crossover_valve_state` |
-| `ESTADO-SDV-GL` | `gas_lift_shutdown_valve_state` |
-| `ESTADO-SDV-P` | `production_shutdown_valve_state` |
-| `ESTADO-W1` | `production_wing_valve_state` |
-| `ESTADO-W2` | `annulus_wing_valve_state` |
-| `ESTADO-XO` | `crossover_valve_state` |
-| `P-ANULAR` | `annulus_pressure_pa` |
-| `P-JUS-BS` | `service_pump_downstream_pressure_pa` |
-| `P-JUS-CKGL` | `gas_lift_choke_downstream_pressure_pa` |
-| `P-JUS-CKP` | `production_choke_downstream_pressure_pa` |
-| `P-MON-CKGL` | `gas_lift_choke_upstream_pressure_pa` |
-| `P-MON-CKP` | `production_choke_upstream_pressure_pa` |
-| `P-MON-SDV-P` | `production_shutdown_valve_upstream_pressure_pa` |
-| `P-PDG` | `downhole_pdg_pressure_pa` |
-| `PT-P` | `subsea_production_line_pressure_pa` |
-| `P-TPT` | `subsea_tree_tpt_pressure_pa` |
-| `QBS` | `service_pump_flow_rate_m3_s` |
-| `QGL` | `gas_lift_flow_rate_m3_s` |
-| `T-JUS-CKP` | `production_choke_downstream_temperature_c` |
-| `T-MON-CKP` | `production_choke_upstream_temperature_c` |
-| `T-PDG` | `downhole_pdg_temperature_c` |
-| `T-TPT` | `subsea_tree_tpt_temperature_c` |
+| ABER-CKGL | gas_lift_choke_opening_pct_clean |
+| ABER-CKP | production_choke_opening_pct_clean |
+| ESTADO-DHSV | downhole_safety_valve_state_clean |
+| ESTADO-M1 | production_master_valve_state_clean |
+| ESTADO-M2 | annulus_master_valve_state_clean |
+| ESTADO-PXO | pig_crossover_valve_state_clean |
+| ESTADO-SDV-GL | gas_lift_shutdown_valve_state_clean |
+| ESTADO-SDV-P | production_shutdown_valve_state_clean |
+| ESTADO-W1 | production_wing_valve_state_clean |
+| ESTADO-W2 | annulus_wing_valve_state_clean |
+| ESTADO-XO | crossover_valve_state_clean |
+| P-ANULAR | annulus_pressure_pa_clean |
+| P-JUS-BS | service_pump_downstream_pressure_pa_clean |
+| P-JUS-CKGL | gas_lift_choke_downstream_pressure_pa_clean |
+| P-JUS-CKP | production_choke_downstream_pressure_pa_clean |
+| P-MON-CKGL | gas_lift_choke_upstream_pressure_pa_clean |
+| P-MON-CKP | production_choke_upstream_pressure_pa_clean |
+| P-MON-SDV-P | production_shutdown_valve_upstream_pressure_pa_clean |
+| P-PDG | downhole_pdg_pressure_pa_clean |
+| PT-P | subsea_production_line_pressure_pa_clean |
+| P-TPT | subsea_tree_tpt_pressure_pa_clean |
+| QBS | service_pump_flow_rate_m3_s_clean |
+| QGL | gas_lift_flow_rate_m3_s_clean |
+| T-JUS-CKP | production_choke_downstream_temperature_c_clean |
+| T-MON-CKP | production_choke_upstream_temperature_c_clean |
+| T-PDG | downhole_pdg_temperature_c_clean |
+| T-TPT | subsea_tree_tpt_temperature_c_clean |

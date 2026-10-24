@@ -52,7 +52,7 @@ flowchart TD
 
 ## 4 Silver design
 
-The purpose of the Silver layer is to make the prepared Bronze data easier to understand and use in Gold. We standardise field names, add recording and event details, identify data-quality problems, and prepare clean sensor values. We preserve the source readings while also attempting to repair them for some sensors, because detecting a problem does not necessarily tell us what the correct value should be.
+The purpose of the Silver layer is to make the prepared Bronze data easier to understand and use in Gold. We standardise field names, add recording and event details, identify data-quality problems, and prepare clean sensor values. We preserve the source readings in Bronze while also attempting to repair them for some sensors, because detecting a problem does not necessarily tell us what the correct value should be.
 
 ### Grain and data model
 One row in the main Silver table represents one original observation, with all 27 sensor fields kept as columns. This means that Silver retains the same 76,587,318 observations as Bronze. We do not create a separate observation row for each sensor.
@@ -67,7 +67,7 @@ Silver saves seven Parquet tables. The counts below agree across the two final 1
 | `instance_quality` | One summary per recording (one original Parquet file), containing observation counts, missing labels, timestamp problems, and overall sensor coverage. | 2,228 |
 | `sensor_availability` | One summary per sensor per recording, showing counts and percentages of finite versus missing or nonfinite readings. This describes coverage, not whether every reading is valid. | 60,156 |
 | `quality_issues` | Warnings and errors linked to individual observations, with the affected field, reason, and recommended action. Covers label, timestamp, and sensor-value problems; individual null sensor cells are summarised in `sensor_availability` instead. | 4,195,465 |
-| `quality_quarantine` | The error-only subset of `quality_issues`, identifying affected measurements, labels, or timestamps for exclusion or further investigation. The original observations remain in `silver_observations`. | 167,065 |
+| `quality_quarantine` | The error-only subset of `quality_issues`, identifying affected measurements, labels, or timestamps for exclusion or further investigation. Observation identities remain in Silver and original readings remain in Bronze. | 167,065 |
 | `event_reference` | One definition per event category, containing its readable name and supported observation classes and phases, such as normal, transient, and steady. | 10 |
 | `sensor_reference` | One definition per sensor, connecting its original name to its readable English name, meaning, unit, and applicable value rules. | 27 |
 `silver_observations` is the main table, while the other six tables provide summaries, issues or reference definitions. The `sensor_reference` and `event_reference` tables are static definitions; the other five tables are generated from the source data.
@@ -89,14 +89,14 @@ These events are usually faults or undesirable operating conditions. Silver adds
 
 ### Missing values and quality rules
 
-We preserve original readings in `silver_observations` and add one `_clean` value for each of the 27 sensors. The clean value is the original when it is usable, a limited choke repair when allowed, or null when no usable value is available. We do not replace missing readings with zero or clip values to an allowed range. Zero is not automatically treated as missing. Separate quality tables describe the limitations and identify which observations or fields they affect.
+We preserve original readings in Bronze and export one `_clean` value for each of the 27 sensors in Silver. The clean value is the original when it is usable, a limited choke repair when allowed, or null when no usable value is available. We do not replace missing readings with zero or clip values to an allowed range. Zero is not automatically treated as missing. Separate quality tables describe the limitations and identify which observations or fields they affect.
 
 For a finite choke opening outside the documented range of 0–100%, Silver can use the most recent original valid reading from the same uninterrupted sequence, if it is no more than 360 seconds (six minutes) old. The replacement is an estimate; its imputation flag and source age are recorded. The
 [repair-window review](evidence/silver/repair-window-extension/README.md) verifies
 334 estimates under this setting. The earlier full-run reports used a three-second
 limit and contain three estimates; they do not certify a new full build. Missing, NaN, infinite, long-gap, and sequence-boundary values are not repaired. If there is no eligible earlier reading, the clean value stays null. The original value is kept unchanged; Silver does not clip an opening such as 120% to 100%.
 
-Silver keeps one observation per original row and new builds store 108 columns: 36 Bronze fields, 3 catalogue fields, and 69 added fields. The additional `class_code_clean` preserves supplied classes and fills leading nulls from the first supplied class when it agrees with the recording event. This explicitly assumes that the initial unknown period had the same class. Internal gaps between equal consistent original classes are also filled, assuming that class persisted through the gap; gaps between different classes remain unknown. Original `class_code` remains available, and the boolean `class_was_inferred` explicitly identifies filled labels. It is false for original labels and unresolved nulls. The [class-backfill verification](evidence/silver/class-label-backfill/README.md) covers all 4,028,400 source null classes. Historical full-run exports still contain 106 columns. These include 120-second means, sample standard deviations, previous-reading changes and usable counts for seven pressure, temperature and gas-lift-flow sensors, plus two durations describing consecutive invalid original choke readings. Features use current and earlier clean values within the same sequence segment. Gold will select labelled examples and compare Random Forest and XGBoost using these prepared values; it can calculate additional statistics if its design requires them.
+Silver keeps one observation per original row and new builds store 79 columns after removing duplicate original sensor/class columns and the repeated ingestion-run ID. Bronze preserves the original readings; Silver retains the exact observation key. The additional `class_code_clean` preserves supplied classes and fills leading nulls from the first supplied class when it agrees with the recording event. This explicitly assumes that the initial unknown period had the same class. Internal gaps between equal consistent original classes are also filled, assuming that class persisted through the gap; gaps between different classes remain unknown. The original class remains available in Bronze, and the boolean `class_was_inferred` explicitly identifies filled labels. It is false for original labels and unresolved nulls. The [class-backfill verification](evidence/silver/class-label-backfill/README.md) covers all 4,028,400 source null classes. Historical full-run exports still contain 106 columns. These include 120-second means, sample standard deviations, previous-reading changes and usable counts for seven pressure, temperature and gas-lift-flow sensors, plus two durations describing consecutive invalid original choke readings. Features use current and earlier clean values within the same sequence segment. Gold will select labelled examples and compare Random Forest and XGBoost using these prepared values; it can calculate additional statistics if its design requires them.
 
 **`instance_quality`: quality of each recording**
 
@@ -150,7 +150,7 @@ The distinction is therefore:
 
 ### Validation and measured results
 
-The current Silver implementation was run on a development sample of 30 recordings containing 1,931,052 observations. All 32 build checks passed across the seven output tables. The checks confirmed that Silver kept every observation, preserved the source values required by the contract, and produced the expected schemas and prepared values.
+The historical 106-column Silver implementation was run on a development sample of 30 recordings containing 1,931,052 observations. All 32 build checks passed across the seven output tables. The checks confirmed that Silver kept every observation, preserved the source values required by the contract, and produced the expected schemas and prepared values.
 
 ### Spark processing and future scaling
 

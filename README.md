@@ -13,24 +13,23 @@ Silver progress is documented in the [milestone report](docs/silver/SILVER_MILES
 See the [Silver contract](docs/silver/SILVER_CONTRACT.md) for table definitions.
 The [Silver run guide](docs/silver/SILVER_RUN_GUIDE.md) covers commands, failures and comparison of saved runs.
 
-Silver standardizes observations, adds cleaned sensor columns and six-minute bounded
-repairs of finite invalid choke openings, and records quality, event references and sensor references.
-New Silver builds have 108 observation columns, including `class_code_clean`,
-its boolean `class_was_inferred` flag,
-120-second sensor features and invalid-choke durations. Leading unknown classes
-are backfilled under an explicit persistence assumption. Internal gaps between
-equal consistent original classes are also filled; source labels remain available. See the [class-backfill review](docs/evidence/silver/class-label-backfill/README.md).
-The default choke repair age was extended from 3 to 360 seconds on 24 October 2026;
-[the extension review](docs/evidence/silver/repair-window-extension/README.md) verifies
-334 estimates on the affected source recordings. The historical full VM runs below
-used the earlier three-second setting and still contain three estimates.
-Gold selects labelled examples and trains/evaluates its Spark model from those prepared values. Read
-[Silver assumptions](docs/silver/SILVER_ASSUMPTIONS.md) and
-[quality rules](docs/silver/QUALITY_RULES.md). Original measurements and all seven tables remain.
-With Bronze ready, run `python -m threew.silver.run --env dev` in the locked Linux environment.
-Gold table building, model training and comparison results are available under `gold/`.
-The current Gold builder uses the saved 106-column Silver input and original class labels;
-selecting the new assumed targets is separate follow-up work.
+Silver standardizes observations and exports **79 columns**: clean sensors and
+class targets, recording context, inference/repair flags and temporal features.
+Duplicate original sensor/class values and the repeated ingestion-run ID remain
+in Bronze instead of being copied into every Silver row. The
+[contract](docs/silver/SILVER_CONTRACT.md) defines the saved fields.
+
+The GitHub Actions [Silver workflow](.github/workflows/silver.yml) runs on the
+existing VM runner after successful Bronze or CI workflows on main, or by manual
+dispatch. It builds the locked environment, uses an isolated output root and
+skips matching verified output. It activates after the workflow reaches main
+through a PR. Commands and VM prerequisites are in the
+[run guide](docs/silver/SILVER_RUN_GUIDE.md).
+
+Gold resolves the current Silver ready marker and consumes clean class targets.
+Inferred targets can train the model; held-out evaluation uses supplied labels.
+[Gold code](gold/build_gold_table.py) and existing model results remain available.
+The historical saved full runs below retain their original 106-column schema.
 
 Both [106-column full VM runs](docs/evidence/silver/v2/README.md) passed all 32 checks across
 2,228 recordings and 76,587,318 observations. Each published seven tables and saved 10.53 GB

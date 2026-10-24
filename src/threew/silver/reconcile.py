@@ -9,6 +9,7 @@ from pyspark.sql import functions as F
 from pyspark.sql.types import IntegerType, StringType, TimestampNTZType
 
 from threew.silver.issues import ISSUE_KEY, build_quality_issues, quarantine_issues
+from threew.silver.output import export_observations
 from threew.silver.prepare import prepare_observations
 from threew.silver.quality import build_quality_summaries
 from threew.silver.reference import (
@@ -104,10 +105,9 @@ def output_checks(
     rules=None,
 ) -> dict[str, bool]:
     """Validate saved tables against Bronze, the contract and freshly computed summaries."""
-    expected = build_silver_observations(bronze, manifest_rows)
-    if rules is not None:
-        expected = prepare_observations(expected, rules)
-    summaries = build_quality_summaries(expected)
+    source = build_silver_observations(bronze, manifest_rows)
+    expected = export_observations(prepare_observations(source, rules)) if rules is not None else source
+    summaries = build_quality_summaries(source)
     issues = None
     try:
         # Recompute from Bronze. Explicit-value tests check the transformation rules;
@@ -128,7 +128,9 @@ def output_checks(
             return checks
         required_null = F.lit(False)
         for name in REQUIRED_OBSERVATION_FIELDS:
-            required_null = required_null | F.col(name).isNull()
+            if name in expected.columns:
+                required_null = required_null | F.col(name).isNull()
+        retained = [name for name in BRONZE_TYPES if RENAMES.get(name, name) in expected.columns]
         checks.update(
             {
                 "silver_required_fields_are_non_null": observations.filter(required_null).limit(1).count() == 0,
@@ -144,8 +146,8 @@ def output_checks(
                     observations.groupBy(*RECORDING_KEY).count().withColumnRenamed("count", "bronze_rows"),
                 ),
                 "silver_preserved_values_match_bronze": same_rows(
-                    bronze.select(*[F.col(name).alias(RENAMES.get(name, name)) for name in BRONZE_TYPES]),
-                    observations.select(*[RENAMES.get(name, name) for name in BRONZE_TYPES]),
+                    bronze.select(*[F.col(name).alias(RENAMES.get(name, name)) for name in retained]),
+                    observations.select(*[RENAMES.get(name, name) for name in retained]),
                 ),
                 "silver_recording_and_event_details_match": same_rows(
                     expected.select(*OBSERVATION_KEY, *DETAIL_FIELDS),
@@ -175,7 +177,7 @@ def output_checks(
                 reference, observations.select(*OBSERVATION_KEY, *derived)
             )
         if additional is not None:
-            issues = build_quality_issues(expected, rules).persist(StorageLevel.MEMORY_AND_DISK)
+            issues = build_quality_issues(source, rules).persist(StorageLevel.MEMORY_AND_DISK)
             expected_additional = {
                 "quality_issues": issues,
                 "quality_quarantine": quarantine_issues(issues),

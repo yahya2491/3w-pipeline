@@ -1,6 +1,6 @@
 # Silver quality rules
 
-Silver keeps original observations and records the problems below. Sensor corrections go into separate `_clean` columns. The [contract](SILVER_CONTRACT.md) defines those columns; the [assumptions](SILVER_ASSUMPTIONS.md) explain the choices.
+Silver keeps original observation identities and records the source problems below. Original readings remain in Bronze. Only `_clean` sensor values are exported in Silver. The [contract](SILVER_CONTRACT.md) defines those columns; the [assumptions](SILVER_ASSUMPTIONS.md) explain the choices.
 
 | Finding | What Silver does |
 |---|---|

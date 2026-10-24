@@ -1,0 +1,115 @@
+name: Silver
+
+on:
+  workflow_run:
+    workflows: [Bronze, CI]
+    branches: [main]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Rebuild even when input, code and rules are unchanged
+        type: boolean
+        default: false
+      batch_rows:
+        description: Target observations per complete-recording batch
+        type: string
+        default: "1000000"
+
+permissions:
+  contents: read
+
+# Preserve the running build. The newest pending request will check for reuse.
+concurrency:
+  group: silver-prod
+  cancel-in-progress: false
+
+jobs:
+  silver:
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.head_repository.full_name == github.repository))
+    runs-on: [self-hosted, uis-openstack]
+    environment: production
+    timeout-minutes: 720 # The historical full build took just over six hours.
+    env:
+      PYTHONUNBUFFERED: "1"
+      SILVER_ROOT: /mnt/silver-data/3w-data/silver-v3
+      SPARK_LOCAL_DIRS: /mnt/silver-data/spark-tmp/silver-${{ github.run_id }}-${{ github.run_attempt }}
+      FORCE_REBUILD: ${{ inputs.force || false }}
+      SILVER_BATCH_ROWS: ${{ inputs.batch_rows || '1000000' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main # Always trusted merged code, never an upstream PR/artifact.
+          persist-credentials: false
+
+      - name: Check the VM volume and prepare scratch
+        run: |
+          mountpoint -q /mnt/silver-data
+          mkdir -p "$SPARK_LOCAL_DIRS" out
+          echo "TMPDIR=$SPARK_LOCAL_DIRS" >> "$GITHUB_ENV"
+
+      - name: Build the locked Python environment
+        run: |
+          python3.11 -m venv .venv
+          .venv/bin/pip install --quiet -r requirements.lock
+          .venv/bin/pip install --quiet -e . --no-deps
+
+      - name: Build or reuse Silver
+        id: silver
+        run: |
+          args=(--env prod --output-root "$SILVER_ROOT" --batch-rows "$SILVER_BATCH_ROWS" --min-free-gib 20 --report-copy out/)
+          if [ "$FORCE_REBUILD" != "true" ]; then
+            args+=(--skip-unchanged)
+          fi
+          set +e
+          set -o pipefail
+          .venv/bin/python -u -m threew.silver.run "${args[@]}" 2>&1 | tee out/silver.log
+          code=${PIPESTATUS[0]}
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
+      - name: Job summary
+        if: always()
+        run: |
+          if [ -x .venv/bin/python ]; then
+            .venv/bin/python scripts/report_summary.py out/*.json >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Silver setup failed before a run report was produced; see the job log." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Keep the run report and log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: silver-prod-${{ github.run_id }}-${{ github.run_attempt }}
+          path: out/
+          retention-days: 90
+          if-no-files-found: warn
+
+      - name: Release this job's Spark scratch directory
+        if: always()
+        run: |
+          python3.11 - <<'PY'
+          import os
+          import shutil
+          from pathlib import Path
+          if Path("/mnt/silver-data").is_mount():
+              root = Path("/mnt/silver-data/spark-tmp")
+              path = Path(os.environ["SPARK_LOCAL_DIRS"])
+              expected = f"silver-{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}"
+              if path.exists():
+                  assert not path.is_symlink()
+                  assert root.resolve() == root
+                  assert path.resolve().parent == root and path.name == expected
+                  shutil.rmtree(path)
+          PY
+
+      - name: Exit with the pipeline's status
+        if: always()
+        env:
+          CODE: ${{ steps.silver.outputs.code }}
+        run: exit "${CODE:-1}"

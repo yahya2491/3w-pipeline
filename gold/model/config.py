@@ -16,6 +16,8 @@ NOT_FEATURES = {
     "well_id",
     "_row_in_file",
     "class_code",
+    "class_code_clean",
+    "class_was_inferred",
     "label",
     "recording_event",
     "split",

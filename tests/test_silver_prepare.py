@@ -271,3 +271,45 @@ def test_rules_reject_invalid_or_unsupported_settings(tmp_path, section, key, va
     path.write_text(yaml.safe_dump(raw))
     with pytest.raises(ValueError):
         load_rules(path)
+
+
+def test_export_keeps_only_clean_values_and_describes_the_clean_class(spark):
+    from threew.silver.output import OUTPUT_COLUMNS, export_observations
+    from threew.silver.reference import SENSOR_FIELDS
+    from threew.silver.transform import add_event_descriptions
+
+    values = [40.0, 120.0, float("nan"), None]
+    classes = [None, 0, 105, 5]
+    source = readings(
+        spark,
+        range(4),
+        {
+            i: {
+                CHOKE: values[i],
+                "class_code": classes[i],
+                "class_label_status": "unlabeled" if i == 0 else "consistent",
+            }
+            for i in range(4)
+        },
+    )
+    for name, value in {
+        "source_type": "REAL",
+        "instance_label": 5,
+        "state_code": 1,
+        "_ingest_run_id": "bronze-source",
+        "instance_id": "recording",
+        "well_id": 1,
+    }.items():
+        source = source.withColumn(name, F.lit(value))
+    source = source.withColumn("instance_start", F.col("timestamp"))
+    source = add_event_descriptions(source)
+    prepared = prepare_observations(source, load_rules())
+    exported = export_observations(prepared)
+    rows = exported.orderBy("_row_in_file").collect()
+    assert len(exported.columns) == len(OUTPUT_COLUMNS) == 79
+    assert not (set(SENSOR_FIELDS) | {"class_code", "_ingest_run_id"}) & set(exported.columns)
+    assert [row[f"{CHOKE}_clean"] for row in rows] == [40.0, 40.0, None, None]
+    assert rows[0].class_code_clean == 0 and rows[0].class_was_inferred
+    assert rows[0].row_event_phase == "normal" and rows[0].class_label_status == "consistent"
+    assert rows[0].row_event_name == "Normal Operation"
+    assert summarize_preparation(exported, load_rules(), source) == summarize_preparation(prepared, load_rules())

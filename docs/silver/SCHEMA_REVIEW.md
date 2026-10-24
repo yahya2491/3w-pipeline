@@ -1,19 +1,18 @@
 # Silver schema review
 
 Reviewed on 24 October 2026. This is a design assessment of the current
-108-column contract. The [measurements](../evidence/silver/schema-review/profile.json)
+79-column contract. The [measurements](../evidence/silver/schema-review/profile.json)
 cover candidate-feature availability in the full pinned source, repair-column
 storage in a saved development build, and current downstream notebook use.
 
 ## Decision
 
-The four repair-provenance fields are optional export fields. Given the
-preference for a simpler observation table, a future export can omit them while
-retaining the internal repair calculations, aggregate quality counts and policy
-documentation. Removing all four would produce 104 observation columns with the
-same clean readings. This remains a design proposal. New builds now add
-`class_code_clean` for the explicitly requested class assumptions and
-`class_was_inferred` for their provenance, giving 108 columns; the published full VM baseline still has 106 columns.
+The current export removes the 27 duplicate original sensor fields, original
+class_code and repeated _ingest_run_id from the 108-column draft, leaving 79
+columns. Bronze remains the original archive. Keep exact observation keys and
+recording context for joins, grouping and source recovery. Event descriptions
+now follow the exported clean class. Both class and choke inference provenance
+remain available. The prior idea of removing four choke fields was not applied.
 
 Add no further persisted Silver columns merely to increase the column count.
 The first additional feature to evaluate in Gold is downhole pressure minus
@@ -45,7 +44,7 @@ storage benefit in this measured build.
 
 For the current policy, internal calculation plus aggregate reporting is
 sufficient if consumers do not need immediate access to row-level provenance.
-The original and clean openings allow an imputation flag to be reconstructed.
+Original readings can be recovered from Bronze if a repair audit needs them.
 A separate sparse repair log is another option when row-level repair audits are
 needed, at the cost of another representation and a join. If repair methods
 expand to other sensors or learned estimates, preserve their provenance in an

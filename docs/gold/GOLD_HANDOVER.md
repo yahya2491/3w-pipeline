@@ -4,13 +4,13 @@ This explains the saved Silver inputs and the assumptions behind future Silver b
 
 ## Where we are
 
-New Silver builds have **108 columns**, adding `class_code_clean` and its
-boolean `class_was_inferred` flag under the
-[leading-class assumption](../evidence/silver/class-label-backfill/README.md).
-Use the clean class for assumed-label training; identify inferred rows using
-`class_was_inferred`. Keep this target-provenance flag out of predictor inputs. Report source-label evaluation separately from
-assumed-label evaluation. The saved full VM baseline described below has
-**106 columns** and needs rebuilding to include the new target field.
+New Silver builds have **79 columns**, including only clean sensor values and
+class_code_clean with class_was_inferred. Source readings remain in Bronze.
+The Gold builder resolves the ready marker under /mnt/silver-data/3w-data/silver-v3
+and reads clean targets. It keeps inferred classes for training and excludes
+them from held-out evaluation. The inference flag is never a predictor. The
+saved full VM baseline below has 106 columns and is unchanged; publish a new
+Silver build before using the updated Gold builder.
 
 The historical 106-column Silver baseline is available for Gold. It provides clean readings for all 27 sensors, bounded choke-opening estimates, sequence and quality details, 120-second features for seven sensors, and two invalid-opening durations. Original measurements, labels and row identities remain available. Read [Silver assumptions](../silver/SILVER_ASSUMPTIONS.md) for the limits of cleaning and feature selection.
 
@@ -20,7 +20,7 @@ A ready marker and its resolved rules identify which policy an output uses.
 
 Both [full VM runs](../evidence/silver/v2/README.md) passed all 32 checks and published all seven tables. Each covers 2,228 recordings and 76,587,318 observations across 82 batches, saving 10.53 GB of Parquet. The [v2 comparison log](../evidence/silver/v2/comparison.log) confirms matching schemas and complete contents for every table, including duplicates and nulls. Runtimes were 6 h 10 min 25 s and 6 h 5 min 32 s; this is not a controlled storage-performance benchmark.
 
-The current saved input is the second run on the attached volume: `/mnt/silver-data/3w-data/silver-v2/runs/20261018T091117552005Z-3280e5d3/`. The original baseline remains under `/home/ubuntu/3w-data/silver-v2/runs/20261017T232322182032Z-ba450086/`. Resolve one successful ready marker and keep that run's paths together, as explained below.
+The historical saved input is the second run on the attached volume: `/mnt/silver-data/3w-data/silver-v2/runs/20261018T091117552005Z-3280e5d3/`. The original baseline remains under `/home/ubuntu/3w-data/silver-v2/runs/20261017T232322182032Z-ba450086/`. Resolve one successful ready marker and keep that run's paths together, as explained below.
 
 ## What Silver v2 and silver-fixes mean
 
@@ -83,7 +83,7 @@ The observations also identify the source as `REAL`, `SIMULATED`, or `DRAWN` in 
 
 ## How to use the saved quality tables with observations
 
-**Use the prepared columns explicitly.** `<sensor>_clean` coexists with the original columns. Opening replacements carry `_was_imputed` and `_source_age_seconds`. Raw quality issues remain even after a repair, so do not automatically reject a permitted clean replacement just because its raw measurement is quarantined. Conversely, a repair does not make the original measurement valid. Review sequence timing, sensor availability and target eligibility for the chosen task.
+**Use the prepared columns explicitly.** `<sensor>_clean` is the only exported sensor value. Originals can be recovered from Bronze through the observation key. Opening replacements carry `_was_imputed` and `_source_age_seconds`. Source quality issues remain even after a repair, so do not automatically reject a permitted clean replacement just because its raw measurement is quarantined. Conversely, a repair does not make the original measurement valid. Review sequence timing, sensor availability and target eligibility for the chosen task.
 
 Gold can read the existing `quality_issues` or `quality_quarantine` Parquet table alongside `silver_observations`. It does not need to rerun Silver or rediscover the same problems.
 
@@ -93,7 +93,7 @@ Gold can read the existing `quality_issues` or `quality_quarantine` Parquet tabl
 4. Use `field_name`, `affected_use`, and `recommended_action` to decide whether that particular measurement or label belongs in the result.
 5. Keep other readings when their issues are unrelated to the question. Record how many inputs were included and excluded.
 
-For example, an observation may have a missing class and an original opening of −99.99%, while another sensor has a suitable finite reading. Gold can use that other sensor without a class label. The opening's clean value may be a permitted bounded estimate or null; inspect its repair flag and age. The unknown class cannot become confirmed evaluation ground truth. Original columns remain unchanged.
+For example, an observation may have a missing class and an original opening of −99.99%, while another sensor has a suitable finite reading. Gold can use that other sensor without a class label. The opening's clean value may be a permitted bounded estimate or null; inspect its repair flag and age. The unknown class cannot become confirmed evaluation ground truth. Original columns remain in Bronze.
 
 The issue tables describe problems; the full measurements still come from `silver_observations`. Their `observed_value` field is text for inspection, not a replacement numeric sensor table.
 
@@ -148,10 +148,9 @@ The [full-source class-label review](../evidence/silver/class-label-review/READM
 locates every missing class in the first 3,600 rows of each real recording.
 New Silver builds expose assumed targets through `class_code_clean` and mark
 them with `class_was_inferred`; original classes and the historical counts
-below are preserved. The current Gold builder still selects original
-`class_code` from the saved 106-column input. Using inferred targets requires
-an explicit future change to Gold input selection, with source-label and
-assumed-label evaluation reported separately.
+below are preserved. The updated Gold builder reads clean classes from the new ready publication;
+its held-out scores use supplied classes only, distinguished by the inference
+flag. Historical Gold results still describe the original 106-column input.
 
 Leaving real data out would remove these labelled rows:
 

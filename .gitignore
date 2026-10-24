@@ -19,3 +19,6 @@ data/
 spark-warehouse/
 metastore_db/
 derby.log
+
+# CI reports and logs
+out/

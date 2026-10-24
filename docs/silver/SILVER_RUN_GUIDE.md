@@ -1,6 +1,6 @@
 # Silver run guide
 
-Use the locked Linux environment described in the [README](../../README.md). The commands below build the current **106-column Silver v2**. Field definitions are in the [contract](SILVER_CONTRACT.md); measured results are in the [milestone report](SILVER_MILESTONE_REPORT.md).
+Use the locked Linux environment described in the [README](../../README.md). The commands below build the current **79-column Silver**. Field definitions are in the [contract](SILVER_CONTRACT.md); measured results are in the [milestone report](SILVER_MILESTONE_REPORT.md).
 
 ## Run the dev sample
 
@@ -22,7 +22,7 @@ The sample contains 30 recordings and 1,931,052 observations. To inspect Bronze 
 
 The [two recorded 106-column VM runs](../evidence/silver/v2/README.md) each passed all 32 checks over 2,228 recordings and 76,587,318 observations. Each published 10.53 GB of Parquet across seven tables; runtimes were 6 h 10 min 25 s and 6 h 5 min 32 s. Their [saved comparison log](../evidence/silver/v2/comparison.log) reports matching schemas and complete contents for all seven tables. Each new run retains its own complete output copy; allow additional space for Spark temporary data.
 
-The attached volume is mounted at `/mnt/silver-data`; [VM storage](VM_STORAGE.md) describes the layout. Run one job at a time and reuse the existing production Bronze table. For a reproducibility pair, keep the same commit, clean working tree, dependencies, input, rules and configuration; do not pull or change batch size between the two runs. Production deployment remains restricted to `main`; development changes belong on `dev`.
+The attached volume is mounted at `/mnt/silver-data`; [VM storage](VM_STORAGE.md) describes the layout. Run one job at a time and reuse the existing production Bronze table. For a reproducibility pair, keep the same commit, clean working tree, dependencies, input, rules and configuration; do not pull or change batch size between the two runs. Production deployment remains restricted to `main`; feature changes reach it through pull requests.
 
 ```bash
 cd ~/3w-pipeline
@@ -34,10 +34,45 @@ SPARK_LOCAL_DIRS=/mnt/silver-data/spark-tmp \
 TMPDIR=/mnt/silver-data/spark-tmp \
 python -u -m threew.silver.run \
   --env prod \
-  --output-root /mnt/silver-data/3w-data/silver-v2
+  --output-root /mnt/silver-data/3w-data/silver-v3
 ```
 
 Run the build only after `mountpoint` confirms the volume is mounted. This foreground command requires the SSH session to stay connected. The original baseline remains under `/home/ubuntu/3w-data/silver-v2/`; each new attempt gets its own run directory on the volume. The `--output-root` override leaves the configured Bronze input path unchanged.
+
+## Automated VM builds
+
+.github/workflows/silver.yml follows the existing Bronze Actions setup. It runs
+only trusted main code on the self-hosted uis-openstack runner in the production
+environment, after successful Bronze or CI runs on main. Manual dispatch has a
+force option and a batch-row target. The normal weekly cadence comes from the
+Bronze schedule; no separate competing Silver cron is needed.
+
+The workflow must first be merged into main through a PR. GitHub workflow_run
+and workflow_dispatch require the workflow to exist on the default branch:
+[official trigger documentation](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_run).
+No production workflow is started from silver-v3. Existing runner/environment
+protections remain in effect. This change does not provision a new VM runner.
+
+The job checks that /mnt/silver-data is mounted, uses a per-job scratch directory, installs requirements.lock, and invokes:
+
+    python -u -m threew.silver.run --env prod --output-root /mnt/silver-data/3w-data/silver-v3 --skip-unchanged --min-free-gib 20 --report-copy out/
+
+A 12-hour self-hosted job timeout accommodates the historical six-hour builds.
+Concurrency never cancels an active Silver build. Pipeline locks also protect
+against manual runs and Bronze writes. Logs/reports are kept as Actions artifacts
+for 90 days, with a job summary and a failing job status on pipeline errors.
+Only the job's own temporary Spark directory is removed; published runs are not
+automatically deleted. A new build requires at least 20 GiB free, failing instead of removing old
+evidence. Unchanged output can still be reused below that floor.
+
+--skip-unchanged compares source-file versions/counts and recording metadata,
+resolved rules/configuration, the contract, runtime source and locked dependencies.
+It ignores changing Bronze run IDs when content is unchanged. Reuse requires a
+successful current-schema marker and all seven output directories with recorded
+Parquet byte sizes. It does not rescan all output values for same-length external
+corruption: published runs should remain immutable. Use manual force to rebuild
+or revalidate. On a genuine reuse, Spark is not started and the ready marker is
+not rewritten. Unsuccessful attempts retain the prior published marker.
 
 ## What batches mean
 
@@ -67,7 +102,7 @@ python - <<'PY'
 import json
 from pathlib import Path
 
-root = Path("/mnt/silver-data/3w-data/silver-v2")
+root = Path("/mnt/silver-data/3w-data/silver-v3")
 ready = json.loads((root / "silver_ready.json").read_text())
 report_path = Path(ready["report"])
 print("Run:", ready["run_id"])

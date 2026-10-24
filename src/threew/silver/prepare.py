@@ -97,7 +97,9 @@ def prepare_observations(observations: DataFrame, rules: QualityRules) -> DataFr
     return add_sensor_features(cleaned, rules)
 
 
-def summarize_preparation(observations: DataFrame, rules: QualityRules) -> dict:
+def summarize_preparation(
+    observations: DataFrame, rules: QualityRules, source_observations: DataFrame | None = None
+) -> dict:
     has_valid_sensor = reduce(
         lambda a, b: a | b,
         (observed_valid(name, rules) for name in SENSOR_FIELDS),
@@ -106,16 +108,12 @@ def summarize_preparation(observations: DataFrame, rules: QualityRules) -> dict:
         F.count("*").alias("rows"),
         F.count(F.when(F.col("class_was_inferred"), 1)).alias("class_code_inferred_rows"),
         F.count(F.when(F.col("class_code_clean").isNull(), 1)).alias("class_code_unresolved_rows"),
-        F.count(F.when(~has_valid_sensor, 1)).alias("rows_without_observed_valid_sensors"),
         F.count(F.when(~F.col("sequence_usable"), 1)).alias("rows_without_usable_time"),
     ]
     for name in OPENINGS:
         expressions.extend(
             [
                 F.count(F.when(F.col(f"{name}_was_imputed"), 1)).alias(f"{name}_repaired"),
-                F.count(F.when(F.col(name).isNotNull() & F.col(f"{name}_clean").isNull(), 1)).alias(
-                    f"{name}_unresolved"
-                ),
             ]
         )
     for name in rules.feature_sensors:
@@ -124,4 +122,17 @@ def summarize_preparation(observations: DataFrame, rules: QualityRules) -> dict:
                 f"{name}_complete_120s_rows"
             )
         )
-    return observations.agg(*expressions).first().asDict()
+    result = observations.agg(*expressions).first().asDict()
+    source = observations if source_observations is None else source_observations
+    source_expressions = [
+        F.count(F.when(~has_valid_sensor, 1)).alias("rows_without_observed_valid_sensors"),
+        *[
+            F.count(F.when(F.col(name).isNotNull() & ~observed_valid(name, rules), 1)).alias(f"{name}_invalid")
+            for name in OPENINGS
+        ],
+    ]
+    original = source.agg(*source_expressions).first().asDict()
+    result["rows_without_observed_valid_sensors"] = original["rows_without_observed_valid_sensors"]
+    for name in OPENINGS:
+        result[f"{name}_unresolved"] = original[f"{name}_invalid"] - result[f"{name}_repaired"]
+    return result
