@@ -1,5 +1,6 @@
 {
-  "contract_version": 2,
+  "build_signature": "54b7ecbf9928dc7283f0744a7d37350c926aeef73e316c24cf19d7389b4d5817",
+  "contract_version": 4,
   "env": "prod",
   "execution": {
     "batch_count": 82,
@@ -7,14 +8,16 @@
     "complete_recordings": true
   },
   "preparation_summary": {
+    "class_code_inferred_rows": 4028400,
+    "class_code_unresolved_rows": 0,
     "downhole_pdg_pressure_pa_complete_120s_rows": 68431875,
     "gas_lift_choke_downstream_pressure_pa_complete_120s_rows": 31789198,
     "gas_lift_choke_opening_pct_repaired": 0,
     "gas_lift_choke_opening_pct_unresolved": 0,
     "gas_lift_flow_rate_m3_s_complete_120s_rows": 24489845,
     "production_choke_downstream_temperature_c_complete_120s_rows": 60350696,
-    "production_choke_opening_pct_repaired": 3,
-    "production_choke_opening_pct_unresolved": 161869,
+    "production_choke_opening_pct_repaired": 334,
+    "production_choke_opening_pct_unresolved": 161538,
     "production_choke_upstream_pressure_pa_complete_120s_rows": 69281672,
     "rows": 76587318,
     "rows_without_observed_valid_sensors": 5193,
@@ -22,10 +25,10 @@
     "subsea_tree_tpt_pressure_pa_complete_120s_rows": 70948610,
     "subsea_tree_tpt_temperature_c_complete_120s_rows": 66085432
   },
-  "published_at": "2026-10-18T05:33:47.610638+00:00",
+  "published_at": "2026-10-25T06:58:54.840634+00:00",
   "quality_rules": {
     "resolved": {
-      "choke_forward_fill_max_seconds": 3,
+      "choke_forward_fill_max_seconds": 360,
       "expected_interval_seconds": 1,
       "feature_sensors": [
         "downhole_pdg_pressure_pa",
@@ -37,6 +40,7 @@
         "gas_lift_flow_rate_m3_s"
       ],
       "feature_window_seconds": 120,
+      "missing_classes": "backfill_leading_and_matching",
       "opening_max_pct": 100.0,
       "opening_min_pct": 0.0,
       "valve_states": [
@@ -46,7 +50,7 @@
       ],
       "version": 1
     },
-    "sha256": "85967b9053c64dc0a411c610086d47d19b6ea177805b5d54c860a8374986e44c",
+    "sha256": "6151be9d2ee23cc7c4c7816e99b75795b2738aaa492e9227608f5382cebb737a",
     "version": 1
   },
   "quality_summary": {
@@ -302,47 +306,47 @@
     "passed": true
   },
   "reference_version": 1,
-  "report": "/home/ubuntu/3w-data/silver-v2/_runs/20261017T232322182032Z-ba450086.json",
-  "run_id": "20261017T232322182032Z-ba450086",
+  "report": "/mnt/silver-data/3w-data/silver-v3/_runs/20261025T010710680886Z-216d5afd.json",
+  "run_id": "20261025T010710680886Z-216d5afd",
   "source": {
-    "bronze_run_id": "20261012T092208Z-c1647d",
+    "bronze_run_id": "20261019T085548Z-c58876",
     "repo_id": "Yahya2491/3w-pipeline",
     "revision": "c1a7e8d0cfefc0875974ea079d11349a37fa0c56"
   },
   "tables": {
     "event_reference": {
       "parquet_bytes": 12031,
-      "path": "/home/ubuntu/3w-data/silver-v2/runs/20261017T232322182032Z-ba450086/event_reference",
+      "path": "/mnt/silver-data/3w-data/silver-v3/runs/20261025T010710680886Z-216d5afd/event_reference",
       "rows": 10
     },
     "instance_quality": {
       "parquet_bytes": 3298135,
-      "path": "/home/ubuntu/3w-data/silver-v2/runs/20261017T232322182032Z-ba450086/instance_quality",
+      "path": "/mnt/silver-data/3w-data/silver-v3/runs/20261025T010710680886Z-216d5afd/instance_quality",
       "rows": 2228
     },
     "quality_issues": {
-      "parquet_bytes": 7680961,
-      "path": "/home/ubuntu/3w-data/silver-v2/runs/20261017T232322182032Z-ba450086/quality_issues",
+      "parquet_bytes": 7718979,
+      "path": "/mnt/silver-data/3w-data/silver-v3/runs/20261025T010710680886Z-216d5afd/quality_issues",
       "rows": 4195465
     },
     "quality_quarantine": {
       "parquet_bytes": 856472,
-      "path": "/home/ubuntu/3w-data/silver-v2/runs/20261017T232322182032Z-ba450086/quality_quarantine",
+      "path": "/mnt/silver-data/3w-data/silver-v3/runs/20261025T010710680886Z-216d5afd/quality_quarantine",
       "rows": 167065
     },
     "sensor_availability": {
       "parquet_bytes": 2471347,
-      "path": "/home/ubuntu/3w-data/silver-v2/runs/20261017T232322182032Z-ba450086/sensor_availability",
+      "path": "/mnt/silver-data/3w-data/silver-v3/runs/20261025T010710680886Z-216d5afd/sensor_availability",
       "rows": 60156
     },
     "sensor_reference": {
       "parquet_bytes": 13964,
-      "path": "/home/ubuntu/3w-data/silver-v2/runs/20261017T232322182032Z-ba450086/sensor_reference",
+      "path": "/mnt/silver-data/3w-data/silver-v3/runs/20261025T010710680886Z-216d5afd/sensor_reference",
       "rows": 27
     },
     "silver_observations": {
-      "parquet_bytes": 10519862973,
-      "path": "/home/ubuntu/3w-data/silver-v2/runs/20261017T232322182032Z-ba450086/silver_observations",
+      "parquet_bytes": 8534841714,
+      "path": "/mnt/silver-data/3w-data/silver-v3/runs/20261025T010710680886Z-216d5afd/silver_observations",
       "rows": 76587318
     }
   },
@@ -350,7 +354,7 @@
     "domains": "Check versioned valve/opening domains; clean columns with repair flags supplement unchanged source values.",
     "duplicate_identity": "Stop on repeated source-path/file-hash/row-position keys, including identical copies.",
     "duplicate_timestamp": "Keep distinct observations; flag every row sharing a timestamp within its recording.",
-    "missing_class": "Keep sensor readings; exclude this label from analyses requiring a known class.",
+    "missing_class": "Preserve source unknowns. class_code_clean may supply assumed training targets; original labels identify observed evaluation targets.",
     "missing_sensors": "Individual missing sensors stay in availability summaries. A row with no finite sensors is flagged for sensor use.",
     "quarantine": "Review error issues for their affected field/use; join their keys to observations for complete readings.",
     "source_versions": "Use Bronze's current manifest; a new file hash is a new source version, not a row duplicate.",

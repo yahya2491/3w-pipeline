@@ -7,6 +7,7 @@ from pyspark.sql import functions as F
 from pyspark.sql.window import Window
 
 from threew.silver.features import add_sensor_features
+from threew.silver.labels import prepare_class_labels
 from threew.silver.quality import is_finite
 from threew.silver.reference import OPENINGS, RECORDING_KEY, SENSOR_FIELDS
 from threew.silver.rules import QualityRules
@@ -27,7 +28,9 @@ def prepare_observations(observations: DataFrame, rules: QualityRules) -> DataFr
     original = observations.columns
     ordered = Window.partitionBy(*RECORDING_KEY).orderBy("_row_in_file")
     prefix = ordered.rowsBetween(Window.unboundedPreceding, Window.currentRow)
-    df = observations.withColumn("_prep_us", F.unix_micros(F.col("timestamp").cast("timestamp")))
+    df = prepare_class_labels(observations, rules).withColumn(
+        "_prep_us", F.unix_micros(F.col("timestamp").cast("timestamp"))
+    )
     df = df.select(
         "*",
         F.lag("_prep_us").over(ordered).alias("_prep_prev_us"),
@@ -94,23 +97,23 @@ def prepare_observations(observations: DataFrame, rules: QualityRules) -> DataFr
     return add_sensor_features(cleaned, rules)
 
 
-def summarize_preparation(observations: DataFrame, rules: QualityRules) -> dict:
+def summarize_preparation(
+    observations: DataFrame, rules: QualityRules, source_observations: DataFrame | None = None
+) -> dict:
     has_valid_sensor = reduce(
         lambda a, b: a | b,
         (observed_valid(name, rules) for name in SENSOR_FIELDS),
     )
     expressions = [
         F.count("*").alias("rows"),
-        F.count(F.when(~has_valid_sensor, 1)).alias("rows_without_observed_valid_sensors"),
+        F.count(F.when(F.col("class_was_inferred"), 1)).alias("class_code_inferred_rows"),
+        F.count(F.when(F.col("class_code_clean").isNull(), 1)).alias("class_code_unresolved_rows"),
         F.count(F.when(~F.col("sequence_usable"), 1)).alias("rows_without_usable_time"),
     ]
     for name in OPENINGS:
         expressions.extend(
             [
                 F.count(F.when(F.col(f"{name}_was_imputed"), 1)).alias(f"{name}_repaired"),
-                F.count(F.when(F.col(name).isNotNull() & F.col(f"{name}_clean").isNull(), 1)).alias(
-                    f"{name}_unresolved"
-                ),
             ]
         )
     for name in rules.feature_sensors:
@@ -119,4 +122,17 @@ def summarize_preparation(observations: DataFrame, rules: QualityRules) -> dict:
                 f"{name}_complete_120s_rows"
             )
         )
-    return observations.agg(*expressions).first().asDict()
+    result = observations.agg(*expressions).first().asDict()
+    source = observations if source_observations is None else source_observations
+    source_expressions = [
+        F.count(F.when(~has_valid_sensor, 1)).alias("rows_without_observed_valid_sensors"),
+        *[
+            F.count(F.when(F.col(name).isNotNull() & ~observed_valid(name, rules), 1)).alias(f"{name}_invalid")
+            for name in OPENINGS
+        ],
+    ]
+    original = source.agg(*source_expressions).first().asDict()
+    result["rows_without_observed_valid_sensors"] = original["rows_without_observed_valid_sensors"]
+    for name in OPENINGS:
+        result[f"{name}_unresolved"] = original[f"{name}_invalid"] - result[f"{name}_repaired"]
+    return result

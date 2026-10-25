@@ -2,14 +2,16 @@
 
 Usage:
     python -m threew.silver.run --env dev
-    python -m threew.silver.run --env prod --output-root /home/ubuntu/3w-data/silver-v2
+    python -m threew.silver.run --env prod --output-root /mnt/silver-data/silver-schedule
 """
 
 import argparse
 import hashlib
 import json
 import logging
+import math
 import os
+import shutil
 import sys
 import time
 import uuid
@@ -28,9 +30,11 @@ from threew.bronze.ingest import LOCK_FILE
 from threew.bronze.report import code_info
 from threew.config import REPO_ROOT, Config, load_config
 from threew.lock import LockHeld, run_lock
+from threew.silver.automation import build_signature, reusable_build
 from threew.silver.batch import DEFAULT_BATCH_ROWS, merge_quality_summaries, plan_batches
 from threew.silver.input import current_manifest_counts, current_manifest_rows, read_bronze_ready_marker
 from threew.silver.issues import USAGE_POLICY, build_quality_issues, quarantine_issues, summarize_quality
+from threew.silver.output import CONTRACT_VERSION, export_observations
 from threew.silver.prepare import prepare_observations, summarize_preparation
 from threew.silver.quality import build_quality_summaries
 from threew.silver.reconcile import input_checks, output_checks, unique_non_null_keys
@@ -128,7 +132,7 @@ def _run_batch(spark, cfg, batch, table_paths, rules, report, batch_report, *, f
         with _phase(report, "transform_and_write"):
             source_silver = build_silver_observations(bronze, batch.metadata)
             # Never persist the wide observation table: Parquet is the saved copy.
-            silver = prepare_observations(source_silver, rules)
+            silver = export_observations(prepare_observations(source_silver, rules))
             summaries = build_quality_summaries(source_silver)
             issues = build_quality_issues(source_silver, rules).persist(StorageLevel.MEMORY_AND_DISK)
             tables = {
@@ -184,7 +188,7 @@ def _run_batch(spark, cfg, batch, table_paths, rules, report, batch_report, *, f
             batch_report["parquet_bytes"] = {
                 name: sum(path.stat().st_size for path in paths) for name, paths in batch_files.items()
             }
-            preparation = summarize_preparation(saved["silver_observations"], rules)
+            preparation = summarize_preparation(saved["silver_observations"], rules, source_silver)
             quality = summarize_quality(
                 saved["quality_issues"],
                 saved["instance_quality"],
@@ -203,10 +207,15 @@ def run_silver(
     output_root: Path | None = None,
     rules_path: Path = DEFAULT_RULES_PATH,
     batch_rows: int = DEFAULT_BATCH_ROWS,
+    skip_unchanged: bool = False,
+    report_copy: Path | None = None,
+    min_free_gib: float = 0,
 ) -> dict[str, Any]:
     """Hold the writer's input lock and the output lock until verified publication."""
     if type(batch_rows) is not int or batch_rows <= 0:
         raise ValueError("batch_rows must be a positive integer.")
+    if not math.isfinite(min_free_gib) or min_free_gib < 0:
+        raise ValueError("Minimum free GiB must be finite and non-negative.")
     silver_root = _output_root(cfg, output_root)
     rules = load_rules(rules_path)
     now, started = datetime.now(UTC), time.monotonic()
@@ -239,7 +248,7 @@ def run_silver(
         "code": code_info(),
         "config": config,
         "config_sha256": hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest(),
-        "contract": {"version": 2, "sha256": hashlib.sha256(contract.read_bytes()).hexdigest()},
+        "contract": {"version": CONTRACT_VERSION, "sha256": hashlib.sha256(contract.read_bytes()).hexdigest()},
         "execution": {"batch_rows": batch_rows, "complete_recordings": True},
         "batches": [],
         "quality_rules": rules.snapshot(),
@@ -266,6 +275,24 @@ def run_silver(
                 manifest_counts = current_manifest_counts(cfg)
                 if run_root.exists():
                     raise FileExistsError(f"Silver run folder already exists: {run_root}")
+                signature = build_signature(
+                    cfg, bronze_marker, manifest_rows, manifest_counts, rules, batch_rows, report["contract"]["sha256"]
+                )
+                report["build_signature"] = signature
+                previous = reusable_build(ready_path, signature) if skip_unchanged else None
+                if previous is not None:
+                    report["status"] = "SKIPPED"
+                    report["skip_reason"] = "unchanged"
+                    report["reused_run_id"] = previous["run_id"]
+                    print(f"Silver unchanged; reusing verified run {previous['run_id']}", flush=True)
+                    return previous
+                if min_free_gib:
+                    free = shutil.disk_usage(silver_root).free
+                    report["disk_preflight"] = {"free_bytes": free, "minimum_gib": min_free_gib}
+                    if free < min_free_gib * 1024**3:
+                        raise OSError(
+                            f"Silver requires {min_free_gib:g} GiB free for a new build; found {free / 1024**3:.1f} GiB"
+                        )
             batches = plan_batches(manifest_rows, manifest_counts, batch_rows)
             report["execution"]["batch_count"] = len(batches)
             # Audit the whole input before batch filters can hide missing/extra recordings.
@@ -368,7 +395,8 @@ def run_silver(
                     "reference_version": report["reference_version"],
                     "quality_rules": report["quality_rules"],
                     "preparation_summary": report["preparation_summary"],
-                    "contract_version": 2,
+                    "contract_version": CONTRACT_VERSION,
+                    "build_signature": report["build_signature"],
                     "execution": report["execution"],
                 }
                 _write_json_atomically(ready_path, marker)
@@ -383,6 +411,14 @@ def run_silver(
             report["duration_seconds"] = round(time.monotonic() - started, 3)
             if report["status"] != "SUCCESS":
                 _write_json_atomically(report_path, report)
+            if report_copy is not None:
+
+                def copy_report():
+                    destination = Path(report_copy)
+                    destination.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(report_path, destination / report_path.name)
+
+                cleanup_spark(copy_report, "copy the Silver job report")
     print(
         f"Silver run: {run_id}; {counts['silver_observation_rows']:,} observations, {counts['instance_quality_rows']:,} recording summaries, {counts['sensor_availability_rows']:,} sensor summaries"
     )
@@ -404,10 +440,23 @@ def main(argv: list[str] | None = None) -> int:
         default=DEFAULT_BATCH_ROWS,
         help="target observations per batch; recordings are never split (default: 1000000)",
     )
+    parser.add_argument(
+        "--skip-unchanged", action="store_true", help="reuse matching verified output without starting Spark"
+    )
+    parser.add_argument("--report-copy", type=Path, help="copy this attempt's JSON report for CI artifacts")
+    parser.add_argument(
+        "--min-free-gib", type=float, default=0, help="free-space floor for new builds; reuse is allowed below it"
+    )
     args = parser.parse_args(argv)
     try:
         run_silver(
-            load_config(args.env), output_root=args.output_root, rules_path=args.rules, batch_rows=args.batch_rows
+            load_config(args.env),
+            output_root=args.output_root,
+            rules_path=args.rules,
+            batch_rows=args.batch_rows,
+            skip_unchanged=args.skip_unchanged,
+            report_copy=args.report_copy,
+            min_free_gib=args.min_free_gib,
         )
     except LockHeld as exc:
         print(f"Silver skipped: {exc}", file=sys.stderr)

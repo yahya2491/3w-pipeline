@@ -9,36 +9,40 @@ pinned to one commit. See [`docs/source.md`](docs/source.md) for the pinned revi
 and [`docs/bronze/dataset_notes.md`](docs/bronze/dataset_notes.md) for measured facts about the data that later layers depend on.
 To build on Bronze, start with the [Bronze reference](docs/bronze/BRONZE_REFERENCE.md).
 
-Silver progress is documented in the [milestone report](docs/silver/SILVER_MILESTONE_REPORT.md).
+Current results are documented in the [validation report](docs/silver/SILVER_MILESTONE_REPORT.md).
 See the [Silver contract](docs/silver/SILVER_CONTRACT.md) for table definitions.
 The [Silver run guide](docs/silver/SILVER_RUN_GUIDE.md) covers commands, failures and comparison of saved runs.
 
-Silver contract v2 standardizes observations, adds cleaned sensor columns and three-second bounded
-repairs of finite invalid choke openings, and records quality, event references and sensor references.
-Its 106 observation columns include 120-second sensor features and invalid-choke durations.
-Gold selects labelled examples and trains/evaluates its Spark model from those prepared values. Read
-[Silver assumptions](docs/silver/SILVER_ASSUMPTIONS.md) and
-[quality rules](docs/silver/QUALITY_RULES.md). Original measurements and all seven tables remain.
-With Bronze ready, run `python -m threew.silver.run --env dev` in the locked Linux environment.
-Gold anomaly classification consumes the prepared output; the model is planned work and is not
-implemented by this Silver milestone.
+Silver standardizes observations and exports **79 columns**: clean sensors and
+class targets, recording context, inference/repair flags and temporal features.
+Duplicate original sensor/class values and the repeated ingestion-run ID remain
+in Bronze instead of being copied into every Silver row. The
+[contract](docs/silver/SILVER_CONTRACT.md) defines the saved fields.
 
-Both [106-column full VM runs](docs/evidence/silver/v2/README.md) passed all 32 checks across
-2,228 recordings and 76,587,318 observations. Each published seven tables and saved 10.53 GB
-of Parquet; runtimes were 6 h 10 min 25 s and 6 h 5 min 32 s. The
-[v2 comparison log](docs/evidence/silver/v2/comparison.log) confirms matching schemas and
-complete contents for all seven tables, including duplicates and nulls. See the
-[full-dataset v2 validation](docs/silver/SILVER_MILESTONE_REPORT.md#full-dataset-v2-validation) for details.
+The GitHub Actions [Silver workflow](.github/workflows/silver.yml) runs on the
+existing VM runner after successful Bronze or CI workflows on main, or by manual
+dispatch. It builds the locked environment, uses an isolated output root and
+skips matching verified output. It activates after the workflow reaches main
+through a PR. Commands and VM prerequisites are in the
+[run guide](docs/silver/SILVER_RUN_GUIDE.md).
 
-Silver v2 is the existing Silver implementation extended with review feedback and prepared
-sensor features. The work is on `silver-fixes`; commit scopes such as `feat(silverv2)` name
-that revision, and `silver-v2/` is its VM output folder. The Python entry point remains
-`threew.silver.run`. The [Gold handover](docs/gold/GOLD_HANDOVER.md) explains the versions and paths.
+Gold resolves the current Silver ready marker and consumes clean class targets.
+Inferred targets can train the model; held-out evaluation uses supplied labels.
+[Gold code](gold/build_gold_table.py) and existing model results remain available.
+Two [full VM builds](docs/evidence/silver/v3/README.md) of the current 79-column
+schema passed all 32 checks across 2,228 recordings and 76,587,318 observations.
+Each saved 8.55 GB of Parquet across seven tables. Runtimes were 6 h 19 min 21 s
+and 5 h 51 min 44 s. The [comparison log](docs/evidence/silver/v3/comparison.log)
+confirms matching schemas and complete contents for all seven tables.
+Both builds inferred 4,028,400 missing class labels, repaired 334 production-choke
+readings, and left 161,538 invalid openings unresolved. Inferred values are
+assumptions, identified by provenance flags; source-quality issues remain visible.
 
-The VM's attached volume is mounted at `/mnt/silver-data`. Existing pipeline data has been copied
-under `/mnt/silver-data/3w-data/`; new Silver runs save to its `silver-v2/` directory and use
-`/mnt/silver-data/spark-tmp/` for Spark temporary data. Production Bronze input remains configured
-under `/home/ubuntu/3w-data/`. See [VM storage](docs/silver/VM_STORAGE.md) and the
+The VM's attached volume is mounted at `/mnt/silver-data`. Production Bronze remains
+under `/home/ubuntu/3w-data/`. Scheduled Silver reads that Bronze publication and saves to
+`/mnt/silver-data/silver-schedule/`, using its own job directories under
+`/mnt/silver-data/spark-tmp/` for temporary data. Older copied data remains under
+`/mnt/silver-data/3w-data/` and is not the scheduled input. See [VM storage](docs/silver/VM_STORAGE.md) and the
 [Silver run guide](docs/silver/SILVER_RUN_GUIDE.md) for the exact paths and commands.
 
 Pipeline run dates and times are UTC. Source observation clocks remain timezone-free and unchanged.
@@ -131,9 +135,9 @@ SKIPPED.
 
 ### Scheduled runs
 
-The intended weekly Bronze schedule is Monday at 03:17 UTC on the VM's self-hosted runner.
-This `silver-profiling` checkout's [workflow](.github/workflows/bronze.yml) still contains a temporary 15-minute
-schedule; check the workflow on the deployed branch for the active schedule. It also runs on demand from the
+The [Bronze workflow](.github/workflows/bronze.yml) schedules Monday at 03:17 UTC on the VM's self-hosted runner.
+The [Silver workflow](.github/workflows/silver.yml) follows successful Bronze or CI runs on main;
+workflow changes activate after merging through a PR. Bronze also runs on demand from the
 Actions tab (`env`: prod or dev, `deep`: strict reconcile). Each run builds a
 fresh environment from `requirements.lock`, writes a summary to the run page (status, one row per phase, every
 problem) and keeps the report, log and reconcile plan as an artifact for 90 days. PARTIAL and FAILED runs turn red;

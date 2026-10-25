@@ -139,8 +139,13 @@ def build_silver_observations(bronze: DataFrame, manifest_rows: Sequence[Mapping
     ]
     silver = joined.select(*columns)
 
+    return add_event_descriptions(silver)
+
+
+def add_event_descriptions(observations: DataFrame, class_column: str = "class_code") -> DataFrame:
+    """Describe the selected class column while retaining recording-event context."""
     event_name_map = F.create_map(*[item for code, name in EVENT_NAMES.items() for item in (F.lit(code), F.lit(name))])
-    class_code = F.col("class_code").cast(IntegerType())
+    class_code = F.col(class_column).cast(IntegerType())
     instance_label = F.col("instance_label")
     row_event_code = (
         F.when(class_code == 0, F.lit(0))
@@ -155,7 +160,7 @@ def build_silver_observations(bronze: DataFrame, manifest_rows: Sequence[Mapping
     class_matches_recording = valid_normal_period | valid_steady_event | valid_transient_event
 
     return (
-        silver.withColumn("instance_event_name", F.element_at(event_name_map, instance_label))
+        observations.withColumn("instance_event_name", F.element_at(event_name_map, instance_label))
         .withColumn("row_event_name", F.element_at(event_name_map, row_event_code))
         .withColumn(
             "row_event_phase",

@@ -33,16 +33,16 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 215.084,
+      "duration_seconds": 216.744,
       "expected_rows": 995538,
       "parquet_bytes": {
         "event_reference": 12031,
         "instance_quality": 44840,
-        "quality_issues": 229073,
+        "quality_issues": 230348,
         "quality_quarantine": 1187,
         "sensor_availability": 35576,
         "sensor_reference": 13964,
-        "silver_observations": 109828183
+        "silver_observations": 90973167
       },
       "recording_keys": [
         {
@@ -275,14 +275,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 191.83,
+      "duration_seconds": 204.66,
       "expected_rows": 983259,
       "parquet_bytes": {
         "instance_quality": 44618,
-        "quality_issues": 226051,
+        "quality_issues": 227501,
         "quality_quarantine": 1187,
         "sensor_availability": 35413,
-        "silver_observations": 105228245
+        "silver_observations": 86889199
       },
       "recording_keys": [
         {
@@ -515,14 +515,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 169.545,
+      "duration_seconds": 181.235,
       "expected_rows": 987876,
       "parquet_bytes": {
         "instance_quality": 53284,
-        "quality_issues": 270552,
+        "quality_issues": 272113,
         "quality_quarantine": 1187,
         "sensor_availability": 41565,
-        "silver_observations": 52306868
+        "silver_observations": 44182797
       },
       "recording_keys": [
         {
@@ -771,14 +771,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 174.973,
+      "duration_seconds": 191.216,
       "expected_rows": 988277,
       "parquet_bytes": {
         "instance_quality": 44991,
-        "quality_issues": 232259,
+        "quality_issues": 233529,
         "quality_quarantine": 1187,
         "sensor_availability": 35189,
-        "silver_observations": 51902329
+        "silver_observations": 43639012
       },
       "recording_keys": [
         {
@@ -1011,14 +1011,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 186.658,
+      "duration_seconds": 201.261,
       "expected_rows": 999402,
       "parquet_bytes": {
         "instance_quality": 52982,
-        "quality_issues": 276434,
+        "quality_issues": 277769,
         "quality_quarantine": 7350,
         "sensor_availability": 41043,
-        "silver_observations": 52788435
+        "silver_observations": 44842661
       },
       "recording_keys": [
         {
@@ -1255,14 +1255,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 174.862,
+      "duration_seconds": 179.231,
       "expected_rows": 988952,
       "parquet_bytes": {
         "instance_quality": 52954,
-        "quality_issues": 252402,
+        "quality_issues": 254131,
         "quality_quarantine": 1187,
         "sensor_availability": 40585,
-        "silver_observations": 50318038
+        "silver_observations": 43178972
       },
       "recording_keys": [
         {
@@ -1495,14 +1495,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 191.204,
+      "duration_seconds": 197.495,
       "expected_rows": 986024,
       "parquet_bytes": {
         "instance_quality": 60724,
-        "quality_issues": 282797,
+        "quality_issues": 284551,
         "quality_quarantine": 11452,
         "sensor_availability": 47385,
-        "silver_observations": 75748228
+        "silver_observations": 66047986
       },
       "recording_keys": [
         {
@@ -1735,14 +1735,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 193.23,
+      "duration_seconds": 205.834,
       "expected_rows": 999907,
       "parquet_bytes": {
         "instance_quality": 46645,
-        "quality_issues": 279713,
+        "quality_issues": 281530,
         "quality_quarantine": 1187,
         "sensor_availability": 38403,
-        "silver_observations": 103078715
+        "silver_observations": 89749054
       },
       "recording_keys": [
         {
@@ -2043,14 +2043,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 214.377,
+      "duration_seconds": 220.55,
       "expected_rows": 981119,
       "parquet_bytes": {
         "instance_quality": 53980,
-        "quality_issues": 291898,
+        "quality_issues": 293283,
         "quality_quarantine": 1187,
         "sensor_availability": 43353,
-        "silver_observations": 89007462
+        "silver_observations": 76653137
       },
       "recording_keys": [
         {
@@ -2327,14 +2327,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 195.064,
+      "duration_seconds": 200.502,
       "expected_rows": 988485,
       "parquet_bytes": {
         "instance_quality": 52770,
-        "quality_issues": 252786,
+        "quality_issues": 254343,
         "quality_quarantine": 1187,
         "sensor_availability": 41072,
-        "silver_observations": 87601685
+        "silver_observations": 73531150
       },
       "recording_keys": [
         {
@@ -2567,14 +2567,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 205.803,
+      "duration_seconds": 205.377,
       "expected_rows": 987721,
       "parquet_bytes": {
         "instance_quality": 45015,
-        "quality_issues": 235032,
+        "quality_issues": 236307,
         "quality_quarantine": 1187,
         "sensor_availability": 35716,
-        "silver_observations": 72289993
+        "silver_observations": 60997855
       },
       "recording_keys": [
         {
@@ -2811,14 +2811,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 159.027,
+      "duration_seconds": 170.689,
       "expected_rows": 979302,
       "parquet_bytes": {
         "instance_quality": 44867,
-        "quality_issues": 246097,
+        "quality_issues": 247507,
         "quality_quarantine": 6150,
         "sensor_availability": 35060,
-        "silver_observations": 24251885
+        "silver_observations": 22894021
       },
       "recording_keys": [
         {
@@ -3051,14 +3051,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 183.312,
+      "duration_seconds": 191.643,
       "expected_rows": 990718,
       "parquet_bytes": {
         "instance_quality": 34004,
-        "quality_issues": 101233,
+        "quality_issues": 101840,
         "quality_quarantine": 1187,
         "sensor_availability": 25491,
-        "silver_observations": 104985843
+        "silver_observations": 85880371
       },
       "recording_keys": [
         {
@@ -3191,14 +3191,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 178.537,
+      "duration_seconds": 189.973,
       "expected_rows": 919195,
       "parquet_bytes": {
         "instance_quality": 39622,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 28656,
-        "silver_observations": 120222758
+        "silver_observations": 97152849
       },
       "recording_keys": [
         {
@@ -3291,14 +3291,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 169.331,
+      "duration_seconds": 180.599,
       "expected_rows": 995994,
       "parquet_bytes": {
         "instance_quality": 47513,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 34377,
-        "silver_observations": 133221916
+        "silver_observations": 107867494
       },
       "recording_keys": [
         {
@@ -3399,14 +3399,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 188.636,
+      "duration_seconds": 211.146,
       "expected_rows": 976795,
       "parquet_bytes": {
         "instance_quality": 47562,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 33758,
-        "silver_observations": 137750258
+        "silver_observations": 110822250
       },
       "recording_keys": [
         {
@@ -3499,14 +3499,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 181.921,
+      "duration_seconds": 195.634,
       "expected_rows": 988788,
       "parquet_bytes": {
         "instance_quality": 48417,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 34519,
-        "silver_observations": 156443604
+        "silver_observations": 126905122
       },
       "recording_keys": [
         {
@@ -3619,14 +3619,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 177.429,
+      "duration_seconds": 182.427,
       "expected_rows": 962391,
       "parquet_bytes": {
         "instance_quality": 39864,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 28480,
-        "silver_observations": 154620711
+        "silver_observations": 123767092
       },
       "recording_keys": [
         {
@@ -3719,14 +3719,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 179.777,
+      "duration_seconds": 194.357,
       "expected_rows": 950383,
       "parquet_bytes": {
         "instance_quality": 40908,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 29262,
-        "silver_observations": 159335540
+        "silver_observations": 129332249
       },
       "recording_keys": [
         {
@@ -3847,14 +3847,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 191.929,
+      "duration_seconds": 203.061,
       "expected_rows": 971985,
       "parquet_bytes": {
         "instance_quality": 32757,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 23432,
-        "silver_observations": 166284852
+        "silver_observations": 133482499
       },
       "recording_keys": [
         {
@@ -3963,14 +3963,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 160.097,
+      "duration_seconds": 168.938,
       "expected_rows": 962389,
       "parquet_bytes": {
         "instance_quality": 39932,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 28448,
-        "silver_observations": 157923590
+        "silver_observations": 127495343
       },
       "recording_keys": [
         {
@@ -4063,14 +4063,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 196.555,
+      "duration_seconds": 209.119,
       "expected_rows": 997579,
       "parquet_bytes": {
         "instance_quality": 41621,
-        "quality_issues": 70580,
+        "quality_issues": 70901,
         "quality_quarantine": 1187,
         "sensor_availability": 30450,
-        "silver_observations": 150696777
+        "silver_observations": 122909442
       },
       "recording_keys": [
         {
@@ -4199,14 +4199,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 245.626,
+      "duration_seconds": 224.351,
       "expected_rows": 963987,
       "parquet_bytes": {
         "instance_quality": 44132,
-        "quality_issues": 166005,
+        "quality_issues": 167441,
         "quality_quarantine": 1187,
         "sensor_availability": 34213,
-        "silver_observations": 150629419
+        "silver_observations": 120895373
       },
       "recording_keys": [
         {
@@ -4399,14 +4399,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 176.492,
+      "duration_seconds": 197.21,
       "expected_rows": 985982,
       "parquet_bytes": {
         "instance_quality": 40622,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 29102,
-        "silver_observations": 177274810
+        "silver_observations": 143924648
       },
       "recording_keys": [
         {
@@ -4527,14 +4527,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 187.282,
+      "duration_seconds": 178.24,
       "expected_rows": 996981,
       "parquet_bytes": {
         "instance_quality": 40821,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 29265,
-        "silver_observations": 188975476
+        "silver_observations": 152834273
       },
       "recording_keys": [
         {
@@ -4659,14 +4659,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 168.94,
+      "duration_seconds": 188.449,
       "expected_rows": 991985,
       "parquet_bytes": {
         "instance_quality": 40436,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 28748,
-        "silver_observations": 189078563
+        "silver_observations": 152335806
       },
       "recording_keys": [
         {
@@ -4779,14 +4779,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 203.634,
+      "duration_seconds": 208.03,
       "expected_rows": 980092,
       "parquet_bytes": {
         "instance_quality": 49994,
-        "quality_issues": 142798,
+        "quality_issues": 143473,
         "quality_quarantine": 8029,
         "sensor_availability": 37144,
-        "silver_observations": 195381377
+        "silver_observations": 156194512
       },
       "recording_keys": [
         {
@@ -4927,14 +4927,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 219.681,
+      "duration_seconds": 238.431,
       "expected_rows": 993159,
       "parquet_bytes": {
         "instance_quality": 55969,
-        "quality_issues": 342348,
+        "quality_issues": 344184,
         "quality_quarantine": 15423,
         "sensor_availability": 45861,
-        "silver_observations": 161208217
+        "silver_observations": 126556747
       },
       "recording_keys": [
         {
@@ -5267,14 +5267,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 173.766,
+      "duration_seconds": 195.55,
       "expected_rows": 999302,
       "parquet_bytes": {
         "instance_quality": 58064,
-        "quality_issues": 383519,
+        "quality_issues": 385458,
         "quality_quarantine": 1187,
         "sensor_availability": 47127,
-        "silver_observations": 40046890
+        "silver_observations": 35416158
       },
       "recording_keys": [
         {
@@ -5695,14 +5695,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 268.685,
+      "duration_seconds": 245.66,
       "expected_rows": 999672,
       "parquet_bytes": {
         "instance_quality": 58564,
-        "quality_issues": 382598,
+        "quality_issues": 384357,
         "quality_quarantine": 1187,
         "sensor_availability": 50076,
-        "silver_observations": 112277132
+        "silver_observations": 92620455
       },
       "recording_keys": [
         {
@@ -6123,14 +6123,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 216.109,
+      "duration_seconds": 574.471,
       "expected_rows": 998539,
       "parquet_bytes": {
         "instance_quality": 57988,
-        "quality_issues": 383303,
+        "quality_issues": 385596,
         "quality_quarantine": 1187,
         "sensor_availability": 48552,
-        "silver_observations": 80029317
+        "silver_observations": 69982276
       },
       "recording_keys": [
         {
@@ -6551,14 +6551,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 268.571,
+      "duration_seconds": 279.107,
       "expected_rows": 999930,
       "parquet_bytes": {
         "instance_quality": 44257,
-        "quality_issues": 137245,
+        "quality_issues": 138100,
         "quality_quarantine": 7741,
         "sensor_availability": 34050,
-        "silver_observations": 215129353
+        "silver_observations": 165446376
       },
       "recording_keys": [
         {
@@ -6779,14 +6779,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 191.829,
+      "duration_seconds": 202.737,
       "expected_rows": 996167,
       "parquet_bytes": {
         "instance_quality": 42166,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 30915,
-        "silver_observations": 167219536
+        "silver_observations": 131573722
       },
       "recording_keys": [
         {
@@ -6971,14 +6971,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 172.639,
+      "duration_seconds": 185.888,
       "expected_rows": 996167,
       "parquet_bytes": {
         "instance_quality": 42154,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 30909,
-        "silver_observations": 205805520
+        "silver_observations": 160103559
       },
       "recording_keys": [
         {
@@ -7163,14 +7163,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 169.396,
+      "duration_seconds": 189.259,
       "expected_rows": 996167,
       "parquet_bytes": {
         "instance_quality": 42163,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 30934,
-        "silver_observations": 182568724
+        "silver_observations": 142185180
       },
       "recording_keys": [
         {
@@ -7355,14 +7355,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 175.315,
+      "duration_seconds": 184.012,
       "expected_rows": 996166,
       "parquet_bytes": {
         "instance_quality": 50024,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 36376,
-        "silver_observations": 165173279
+        "silver_observations": 130578991
       },
       "recording_keys": [
         {
@@ -7547,14 +7547,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 161.583,
+      "duration_seconds": 176.028,
       "expected_rows": 996166,
       "parquet_bytes": {
         "instance_quality": 50032,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 36393,
-        "silver_observations": 143301760
+        "silver_observations": 115971663
       },
       "recording_keys": [
         {
@@ -7739,14 +7739,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 180.076,
+      "duration_seconds": 194.924,
       "expected_rows": 996167,
       "parquet_bytes": {
         "instance_quality": 50046,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 36415,
-        "silver_observations": 188866110
+        "silver_observations": 147454051
       },
       "recording_keys": [
         {
@@ -7931,14 +7931,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 172.618,
+      "duration_seconds": 189.73,
       "expected_rows": 996166,
       "parquet_bytes": {
         "instance_quality": 50021,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 36317,
-        "silver_observations": 164550617
+        "silver_observations": 130648934
       },
       "recording_keys": [
         {
@@ -8123,14 +8123,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 182.106,
+      "duration_seconds": 195.396,
       "expected_rows": 996168,
       "parquet_bytes": {
         "instance_quality": 42167,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 30936,
-        "silver_observations": 147349129
+        "silver_observations": 118953018
       },
       "recording_keys": [
         {
@@ -8315,14 +8315,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 156.499,
+      "duration_seconds": 176.479,
       "expected_rows": 996167,
       "parquet_bytes": {
         "instance_quality": 42160,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 30897,
-        "silver_observations": 145029941
+        "silver_observations": 117296744
       },
       "recording_keys": [
         {
@@ -8507,14 +8507,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 156.703,
+      "duration_seconds": 165.263,
       "expected_rows": 996167,
       "parquet_bytes": {
         "instance_quality": 50041,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 36365,
-        "silver_observations": 154196142
+        "silver_observations": 123014088
       },
       "recording_keys": [
         {
@@ -8699,14 +8699,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 174.852,
+      "duration_seconds": 188.818,
       "expected_rows": 996166,
       "parquet_bytes": {
         "instance_quality": 50019,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 36363,
-        "silver_observations": 149076102
+        "silver_observations": 119648587
       },
       "recording_keys": [
         {
@@ -8891,14 +8891,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 195.718,
+      "duration_seconds": 212.905,
       "expected_rows": 996166,
       "parquet_bytes": {
         "instance_quality": 50011,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 36333,
-        "silver_observations": 129725173
+        "silver_observations": 107357687
       },
       "recording_keys": [
         {
@@ -9083,14 +9083,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 831.753,
+      "duration_seconds": 925.366,
       "expected_rows": 983988,
       "parquet_bytes": {
         "instance_quality": 51078,
-        "quality_issues": 150002,
+        "quality_issues": 150855,
         "quality_quarantine": 10607,
         "sensor_availability": 37995,
-        "silver_observations": 143543087
+        "silver_observations": 113207039
       },
       "recording_keys": [
         {
@@ -9263,14 +9263,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 173.742,
+      "duration_seconds": 169.046,
       "expected_rows": 998963,
       "parquet_bytes": {
         "instance_quality": 42400,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 31246,
-        "silver_observations": 143784872
+        "silver_observations": 112786527
       },
       "recording_keys": [
         {
@@ -9467,14 +9467,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 175.127,
+      "duration_seconds": 175.648,
       "expected_rows": 998964,
       "parquet_bytes": {
         "instance_quality": 58223,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 42234,
-        "silver_observations": 138371685
+        "silver_observations": 110431862
       },
       "recording_keys": [
         {
@@ -9671,14 +9671,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 164.622,
+      "duration_seconds": 168.751,
       "expected_rows": 998963,
       "parquet_bytes": {
         "instance_quality": 50309,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 36727,
-        "silver_observations": 128158010
+        "silver_observations": 102216162
       },
       "recording_keys": [
         {
@@ -9875,14 +9875,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 194.353,
+      "duration_seconds": 210.352,
       "expected_rows": 998965,
       "parquet_bytes": {
         "instance_quality": 50006,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 36808,
-        "silver_observations": 145720411
+        "silver_observations": 114115917
       },
       "recording_keys": [
         {
@@ -10079,14 +10079,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 173.633,
+      "duration_seconds": 176.39,
       "expected_rows": 998964,
       "parquet_bytes": {
         "instance_quality": 50332,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 36735,
-        "silver_observations": 149724155
+        "silver_observations": 117417452
       },
       "recording_keys": [
         {
@@ -10283,14 +10283,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 218.829,
+      "duration_seconds": 211.484,
       "expected_rows": 747067,
       "parquet_bytes": {
         "instance_quality": 33512,
-        "quality_issues": 61659,
+        "quality_issues": 62052,
         "quality_quarantine": 1187,
         "sensor_availability": 24744,
-        "silver_observations": 83494656
+        "silver_observations": 65588838
       },
       "recording_keys": [
         {
@@ -10415,14 +10415,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 162.582,
+      "duration_seconds": 198.658,
       "expected_rows": 734403,
       "parquet_bytes": {
         "instance_quality": 15309,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 11023,
-        "silver_observations": 67949460
+        "silver_observations": 53348463
       },
       "recording_keys": [
         {
@@ -10483,14 +10483,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 182.369,
+      "duration_seconds": 190.805,
       "expected_rows": 691202,
       "parquet_bytes": {
         "instance_quality": 14930,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 11022,
-        "silver_observations": 60401612
+        "silver_observations": 47122103
       },
       "recording_keys": [
         {
@@ -10547,14 +10547,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 360.402,
+      "duration_seconds": 308.898,
       "expected_rows": 973254,
       "parquet_bytes": {
         "instance_quality": 31046,
-        "quality_issues": 46828,
+        "quality_issues": 47001,
         "quality_quarantine": 7602,
         "sensor_availability": 22838,
-        "silver_observations": 106852943
+        "silver_observations": 85229175
       },
       "recording_keys": [
         {
@@ -10631,14 +10631,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 1519.397,
+      "duration_seconds": 1459.883,
       "expected_rows": 960392,
       "parquet_bytes": {
         "instance_quality": 23652,
-        "quality_issues": 69389,
+        "quality_issues": 69710,
         "quality_quarantine": 1187,
         "sensor_availability": 17575,
-        "silver_observations": 101911211
+        "silver_observations": 91601313
       },
       "recording_keys": [
         {
@@ -10703,14 +10703,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 138.064,
+      "duration_seconds": 154.435,
       "expected_rows": 289641,
       "parquet_bytes": {
         "instance_quality": 7759,
-        "quality_issues": 19795,
+        "quality_issues": 19902,
         "quality_quarantine": 1187,
         "sensor_availability": 5868,
-        "silver_observations": 29897115
+        "silver_observations": 27044150
       },
       "recording_keys": [
         {
@@ -10763,14 +10763,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 306.349,
+      "duration_seconds": 353.345,
       "expected_rows": 768314,
       "parquet_bytes": {
         "instance_quality": 7757,
-        "quality_issues": 19795,
+        "quality_issues": 19902,
         "quality_quarantine": 1187,
         "sensor_availability": 5869,
-        "silver_observations": 80408898
+        "silver_observations": 72437317
       },
       "recording_keys": [
         {
@@ -10823,14 +10823,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 205.085,
+      "duration_seconds": 204.526,
       "expected_rows": 574981,
       "parquet_bytes": {
         "instance_quality": 15518,
-        "quality_issues": 39590,
+        "quality_issues": 39804,
         "quality_quarantine": 1187,
         "sensor_availability": 11802,
-        "silver_observations": 61069239
+        "silver_observations": 54473205
       },
       "recording_keys": [
         {
@@ -10887,14 +10887,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 220.138,
+      "duration_seconds": 245.058,
       "expected_rows": 604835,
       "parquet_bytes": {
         "instance_quality": 15515,
-        "quality_issues": 39590,
+        "quality_issues": 39804,
         "quality_quarantine": 1187,
         "sensor_availability": 11789,
-        "silver_observations": 62922162
+        "silver_observations": 56582664
       },
       "recording_keys": [
         {
@@ -10951,14 +10951,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 689.104,
+      "duration_seconds": 461.371,
       "expected_rows": 846976,
       "parquet_bytes": {
         "instance_quality": 15516,
-        "quality_issues": 39590,
+        "quality_issues": 39804,
         "quality_quarantine": 1187,
         "sensor_availability": 11762,
-        "silver_observations": 37300877
+        "silver_observations": 34200545
       },
       "recording_keys": [
         {
@@ -11015,14 +11015,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 781.376,
+      "duration_seconds": 516.483,
       "expected_rows": 868655,
       "parquet_bytes": {
         "instance_quality": 23273,
-        "quality_issues": 59385,
+        "quality_issues": 59706,
         "quality_quarantine": 1187,
         "sensor_availability": 17660,
-        "silver_observations": 48685127
+        "silver_observations": 44108954
       },
       "recording_keys": [
         {
@@ -11083,14 +11083,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 308.094,
+      "duration_seconds": 346.755,
       "expected_rows": 920568,
       "parquet_bytes": {
         "instance_quality": 23646,
-        "quality_issues": 69386,
+        "quality_issues": 69707,
         "quality_quarantine": 1187,
         "sensor_availability": 17898,
-        "silver_observations": 115322108
+        "silver_observations": 100356622
       },
       "recording_keys": [
         {
@@ -11155,14 +11155,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 368.102,
+      "duration_seconds": 368.605,
       "expected_rows": 904965,
       "parquet_bytes": {
         "instance_quality": 32092,
-        "quality_issues": 109184,
+        "quality_issues": 109612,
         "quality_quarantine": 1187,
         "sensor_availability": 23822,
-        "silver_observations": 119909406
+        "silver_observations": 102909278
       },
       "recording_keys": [
         {
@@ -11239,14 +11239,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 341.255,
+      "duration_seconds": 234.157,
       "expected_rows": 989362,
       "parquet_bytes": {
         "instance_quality": 40982,
-        "quality_issues": 121496,
+        "quality_issues": 121949,
         "quality_quarantine": 12014,
         "sensor_availability": 30117,
-        "silver_observations": 135627675
+        "silver_observations": 116437321
       },
       "recording_keys": [
         {
@@ -11351,14 +11351,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 182.574,
+      "duration_seconds": 202.516,
       "expected_rows": 998963,
       "parquet_bytes": {
         "instance_quality": 50396,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 36804,
-        "silver_observations": 168807851
+        "silver_observations": 138297832
       },
       "recording_keys": [
         {
@@ -11555,14 +11555,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 179.084,
+      "duration_seconds": 190.673,
       "expected_rows": 998963,
       "parquet_bytes": {
         "instance_quality": 50395,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 36808,
-        "silver_observations": 159432134
+        "silver_observations": 131160164
       },
       "recording_keys": [
         {
@@ -11759,14 +11759,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 218.218,
+      "duration_seconds": 233.296,
       "expected_rows": 980144,
       "parquet_bytes": {
         "instance_quality": 31372,
-        "quality_issues": 79516,
+        "quality_issues": 79903,
         "quality_quarantine": 5285,
         "sensor_availability": 23871,
-        "silver_observations": 103898170
+        "silver_observations": 83966549
       },
       "recording_keys": [
         {
@@ -11831,14 +11831,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 629.537,
+      "duration_seconds": 773.515,
       "expected_rows": 909393,
       "parquet_bytes": {
         "instance_quality": 8142,
-        "quality_issues": 32201,
+        "quality_issues": 32240,
         "quality_quarantine": 6782,
         "sensor_availability": 6164,
-        "silver_observations": 122666211
+        "silver_observations": 95454444
       },
       "recording_keys": [
         {
@@ -11895,14 +11895,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 230.857,
+      "duration_seconds": 246.383,
       "expected_rows": 586201,
       "parquet_bytes": {
         "instance_quality": 7844,
-        "quality_issues": 19795,
+        "quality_issues": 19902,
         "quality_quarantine": 1187,
         "sensor_availability": 5953,
-        "silver_observations": 80039087
+        "silver_observations": 60301420
       },
       "recording_keys": [
         {
@@ -11955,14 +11955,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 203.648,
+      "duration_seconds": 220.874,
       "expected_rows": 522001,
       "parquet_bytes": {
         "instance_quality": 7844,
-        "quality_issues": 19795,
+        "quality_issues": 19902,
         "quality_quarantine": 1187,
         "sensor_availability": 5953,
-        "silver_observations": 68635018
+        "silver_observations": 52613221
       },
       "recording_keys": [
         {
@@ -12015,14 +12015,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 256.231,
+      "duration_seconds": 298.733,
       "expected_rows": 680420,
       "parquet_bytes": {
         "instance_quality": 7844,
-        "quality_issues": 19795,
+        "quality_issues": 19902,
         "quality_quarantine": 1187,
         "sensor_availability": 5953,
-        "silver_observations": 51613856
+        "silver_observations": 45015454
       },
       "recording_keys": [
         {
@@ -12075,14 +12075,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 785.186,
+      "duration_seconds": 688.454,
       "expected_rows": 996674,
       "parquet_bytes": {
         "instance_quality": 16197,
-        "quality_issues": 941295,
+        "quality_issues": 941607,
         "quality_quarantine": 669458,
         "sensor_availability": 12341,
-        "silver_observations": 83572508
+        "silver_observations": 67101346
       },
       "recording_keys": [
         {
@@ -12147,14 +12147,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 282.129,
+      "duration_seconds": 268.94,
       "expected_rows": 984984,
       "parquet_bytes": {
         "instance_quality": 41014,
-        "quality_issues": 19795,
+        "quality_issues": 19902,
         "quality_quarantine": 1187,
         "sensor_availability": 29822,
-        "silver_observations": 204917205
+        "silver_observations": 163912043
       },
       "recording_keys": [
         {
@@ -12279,14 +12279,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 192.43,
+      "duration_seconds": 202.984,
       "expected_rows": 952375,
       "parquet_bytes": {
         "instance_quality": 49375,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 35788,
-        "silver_observations": 219000793
+        "silver_observations": 177180020
       },
       "recording_keys": [
         {
@@ -12435,14 +12435,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 201.134,
+      "duration_seconds": 229.892,
       "expected_rows": 965982,
       "parquet_bytes": {
         "instance_quality": 49022,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 35040,
-        "silver_observations": 218610217
+        "silver_observations": 175222364
       },
       "recording_keys": [
         {
@@ -12571,14 +12571,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 201.144,
+      "duration_seconds": 214.036,
       "expected_rows": 999982,
       "parquet_bytes": {
         "instance_quality": 48846,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 35090,
-        "silver_observations": 223689901
+        "silver_observations": 179680958
       },
       "recording_keys": [
         {
@@ -12707,14 +12707,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 178.33,
+      "duration_seconds": 196.819,
       "expected_rows": 962377,
       "parquet_bytes": {
         "instance_quality": 48933,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 35559,
-        "silver_observations": 223679957
+        "silver_observations": 179875071
       },
       "recording_keys": [
         {
@@ -12855,14 +12855,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 211.111,
+      "duration_seconds": 233.326,
       "expected_rows": 998378,
       "parquet_bytes": {
         "instance_quality": 41386,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 30038,
-        "silver_observations": 232449287
+        "silver_observations": 186528441
       },
       "recording_keys": [
         {
@@ -13003,14 +13003,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 191.938,
+      "duration_seconds": 202.688,
       "expected_rows": 988781,
       "parquet_bytes": {
         "instance_quality": 48804,
         "quality_issues": 1187,
         "quality_quarantine": 1187,
         "sensor_availability": 34889,
-        "silver_observations": 220274224
+        "silver_observations": 176791802
       },
       "recording_keys": [
         {
@@ -13135,14 +13135,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 729.392,
+      "duration_seconds": 1012.676,
       "expected_rows": 954308,
       "parquet_bytes": {
         "instance_quality": 43145,
-        "quality_issues": 166381,
+        "quality_issues": 167286,
         "quality_quarantine": 1187,
         "sensor_availability": 33031,
-        "silver_observations": 124578752
+        "silver_observations": 100294455
       },
       "recording_keys": [
         {
@@ -13299,14 +13299,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 1010.946,
+      "duration_seconds": 938.112,
       "expected_rows": 939705,
       "parquet_bytes": {
         "instance_quality": 42351,
-        "quality_issues": 169434,
+        "quality_issues": 170691,
         "quality_quarantine": 1187,
         "sensor_availability": 31808,
-        "silver_observations": 134361814
+        "silver_observations": 108104829
       },
       "recording_keys": [
         {
@@ -13439,14 +13439,14 @@
         "silver_required_fields_are_non_null": true,
         "silver_schema_matches_contract": true
       },
-      "duration_seconds": 209.534,
+      "duration_seconds": 205.1,
       "expected_rows": 868557,
       "parquet_bytes": {
         "instance_quality": 40649,
-        "quality_issues": 137436,
+        "quality_issues": 138468,
         "quality_quarantine": 6676,
         "sensor_availability": 30377,
-        "silver_observations": 149852777
+        "silver_observations": 121539824
       },
       "recording_keys": [
         {
@@ -13507,8 +13507,9 @@
       }
     }
   ],
+  "build_signature": "54b7ecbf9928dc7283f0744a7d37350c926aeef73e316c24cf19d7389b4d5817",
   "code": {
-    "commit": "330496fb3cb2c89133c89b68ad3866266369af1b",
+    "commit": "af3168be64eaf045215ea546a381920dcca39b54",
     "dirty": false,
     "packages": {
       "huggingface_hub": "2.2.0",
@@ -13560,10 +13561,14 @@
   },
   "config_sha256": "e96535d58fcc7fafd06e24c099a4e2a121ba9fe11b9ad10cddec4c7197887a4a",
   "contract": {
-    "sha256": "44f376cbf5ad44bef6cb63edb8115684d37ff7d14421cd37c639d4fc45037e40",
-    "version": 2
+    "sha256": "a6ec2354cd0cde97f427cc3a5e7863fb8f5eab42f6543e8883f6ba0300e336a0",
+    "version": 4
   },
-  "duration_seconds": 21932.017,
+  "disk_preflight": {
+    "free_bytes": 67653681152,
+    "minimum_gib": 20.0
+  },
+  "duration_seconds": 22760.752,
   "env": "prod",
   "error": null,
   "execution": {
@@ -13571,25 +13576,27 @@
     "batch_rows": 1000000,
     "complete_recordings": true
   },
-  "finished_at": "2026-10-18T15:16:49.568730+00:00",
-  "output_root": "/mnt/silver-data/3w-data/silver-v2",
+  "finished_at": "2026-10-25T00:17:27.109279+00:00",
+  "output_root": "/mnt/silver-data/3w-data/silver-v3",
   "phase": "publish",
   "phase_seconds": {
-    "input": 0.305,
-    "input_checks": 332.489,
+    "input": 0.479,
+    "input_checks": 317.52,
     "lock": 0.0,
-    "read_back_and_check": 12680.097,
-    "transform_and_write": 8808.489
+    "read_back_and_check": 12659.926,
+    "transform_and_write": 9681.644
   },
   "preparation_summary": {
+    "class_code_inferred_rows": 4028400,
+    "class_code_unresolved_rows": 0,
     "downhole_pdg_pressure_pa_complete_120s_rows": 68431875,
     "gas_lift_choke_downstream_pressure_pa_complete_120s_rows": 31789198,
     "gas_lift_choke_opening_pct_repaired": 0,
     "gas_lift_choke_opening_pct_unresolved": 0,
     "gas_lift_flow_rate_m3_s_complete_120s_rows": 24489845,
     "production_choke_downstream_temperature_c_complete_120s_rows": 60350696,
-    "production_choke_opening_pct_repaired": 3,
-    "production_choke_opening_pct_unresolved": 161869,
+    "production_choke_opening_pct_repaired": 334,
+    "production_choke_opening_pct_unresolved": 161538,
     "production_choke_upstream_pressure_pa_complete_120s_rows": 69281672,
     "rows": 76587318,
     "rows_without_observed_valid_sensors": 5193,
@@ -13600,7 +13607,7 @@
   "published": true,
   "quality_rules": {
     "resolved": {
-      "choke_forward_fill_max_seconds": 3,
+      "choke_forward_fill_max_seconds": 360,
       "expected_interval_seconds": 1,
       "feature_sensors": [
         "downhole_pdg_pressure_pa",
@@ -13612,6 +13619,7 @@
         "gas_lift_flow_rate_m3_s"
       ],
       "feature_window_seconds": 120,
+      "missing_classes": "backfill_leading_and_matching",
       "opening_max_pct": 100.0,
       "opening_min_pct": 0.0,
       "valve_states": [
@@ -13621,7 +13629,7 @@
       ],
       "version": 1
     },
-    "sha256": "85967b9053c64dc0a411c610086d47d19b6ea177805b5d54c860a8374986e44c",
+    "sha256": "6151be9d2ee23cc7c4c7816e99b75795b2738aaa492e9227608f5382cebb737a",
     "version": 1
   },
   "quality_summary": {
@@ -13877,48 +13885,48 @@
     "passed": true
   },
   "reference_version": 1,
-  "run_id": "20261018T091117552005Z-3280e5d3",
+  "run_id": "20261024T175806357259Z-675ce602",
   "source": {
-    "bronze_run_id": "20261012T092208Z-c1647d",
+    "bronze_run_id": "20261019T085548Z-c58876",
     "repo_id": "Yahya2491/3w-pipeline",
     "revision": "c1a7e8d0cfefc0875974ea079d11349a37fa0c56"
   },
-  "started_at": "2026-10-18T09:11:17.552005+00:00",
+  "started_at": "2026-10-24T17:58:06.357259+00:00",
   "status": "SUCCESS",
   "tables": {
     "event_reference": {
       "parquet_bytes": 12031,
-      "path": "/mnt/silver-data/3w-data/silver-v2/runs/20261018T091117552005Z-3280e5d3/event_reference",
+      "path": "/mnt/silver-data/3w-data/silver-v3/runs/20261024T175806357259Z-675ce602/event_reference",
       "rows": 10
     },
     "instance_quality": {
       "parquet_bytes": 3298135,
-      "path": "/mnt/silver-data/3w-data/silver-v2/runs/20261018T091117552005Z-3280e5d3/instance_quality",
+      "path": "/mnt/silver-data/3w-data/silver-v3/runs/20261024T175806357259Z-675ce602/instance_quality",
       "rows": 2228
     },
     "quality_issues": {
-      "parquet_bytes": 7680961,
-      "path": "/mnt/silver-data/3w-data/silver-v2/runs/20261018T091117552005Z-3280e5d3/quality_issues",
+      "parquet_bytes": 7718979,
+      "path": "/mnt/silver-data/3w-data/silver-v3/runs/20261024T175806357259Z-675ce602/quality_issues",
       "rows": 4195465
     },
     "quality_quarantine": {
       "parquet_bytes": 856472,
-      "path": "/mnt/silver-data/3w-data/silver-v2/runs/20261018T091117552005Z-3280e5d3/quality_quarantine",
+      "path": "/mnt/silver-data/3w-data/silver-v3/runs/20261024T175806357259Z-675ce602/quality_quarantine",
       "rows": 167065
     },
     "sensor_availability": {
       "parquet_bytes": 2471347,
-      "path": "/mnt/silver-data/3w-data/silver-v2/runs/20261018T091117552005Z-3280e5d3/sensor_availability",
+      "path": "/mnt/silver-data/3w-data/silver-v3/runs/20261024T175806357259Z-675ce602/sensor_availability",
       "rows": 60156
     },
     "sensor_reference": {
       "parquet_bytes": 13964,
-      "path": "/mnt/silver-data/3w-data/silver-v2/runs/20261018T091117552005Z-3280e5d3/sensor_reference",
+      "path": "/mnt/silver-data/3w-data/silver-v3/runs/20261024T175806357259Z-675ce602/sensor_reference",
       "rows": 27
     },
     "silver_observations": {
-      "parquet_bytes": 10519862973,
-      "path": "/mnt/silver-data/3w-data/silver-v2/runs/20261018T091117552005Z-3280e5d3/silver_observations",
+      "parquet_bytes": 8534841714,
+      "path": "/mnt/silver-data/3w-data/silver-v3/runs/20261024T175806357259Z-675ce602/silver_observations",
       "rows": 76587318
     }
   },
@@ -13926,7 +13934,7 @@
     "domains": "Check versioned valve/opening domains; clean columns with repair flags supplement unchanged source values.",
     "duplicate_identity": "Stop on repeated source-path/file-hash/row-position keys, including identical copies.",
     "duplicate_timestamp": "Keep distinct observations; flag every row sharing a timestamp within its recording.",
-    "missing_class": "Keep sensor readings; exclude this label from analyses requiring a known class.",
+    "missing_class": "Preserve source unknowns. class_code_clean may supply assumed training targets; original labels identify observed evaluation targets.",
     "missing_sensors": "Individual missing sensors stay in availability summaries. A row with no finite sensors is flagged for sensor use.",
     "quarantine": "Review error issues for their affected field/use; join their keys to observations for complete readings.",
     "source_versions": "Use Bronze's current manifest; a new file hash is a new source version, not a row duplicate.",

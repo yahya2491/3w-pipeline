@@ -5,8 +5,13 @@ domains:
   opening_max_pct: 100.0
   valve_states: [0.0, 0.5, 1.0]
 cleaning:
-  choke_forward_fill_max_seconds: 3
-  missing_classes: preserve_unknown
+  # Six minutes covers the longest reachable invalid stretch (334 seconds).
+  # Age is always measured from an original valid reading, never an estimate.
+  choke_forward_fill_max_seconds: 360
+  # Assume the initial unknown period shares its first supplied consistent class.
+  # Original class_code is preserved; inferred targets go into class_code_clean.
+  # Fill internal gaps only between equal, consistent original classes.
+  missing_classes: backfill_leading_and_matching
   missing_sensors: preserve_missing
   other_invalid_sensors: null_in_clean_column
 sequence:

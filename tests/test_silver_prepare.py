@@ -4,10 +4,10 @@ from datetime import datetime, timedelta
 import pytest
 import yaml
 from pyspark.sql import functions as F
-from pyspark.sql.types import DoubleType, LongType, StringType, StructField, StructType, TimestampNTZType
+from pyspark.sql.types import DoubleType, LongType, ShortType, StringType, StructField, StructType, TimestampNTZType
 
 from threew.silver.prepare import prepare_observations, summarize_preparation
-from threew.silver.reference import SENSOR_RENAMES
+from threew.silver.reference import OPENINGS, SENSOR_RENAMES
 from threew.silver.rules import DEFAULT_RULES_PATH, FEATURE_SENSORS, load_rules
 
 CHOKE = "production_choke_opening_pct"
@@ -21,6 +21,8 @@ def readings(spark, times, overrides=None, path="a"):
             StructField("_file_sha256", StringType()),
             StructField("_row_in_file", LongType()),
             StructField("timestamp", TimestampNTZType()),
+            StructField("class_code", ShortType()),
+            StructField("class_label_status", StringType()),
             *[StructField(name, DoubleType()) for name in SENSOR_RENAMES.values()],
         ]
     )
@@ -30,6 +32,8 @@ def readings(spark, times, overrides=None, path="a"):
             "_source_path": path,
             "_file_sha256": "hash",
             "_row_in_file": index,
+            "class_code": None,
+            "class_label_status": "unlabeled",
             "timestamp": None
             if seconds is None
             else datetime.fromisoformat("2020-01-01T00:00:00.500000") + timedelta(seconds=seconds),
@@ -43,7 +47,7 @@ def readings(spark, times, overrides=None, path="a"):
 def test_choke_repair_uses_original_anchor_for_at_most_three_seconds(spark):
     values = [40.0, 120.0, -99.99, 101.0, 120.0, None, 42.0, float("nan"), float("inf"), 0.0, 100.0]
     source = readings(spark, range(len(values)), {i: {CHOKE: value} for i, value in enumerate(values)})
-    rules = load_rules()
+    rules = replace(load_rules(), choke_forward_fill_max_seconds=3)
     prepared = prepare_observations(source, rules)
     rows = prepared.orderBy("_row_in_file").collect()
     assert [r[f"{CHOKE}_clean"] for r in rows] == [40.0, 40.0, 40.0, 40.0, None, None, 42.0, None, None, 0.0, 100.0]
@@ -68,6 +72,29 @@ def test_choke_repair_uses_original_anchor_for_at_most_three_seconds(spark):
     summary = summarize_preparation(prepared, rules)
     assert summary[f"{CHOKE}_repaired"] == 3
     assert summary[f"{CHOKE}_unresolved"] == 3  # stale opening, NaN and infinity
+
+
+def test_extended_default_window_stops_at_original_anchor_age_for_both_openings(spark):
+    rules = load_rules()
+    assert rules.choke_forward_fill_max_seconds == 360
+    limit = rules.choke_forward_fill_max_seconds
+    values = [40.0] + [120.0] * (limit + 1) + [None, float("nan"), float("inf")]
+    source = readings(spark, range(len(values)), {i: dict.fromkeys(OPENINGS, value) for i, value in enumerate(values)})
+    prepared = prepare_observations(source, rules)
+    rows = prepared.orderBy("_row_in_file").collect()
+    for opening in OPENINGS:
+        assert [row[f"{opening}_clean"] for row in rows[: limit + 1]] == [40.0] * (limit + 1)
+        assert all(row[f"{opening}_clean"] is None for row in rows[limit + 1 :])
+        assert all(row[f"{opening}_was_imputed"] for row in rows[1 : limit + 1])
+        assert not rows[0][f"{opening}_was_imputed"]
+        assert not any(row[f"{opening}_was_imputed"] for row in rows[limit + 1 :])
+        assert rows[limit][f"{opening}_source_age_seconds"] == float(limit)
+        assert rows[limit + 1][f"{opening}_source_age_seconds"] == float(limit + 1)
+        assert rows[limit][opening] == 120.0
+    summary = summarize_preparation(prepared, rules)
+    for opening in OPENINGS:
+        assert summary[f"{opening}_repaired"] == limit
+        assert summary[f"{opening}_unresolved"] == 3  # Expired finite value, NaN and infinity.
 
 
 def test_time_breaks_and_recordings_reset_repairs_and_empty_rows_remain(spark):
@@ -133,7 +160,7 @@ def test_clean_sensor_rows_keep_source_and_add_only_selected_features(spark):
         for suffix in ("mean_120s", "stddev_120s", "change", "count_120s")
     } | {f"{name}_invalid_duration_seconds" for name in ("gas_lift_choke_opening_pct", CHOKE)}
     assert expected <= rows[0].asDict().keys()
-    assert len(rows[0]) == len(source.columns) + 63
+    assert len(rows[0]) == len(source.columns) + 65
     assert "annulus_pressure_pa_mean_120s" not in rows[0].asDict()
 
 
@@ -244,3 +271,45 @@ def test_rules_reject_invalid_or_unsupported_settings(tmp_path, section, key, va
     path.write_text(yaml.safe_dump(raw))
     with pytest.raises(ValueError):
         load_rules(path)
+
+
+def test_export_keeps_only_clean_values_and_describes_the_clean_class(spark):
+    from threew.silver.output import OUTPUT_COLUMNS, export_observations
+    from threew.silver.reference import SENSOR_FIELDS
+    from threew.silver.transform import add_event_descriptions
+
+    values = [40.0, 120.0, float("nan"), None]
+    classes = [None, 0, 105, 5]
+    source = readings(
+        spark,
+        range(4),
+        {
+            i: {
+                CHOKE: values[i],
+                "class_code": classes[i],
+                "class_label_status": "unlabeled" if i == 0 else "consistent",
+            }
+            for i in range(4)
+        },
+    )
+    for name, value in {
+        "source_type": "REAL",
+        "instance_label": 5,
+        "state_code": 1,
+        "_ingest_run_id": "bronze-source",
+        "instance_id": "recording",
+        "well_id": 1,
+    }.items():
+        source = source.withColumn(name, F.lit(value))
+    source = source.withColumn("instance_start", F.col("timestamp"))
+    source = add_event_descriptions(source)
+    prepared = prepare_observations(source, load_rules())
+    exported = export_observations(prepared)
+    rows = exported.orderBy("_row_in_file").collect()
+    assert len(exported.columns) == len(OUTPUT_COLUMNS) == 79
+    assert not (set(SENSOR_FIELDS) | {"class_code", "_ingest_run_id"}) & set(exported.columns)
+    assert [row[f"{CHOKE}_clean"] for row in rows] == [40.0, 40.0, None, None]
+    assert rows[0].class_code_clean == 0 and rows[0].class_was_inferred
+    assert rows[0].row_event_phase == "normal" and rows[0].class_label_status == "consistent"
+    assert rows[0].row_event_name == "Normal Operation"
+    assert summarize_preparation(exported, load_rules(), source) == summarize_preparation(prepared, load_rules())
