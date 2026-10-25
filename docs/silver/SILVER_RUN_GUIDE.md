@@ -142,7 +142,7 @@ Equal row counts alone do not establish equal contents. Compare the seven tables
 
 Run the following inside the VM. It compares the seven saved tables directly in the two explicit run folders below. It checks schemas and complete contents, including duplicate rows and nulls, while ignoring physical file layout and row order. It does not read run reports, ready markers or code metadata. To compare a different pair, change `first` and `second`.
 
-The comparison for this pair is already saved in [v2/comparison.log](../evidence/silver/v2/comparison.log), with seven `MATCH` results and the final complete-content equality message. The [evidence summary](../evidence/silver/v2/README.md) links both reports and ready-marker snapshots. The command remains here for repeating the check or selecting a different pair.
+The command below compares the two current Silver runs from 24 and 25 October 2026. Run it only after both builds have completed successfully and no Silver build is active. Their equality is not established until this comparison finishes. The [historical comparison](../evidence/silver/v2/comparison.log) and [evidence summary](../evidence/silver/v2/README.md) describe the earlier 106-column builds, not this pair.
 
 ```bash
 cd /home/ubuntu/3w-pipeline
@@ -153,21 +153,16 @@ export TMPDIR=/mnt/silver-data/spark-tmp
 set -o pipefail
 
 mountpoint -q /mnt/silver-data &&
-python -u - <<'PY' 2>&1 | tee /mnt/silver-data/comparison-20261017-vs-20261018.log
+python -u - <<'PY' 2>&1 | tee /mnt/silver-data/comparison-silver-v3.log
 from pathlib import Path
 
 from threew.config import load_config
 from threew.silver.reconcile import same_rows
 from threew.silver.run import spark_session
 
-first = Path(
-    "/home/ubuntu/3w-data/silver-v2/runs/"
-    "20261017T232322182032Z-ba450086"
-)
-second = Path(
-    "/mnt/silver-data/3w-data/silver-v2/runs/"
-    "20261018T091117552005Z-3280e5d3"
-)
+run_root = Path("/mnt/silver-data/3w-data/silver-v3/runs")
+first = run_root / "20261024T175806357259Z-675ce602"
+second = run_root / "20261025T010710680886Z-216d5afd"
 
 tables = [
     "silver_observations",
@@ -209,5 +204,5 @@ else:
 PY
 ```
 
-The command saves its log at `/mnt/silver-data/comparison-20261017-vs-20261018.log`. The copy reviewed for this pair is in `docs/evidence/silver/v2/comparison.log`. A successful comparison prints seven `MATCH` results and the final message that all seven tables have identical schemas and complete contents. If Spark fails, the comparison is incomplete.
+The command saves its log at `/mnt/silver-data/comparison-silver-v3.log`. A successful comparison prints seven `MATCH` results and the final message that all seven tables have identical schemas and complete contents. If Spark fails, the comparison is incomplete.
 
