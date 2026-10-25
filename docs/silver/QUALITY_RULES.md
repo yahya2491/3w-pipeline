@@ -24,16 +24,12 @@ coverage. Raw missing-class warnings still describe the original source.
 
 The choke repair uses a previous original valid reading, never another estimated value. If no eligible reading exists, the clean value is null; Silver does not clip to 0% or 100%. The 120-second sensor summaries do not fill or repair readings.
 
-The [full-source repair review](../evidence/silver/choke-repair-review/README.md)
-found that 161,538 of the 161,872 out-of-range production-choke readings are
-`-99.99` throughout one entire recording, with no valid opening anywhere in it.
-Only the other 334 readings have an earlier original valid opening. The
-historical three-second rule estimated three of those. The current 360-second
-default estimates all 334, as verified with the Spark transformation on both
-affected recordings in the [extension review](../evidence/silver/repair-window-extension/README.md).
-The oldest source reading used there is 334 seconds old. A longer limit adds no
-further coverage in this source. These remain estimates; neither eligibility
-nor masking known-valid data establishes the true faulty readings.
+The [two current full builds](../evidence/silver/v3/README.md) both record
+334 repaired production-choke readings and 161,538 unresolved invalid readings
+from 161,872 original range errors. The rule cannot repair a reading without an
+eligible original-valid anchor. The repaired values are estimates, not confirmed
+measurements. Both builds also infer 4,028,400 missing class labels, with zero
+unresolved clean classes; the original missing-class warnings remain.
 
 `quality_issues` contains warnings and errors; `quality_quarantine` contains the errors only. They refer to the original values, including openings that received a clean repair. An error affects the stated field and use, rather than automatically excluding the whole row. `has_quality_errors: true` in a successful report means source problems were found and recorded; it does not mean the pipeline failed.
 

@@ -20,7 +20,12 @@ The sample contains 30 recordings and 1,931,052 observations. To inspect Bronze 
 
 ## Run on the full dataset on the VM
 
-The [two recorded 106-column VM runs](../evidence/silver/v2/README.md) each passed all 32 checks over 2,228 recordings and 76,587,318 observations. Each published 10.53 GB of Parquet across seven tables; runtimes were 6 h 10 min 25 s and 6 h 5 min 32 s. Their [saved comparison log](../evidence/silver/v2/comparison.log) reports matching schemas and complete contents for all seven tables. Each new run retains its own complete output copy; allow additional space for Spark temporary data.
+The [two recorded full VM builds](../evidence/silver/v3/README.md) use the current
+79-column contract. Both passed 32 checks over 2,228 recordings and 76,587,318
+observations. Each saved 8,549,212,642 bytes of Parquet across seven tables;
+runtimes were 6 h 19 min 21 s and 5 h 51 min 44 s. The saved comparison confirms
+identical schemas and complete contents. Each new full build keeps its own output
+copy; allow additional temporary disk space.
 
 The attached volume is mounted at `/mnt/silver-data`; [VM storage](VM_STORAGE.md) describes the layout. Run one job at a time and reuse the existing production Bronze table under `/home/ubuntu/3w-data/`. For a reproducibility pair, keep the same commit, clean working tree, dependencies, input, rules and configuration; do not pull or change batch size between the two runs. Production deployment remains restricted to `main`; feature changes reach it through pull requests.
 
@@ -37,7 +42,7 @@ python -u -m threew.silver.run \
   --output-root /mnt/silver-data/silver-schedule
 ```
 
-Run the build only after `mountpoint` confirms the volume is mounted. This foreground command requires the SSH session to stay connected. The original baseline remains under `/home/ubuntu/3w-data/silver-v2/`; each new attempt gets its own run directory on the volume. Silver reads the ready marker at `/home/ubuntu/3w-data/bronze/bronze_ready.json`; its output root is separate from that Bronze storage root.
+Run the build only after `mountpoint` confirms the volume is mounted. This foreground command requires the SSH session to stay connected. Each new attempt gets its own run directory on the volume. The validated manual builds are under `/mnt/silver-data/3w-data/silver-v3/`; use that explicit output root when repeating those builds, or the scheduled root shown above for scheduled-destination builds. Silver reads the ready marker at `/home/ubuntu/3w-data/bronze/bronze_ready.json`; its output root is separate from that Bronze storage root.
 
 ## Automated VM builds
 
@@ -142,7 +147,7 @@ Equal row counts alone do not establish equal contents. Compare the seven tables
 
 Run the following inside the VM. It compares the seven saved tables directly in the two explicit run folders below. It checks schemas and complete contents, including duplicate rows and nulls, while ignoring physical file layout and row order. It does not read run reports, ready markers or code metadata. To compare a different pair, change `first` and `second`.
 
-The command below compares the two current Silver runs from 24 and 25 October 2026. Run it only after both builds have completed successfully and no Silver build is active. Their equality is not established until this comparison finishes. The [historical comparison](../evidence/silver/v2/comparison.log) and [evidence summary](../evidence/silver/v2/README.md) describe the earlier 106-column builds, not this pair.
+The [saved comparison log](../evidence/silver/v3/comparison.log) already records seven `MATCH` results for these two successful 79-column runs. Their [reports and markers](../evidence/silver/v3/README.md) record the matching inputs and settings. The command below repeats that check; run it only after both builds have completed successfully and no Silver build is active. A different pair requires its own completed comparison before claiming equality.
 
 ```bash
 cd /home/ubuntu/3w-pipeline

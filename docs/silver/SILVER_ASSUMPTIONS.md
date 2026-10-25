@@ -1,14 +1,39 @@
 # Silver assumptions
 
-These assumptions explain the choices behind the [quality rules](QUALITY_RULES.md).
+These assumptions explain the [quality rules](QUALITY_RULES.md). The
+[two full-run reports](../evidence/silver/v3/README.md) record their application;
+validation establishes implementation and repeatability, not physical truth.
 
-- A missing source class means the condition was not supplied. For cleaning, we assume that the leading unknown period has the same class as the first supplied class in that recording, provided that class agrees with the recording event. We write this inferred target to `class_code_clean` while preserving the original class in Bronze. This uses a later label and cannot establish the true event onset. The recording event alone is not used to fill labels. For an internal null gap, we additionally assume the class stayed unchanged when the nearest original classes on both sides match and are consistent with the recording event. Gaps between different classes, trailing nulls, inconsistent boundaries and entirely unlabelled recordings remain unknown. [Verification](../evidence/silver/class-label-backfill/README.md) covers every missing source class.
-- Missing sensor readings are not zero, and a problem with one sensor does not make every other sensor in that row unusable.
-- The source's documented opening and valve domains are suitable validation limits. We have no justified physical limits for pressure, temperature, or flow; extreme readings may be real well behaviour.
-- We allow an original valid choke opening to be carried forward for up to 360 seconds under a persistence assumption while its reported value is invalid. This is an estimate and can be wrong during an actual adjustment. The six-minute cap covers the longest reachable invalid stretch (334 seconds), without permitting unlimited stale values. The [masking evaluation](../evidence/silver/repair-window-extension/README.md) found low average errors and occasional large errors during opening changes; it does not confirm the true values of actual faults.
-- Carry-forward repair has limited coverage in the full dataset. The [source review](../evidence/silver/choke-repair-review/README.md) found 161,538 invalid openings in a recording with no valid opening at any point. The current 360-second default reaches all of the other 334 invalid readings; recovering the unobserved channel would require separate evidence or modelling. Historical full-run reports retain their original three-second setting and counts.
-- Original row positions describe the sequence, with one-second sampling expected. A break in that sequence prevents us from treating readings on either side as continuous.
-- The seven selected sensors and 120-second history are reasonable feature candidates. Their value for classification, and the best history length, still need evaluation in Gold.
-- Persistent invalid openings indicate a problem with the reported measurements. They do not establish that a labelled well event is occurring.
-
-- The Silver export keeps only clean sensor/class values. Source-quality reports still describe Bronze; exact observation keys allow original readings to be recovered when needed.
+- A missing source class means no condition was supplied. For cleaning, we assume
+  the leading unknown period matches the first supplied class in that recording,
+  provided that class agrees with its recording event. For an internal null gap,
+  we assume the class stayed unchanged only when the nearest original labels on
+  both sides match and are consistent. Different-class gaps, trailing nulls,
+  inconsistent boundaries and entirely unlabelled recordings remain unknown.
+  The recording event alone is never used as the replacement class.
+- Inferred targets are saved in `class_code_clean` and identified by
+  `class_was_inferred`; original classes stay in Bronze. This uses later labels
+  and cannot establish the true event onset. Both full builds inferred 4,028,400
+  labels, leaving zero clean-class nulls. Inferred targets may train a model but
+  must not be treated as supplied expert labels in held-out evaluation. The class,
+  inference flag and event descriptions must stay out of model predictors.
+- Missing sensor readings are not zero. A problem with one measurement does not
+  make all other measurements in that observation unusable.
+- The source's documented opening and valve domains provide validation limits.
+  We have no justified physical limits for pressure, temperature or flow;
+  extreme finite values may be real well behaviour and are retained.
+- An original valid choke opening may persist for up to 360 seconds while the
+  reported opening is finite but out of range. The same recording and continuous
+  one-second segment are required. Estimates never become repair anchors.
+  Persistence can be wrong during a real adjustment; an imputation flag and
+  source-reading age identify each estimate. Both builds report 334 repairs and
+  161,538 unresolved invalid openings. The rule does not reconstruct a channel
+  without an eligible original-valid anchor and does not fill missing readings.
+- Original row positions define source order, with one-second sampling expected.
+  Sequence breaks prevent repairs and temporal histories from spanning the gap.
+- The seven selected sensors and 120-second history are candidate model inputs.
+  Their predictive value and the best history length require Gold evaluation.
+  Persistent invalid openings indicate measurement problems, not proof of an event.
+- The 79-column export keeps one clean value per sensor/class. Exact source keys
+  recover originals from Bronze; source-quality reports remain source-based even
+  after an inferred target or repaired sensor becomes available.

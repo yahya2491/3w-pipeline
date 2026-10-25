@@ -17,8 +17,7 @@ The current observation export has **79 columns** (internal contract version 4).
 | sensor_reference | Logical sensor identifiers, original names, units and domains. |
 
 Bronze preserves the original dataset. Silver does not export the 27 original
-sensor-value columns, original class_code, or repeated _ingest_run_id. Those 29
-columns were removed from the preceding 108-column draft. Original values remain
+sensor-value columns, original class_code, or repeated _ingest_run_id. Original values remain
 available in Bronze through the source path, exact file hash and row position.
 The source Bronze run ID is recorded once in the Silver report and ready marker.
 Quality tables still describe source issues even when a clean value is inferred.
@@ -64,9 +63,9 @@ class agrees with its recording event, and inconsistent otherwise. It can be
 consistent while class_was_inferred is true. instance_event_name describes the
 recording event. These descriptions also stay out of predictors.
 
-The source profile found 4,028,400 leading null classes. Their
-[inference verification](../evidence/silver/class-label-backfill/README.md)
-records the assumed targets; these are not newly recovered expert annotations.
+The [two full builds](../evidence/silver/v3/README.md) report 4,028,400 inferred
+class labels and zero unresolved clean classes. These are assumed targets,
+not newly recovered expert annotations.
 
 ## Sensor values and repairs
 
@@ -86,9 +85,9 @@ the clean value stays null. There is no clipping to 0 or 100%. For example,
 For each opening, <opening>_was_imputed identifies actual estimates and
 <opening>_source_age_seconds records anchor age. Age is zero for an original
 valid opening with usable time, and may exceed 360 on unresolved readings;
-interpret it with the flag. The [window review](../evidence/silver/repair-window-extension/README.md)
-verified 334 production-choke estimates instead of three. The other 161,538
-invalid openings have no valid opening anywhere in their recording.
+interpret it with the flag. Both [full builds](../evidence/silver/v3/README.md)
+report 334 production-choke estimates and 161,538 unresolved invalid openings.
+A longer age limit does not create a missing original-valid anchor.
 
 ## Sequence and temporal features
 
@@ -125,8 +124,9 @@ a ready marker is atomically published. A failure preserves the previous marker.
 Preparation reports count repairs, inferred/unresolved classes and original
 sensor validity without exporting duplicate raw columns.
 
-Earlier 106-column full VM runs and 108-column development evidence describe
-their original schemas. A new build is required to publish the 79-column table.
+Two full VM builds of this 79-column schema passed all 32 checks; their saved
+comparison reports identical schemas and complete contents across seven tables.
+The [evidence index](../evidence/silver/v3/README.md) links reports and markers.
 Gold resolves one current ready marker, uses clean class targets, retains the
 inference flag, and uses supplied labels for held-out evaluation.
 
