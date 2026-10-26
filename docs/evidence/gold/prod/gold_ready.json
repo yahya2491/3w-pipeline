@@ -1,0 +1,58 @@
+{
+  "run_id": "20261026T194903Z-e2521f",
+  "built_at": "2026-10-26T19:53:12.974837+00:00",
+  "passed": true,
+  "contract_version": 1,
+  "env": "prod",
+  "code_version": {
+    "commit": "78449b0941ea4147651ed0feeaab9008b95acb4c",
+    "dirty": false
+  },
+  "silver": {
+    "root": "/mnt/silver-data/silver-schedule",
+    "run_id": "20261025T150850992057Z-ceebdeae",
+    "contract_version": 4,
+    "published_at": "2026-10-25T20:57:55.809158+00:00"
+  },
+  "tables": {
+    "recordings": {
+      "path": "/mnt/silver-data/gold/runs/20261026T194903Z-e2521f/recordings",
+      "rows": 2228
+    },
+    "event_phases": {
+      "path": "/mnt/silver-data/gold/runs/20261026T194903Z-e2521f/event_phases",
+      "rows": 4423
+    },
+    "window_features": {
+      "path": "/mnt/silver-data/gold/runs/20261026T194903Z-e2521f/window_features",
+      "rows": 1259641
+    }
+  },
+  "checks": [
+    {
+      "name": "phases_cover_every_silver_row",
+      "passed": true,
+      "silver_rows": 76587318,
+      "gold_rows": 76587318,
+      "mismatched_recordings": 0
+    },
+    {
+      "name": "keys_unique_and_resolve",
+      "passed": true,
+      "duplicate_recordings": 0,
+      "duplicate_phases": 0,
+      "orphan_phases": 0,
+      "orphan_windows": 0
+    },
+    {
+      "name": "each_recording_in_one_split",
+      "passed": true,
+      "recordings_in_both": 0
+    },
+    {
+      "name": "no_inferred_labels_in_test",
+      "passed": true,
+      "inferred_test_rows": 0
+    }
+  ]
+}

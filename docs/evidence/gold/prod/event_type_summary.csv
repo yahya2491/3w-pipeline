@@ -1,0 +1,20 @@
+event_id,event_name,source_type,recordings,avg_normal_lead_min,avg_time_to_steady_min,avg_event_duration_min,avg_inferred_label_share
+0,Normal Operation,REAL,594,,,,0.184
+1,Abrupt Increase of BSW,DRAWN,10,142.9,826.6,769.1,0.0
+1,Abrupt Increase of BSW,REAL,4,673.6,272.3,313.0,0.089
+1,Abrupt Increase of BSW,SIMULATED,114,100.0,696.8,1116.8,0.0
+2,Spurious Closure of DHSV,REAL,22,126.2,98.3,83.6,0.331
+2,Spurious Closure of DHSV,SIMULATED,16,60.0,60.0,420.0,0.0
+3,Severe Slugging,REAL,32,0.0,,356.4,0.169
+3,Severe Slugging,SIMULATED,74,0.0,,960.6,0.0
+4,Flow Instability,REAL,343,0.0,,179.3,0.335
+5,Rapid Productivity Loss,REAL,11,159.9,547.9,505.9,0.228
+5,Rapid Productivity Loss,SIMULATED,439,8.3,79.8,480.0,0.0
+6,Quick Restriction in PCK,REAL,6,160.1,18.2,55.1,0.39
+6,Quick Restriction in PCK,SIMULATED,215,30.0,120.3,420.0,0.0
+7,Scaling in PCK,DRAWN,10,445.8,2503.0,3586.2,0.0
+7,Scaling in PCK,REAL,36,538.9,1014.4,3102.3,0.031
+8,Hydrate in Production Line,REAL,14,1205.6,4053.7,4519.4,0.014
+8,Hydrate in Production Line,SIMULATED,81,30.0,255.2,420.0,0.0
+9,Hydrate in Service Line,REAL,57,263.1,212.0,253.8,0.149
+9,Hydrate in Service Line,SIMULATED,150,98.7,308.0,662.0,0.0

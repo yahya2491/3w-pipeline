@@ -26,7 +26,7 @@ where = ["src"]
 line-length = 120
 
 [tool.ruff.lint.isort]
-# gold/model runs as a plain folder (cd gold/model; python ...), so these are its own modules
+# consumers/event_classifier runs as a plain folder (cd there; python ...), so these are its own modules
 known-local-folder = ["config", "data", "evaluate"]
 
 [tool.pytest.ini_options]

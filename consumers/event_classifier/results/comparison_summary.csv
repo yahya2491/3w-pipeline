@@ -1,0 +1,10 @@
+,random_forest,xgboost
+test macro F1,0.925,0.928
+tuning macro F1 (CV or validation),0.918,0.931
+fault recall,0.955,0.948
+false alarm rate on normal,0.207,0.174
+pre-fault false alarms (real),0.82,0.67
+macro F1 drawn,0.714,0.604
+macro F1 real,0.633,0.66
+macro F1 simulated,0.979,0.984
+training seconds (final fit),83.316,21.022

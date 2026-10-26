@@ -2,7 +2,7 @@
 
 Gold serves two consumers (see docs/gold/GOLD_CONTRACT.md):
     recordings, event_phases -> operations engineers, through the SQL views in gold/views.sql
-    window_features          -> the event-classifier demo in gold/model/
+    window_features          -> the event-classifier demo in consumers/event_classifier/
 
 Each build writes to <gold root>/runs/<run_id>/, checks the tables it wrote, and only then
 replaces <gold root>/gold_ready.json. If a check fails, the previous marker stays in place,

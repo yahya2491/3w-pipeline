@@ -1,0 +1,101 @@
+{
+  "macro_f1": 0.9246381409374551,
+  "fault_recall": 0.9549381223484932,
+  "per_source_macro_f1": {
+    "DRAWN": 0.7140524843696671,
+    "REAL": 0.6333794866438883,
+    "SIMULATED": 0.9789090100234836
+  },
+  "per_class": {
+    "Normal Operation": {
+      "precision": 0.8446999109865343,
+      "recall": 0.7929771535247577,
+      "f1-score": 0.8180217522880252,
+      "support": 56245.0
+    },
+    "Abrupt Increase of BSW": {
+      "precision": 0.9950232126276695,
+      "recall": 0.9901323083746028,
+      "f1-score": 0.9925717355463757,
+      "support": 27058.0
+    },
+    "Spurious Closure of DHSV": {
+      "precision": 0.9873417721518988,
+      "recall": 0.9950389794472005,
+      "f1-score": 0.9911754324038122,
+      "support": 1411.0
+    },
+    "Severe Slugging": {
+      "precision": 0.9785552391468588,
+      "recall": 0.9824950402614074,
+      "f1-score": 0.9805211821225797,
+      "support": 17138.0
+    },
+    "Flow Instability": {
+      "precision": 0.8278092158447857,
+      "recall": 0.9930900715238211,
+      "f1-score": 0.9029484706530725,
+      "support": 8249.0
+    },
+    "Rapid Productivity Loss": {
+      "precision": 0.9814489673335489,
+      "recall": 0.9890578073708473,
+      "f1-score": 0.9852386971091965,
+      "support": 42953.0
+    },
+    "Quick Restriction in PCK": {
+      "precision": 0.9705962726129966,
+      "recall": 0.9818654282081053,
+      "f1-score": 0.976198328935796,
+      "support": 18087.0
+    },
+    "Scaling in PCK": {
+      "precision": 0.865471003478907,
+      "recall": 0.9528129996653404,
+      "f1-score": 0.9070442477876106,
+      "support": 26893.0
+    },
+    "Hydrate in Production Line": {
+      "precision": 0.739093387866394,
+      "recall": 0.7003821930343974,
+      "f1-score": 0.7192172687322075,
+      "support": 18577.0
+    },
+    "Hydrate in Service Line": {
+      "precision": 0.9834215000944644,
+      "recall": 0.9636674997685828,
+      "f1-score": 0.9734442937958764,
+      "support": 21606.0
+    },
+    "accuracy": 0.9131338233627323,
+    "macro avg": {
+      "precision": 0.9173460482144058,
+      "recall": 0.9341519481179063,
+      "f1-score": 0.9246381409374551,
+      "support": 238217.0
+    },
+    "weighted avg": {
+      "precision": 0.9125717665063718,
+      "recall": 0.9131338233627323,
+      "f1-score": 0.9121075173801482,
+      "support": 238217.0
+    }
+  },
+  "best_params": {
+    "max_features": "sqrt",
+    "min_samples_leaf": 50
+  },
+  "cv_macro_f1": 0.9175445430836092,
+  "cv_results": {
+    "{'max_features': 'sqrt', 'min_samples_leaf': 5}": 0.9036124532334076,
+    "{'max_features': 'sqrt', 'min_samples_leaf': 20}": 0.9108972845592881,
+    "{'max_features': 'sqrt', 'min_samples_leaf': 50}": 0.9175445430836092,
+    "{'max_features': 0.5, 'min_samples_leaf': 5}": 0.8858636147933133,
+    "{'max_features': 0.5, 'min_samples_leaf': 20}": 0.9062133744346147,
+    "{'max_features': 0.5, 'min_samples_leaf': 50}": 0.9069717156688316
+  },
+  "tune_seconds": 515.2534830570221,
+  "fit_seconds": 83.31622457504272,
+  "sklearn_version": "1.9.1",
+  "git_commit": "9feb823"
+}

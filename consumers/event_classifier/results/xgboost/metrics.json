@@ -1,0 +1,111 @@
+{
+  "macro_f1": 0.9280616620400434,
+  "fault_recall": 0.947827138241048,
+  "per_source_macro_f1": {
+    "DRAWN": 0.6041156431267839,
+    "REAL": 0.6604232398182791,
+    "SIMULATED": 0.9835409224086082
+  },
+  "per_class": {
+    "Normal Operation": {
+      "precision": 0.8303036802688258,
+      "recall": 0.825904524846653,
+      "f1-score": 0.8280982601254991,
+      "support": 56245.0
+    },
+    "Abrupt Increase of BSW": {
+      "precision": 0.9968955715140634,
+      "recall": 0.9850321531524873,
+      "f1-score": 0.9909283563222664,
+      "support": 27058.0
+    },
+    "Spurious Closure of DHSV": {
+      "precision": 0.9915254237288136,
+      "recall": 0.9950389794472005,
+      "f1-score": 0.9932790944464096,
+      "support": 1411.0
+    },
+    "Severe Slugging": {
+      "precision": 0.9917892374032725,
+      "recall": 0.9796942467032326,
+      "f1-score": 0.9857046408547862,
+      "support": 17138.0
+    },
+    "Flow Instability": {
+      "precision": 0.851890978237904,
+      "recall": 0.9775730391562614,
+      "f1-score": 0.9104149026248941,
+      "support": 8249.0
+    },
+    "Rapid Productivity Loss": {
+      "precision": 0.9824597748774256,
+      "recall": 0.9936674970316393,
+      "f1-score": 0.9880318533265429,
+      "support": 42953.0
+    },
+    "Quick Restriction in PCK": {
+      "precision": 0.9784904617085983,
+      "recall": 0.9783822635041742,
+      "f1-score": 0.978436359615172,
+      "support": 18087.0
+    },
+    "Scaling in PCK": {
+      "precision": 0.879980026393694,
+      "recall": 0.917413453314989,
+      "f1-score": 0.8983069361004915,
+      "support": 26893.0
+    },
+    "Hydrate in Production Line": {
+      "precision": 0.7524741015105041,
+      "recall": 0.6998977229907951,
+      "f1-score": 0.7252342704149933,
+      "support": 18577.0
+    },
+    "Hydrate in Service Line": {
+      "precision": 0.9992815747880646,
+      "recall": 0.9656576876793483,
+      "f1-score": 0.9821819465693774,
+      "support": 21606.0
+    },
+    "accuracy": 0.9163032025422199,
+    "macro avg": {
+      "precision": 0.9255090830431165,
+      "recall": 0.9318261567826781,
+      "f1-score": 0.9280616620400434,
+      "support": 238217.0
+    },
+    "weighted avg": {
+      "precision": 0.9160977155425575,
+      "recall": 0.9163032025422199,
+      "f1-score": 0.9158928238498302,
+      "support": 238217.0
+    }
+  },
+  "best_params": {
+    "max_depth": 6,
+    "n_estimators": 82,
+    "learning_rate": 0.1,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "tree_method": "hist",
+    "random_state": 42
+  },
+  "tuning": {
+    "4": {
+      "val_macro_f1": 0.9151386512785539,
+      "best_iteration": 63
+    },
+    "6": {
+      "val_macro_f1": 0.9305285138763256,
+      "best_iteration": 64
+    },
+    "8": {
+      "val_macro_f1": 0.9229951526005135,
+      "best_iteration": 63
+    }
+  },
+  "tune_seconds": 88.92440342903137,
+  "fit_seconds": 21.02244257926941,
+  "xgboost_version": "3.2.0",
+  "git_commit": "9feb823"
+}

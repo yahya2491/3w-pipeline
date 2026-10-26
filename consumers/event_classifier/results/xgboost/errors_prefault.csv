@@ -1,0 +1,5 @@
+source_type,kind,rows,false_alarm,alarms_as_own_event
+DRAWN,pre-fault,1786,1.0,0.915
+REAL,normal recording,37788,0.029,0.0
+REAL,pre-fault,9035,0.67,0.996
+SIMULATED,pre-fault,7636,0.111,0.998
