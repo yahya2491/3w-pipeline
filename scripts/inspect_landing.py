@@ -32,7 +32,7 @@ def main() -> None:
     print(f"Total num_rows: {sum(r['num_rows'] or 0 for r in rows):,}")
     not_inspected = sum(r["schema_ok"] is None for r in rows)
     if not_inspected:
-        print(f"Not inspected (landed before step 14): {not_inspected:,}")
+        print(f"Not inspected (landed before footer inspection existed): {not_inspected:,}")
     for r in rows:
         if r["schema_ok"] is False:
             print(f"  DRIFT {r['path']} (fingerprint {r['schema_fingerprint']}, {r['landing_path']})")

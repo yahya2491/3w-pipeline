@@ -1,4 +1,7 @@
-"""Checks for leftovers. They are reported, never deleted: deciding what to do with them is a human's call."""
+"""Checks for leftovers in landing and staging.
+
+They are reported, never deleted: deciding what to do with them is a human's call.
+"""
 
 from pathlib import Path
 

@@ -2,7 +2,7 @@
 
     data/2/WELL-00002_20131104004101.parquet -> label 2, REAL, well 2, 2013-11-04 00:41:01, WELL-00002_20131104004101
 
-The path is the unique key: the same instance ID (e.g. SIMULATED_00001) appears in several label folders.
+The path is the unique key: the same instance ID (e.g. SIMULATED_00001) appears in several label folders (225 IDs do).
 
 Known limitation: instance_start has no timezone. 3W doesn't say which timezone its timestamps use, so none is
 assumed here (in particular not UTC). Silver decides how to handle it.

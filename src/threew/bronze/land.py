@@ -1,4 +1,4 @@
-"""Move verified files from staging into landing, inspect them, and record every result in the manifest.
+"""Move verified files from staging into landing, inspect their footers, and record every result in the manifest.
 
 Landing layout, relative to storage.root (all dates and times are UTC):
 

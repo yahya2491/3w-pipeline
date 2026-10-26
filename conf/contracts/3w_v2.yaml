@@ -1,6 +1,6 @@
 # Expected schema of every 3W dataset 2.0.0 Parquet file: column name -> Arrow type, as pyarrow prints it.
 # Generated from the upstream files at petrobras/3W@d57c058a; all 2,228 files have exactly this schema.
-# Column descriptions and units are in data/dataset.ini on Hugging Face.
+# Column descriptions and units are in data/dataset.ini on Hugging Face and in Silver's sensor_reference table.
 
 columns:
   ABER-CKGL: double

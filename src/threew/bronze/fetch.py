@@ -2,7 +2,7 @@
 
 Bronze promises files byte-for-byte as published, and a download can be corrupted without any error. So every file's
 size and sha256 are checked against what Hugging Face reported in the listing. Nothing here touches landing or the
-manifest; that's step 13.
+manifest; land.py does that.
 """
 
 import hashlib

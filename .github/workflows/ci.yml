@@ -1,5 +1,6 @@
 name: CI
 
+# Lint and the offline test suite, on the VM's Java 8 and on Java 17. main requires all three jobs to pass.
 on:
   push:
     branches: ["**"]

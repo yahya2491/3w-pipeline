@@ -1,4 +1,4 @@
-"""Retry network calls on errors that may fix themselves; fail fast on the rest."""
+"""Retry network calls on errors that may fix themselves, waiting twice as long each time; fail fast on the rest."""
 
 import logging
 import time

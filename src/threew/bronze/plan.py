@@ -1,6 +1,6 @@
 """Decide what to download by comparing the Hugging Face listing with what the manifest says has landed.
 
-Pure: no network and no files. The caller lists the source and reads the manifest, then passes both in.
+Pure: no network and no file access. The caller lists the source and reads the manifest, then passes both in.
 """
 
 from collections import Counter, defaultdict

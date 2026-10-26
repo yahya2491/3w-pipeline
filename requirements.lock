@@ -4,6 +4,8 @@
 #
 #    pip-compile --output-file=requirements.lock --strip-extras pyproject.toml
 #
+# Edit pyproject.toml instead; README.md (Setup) shows how to regenerate both lock files.
+#
 anyio==4.15.1
     # via httpx2
 click==8.5.0

@@ -1,4 +1,4 @@
-"""Prove the Bronze table holds exactly what landed: six checks against the manifest and the landing files.
+"""Check that the Bronze table holds exactly what landed: six checks against the manifest and the landing files.
 
 1 Schema         Spark's schema is the expected one, partition columns included
 2 Total rows     count() equals the manifest's num_rows total

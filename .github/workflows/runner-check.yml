@@ -1,6 +1,6 @@
 name: Runner check
 
-# Manual only: checks that the VM runner works and that production jobs get what they need
+# Run by hand: checks that the VM runner is online and that production jobs get what they need
 on:
   workflow_dispatch:
 

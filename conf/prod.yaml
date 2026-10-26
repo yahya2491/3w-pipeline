@@ -1,4 +1,4 @@
-# VM (group20): all 2,228 files. The base values are already sized for the VM.
+# VM (group20): all 2,228 files. Spark and ingest settings come from base.yaml, which is sized for the VM.
 
 storage:
   root: /home/ubuntu/3w-data

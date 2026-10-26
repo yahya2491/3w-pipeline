@@ -1,4 +1,4 @@
-# Settings shared by all environments. <env>.yaml is deep-merged on top.
+# Settings shared by all environments; dev.yaml or prod.yaml is deep-merged on top, key by key.
 # No secrets here: HF_TOKEN only ever comes from an environment variable.
 
 source:

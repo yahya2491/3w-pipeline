@@ -1,3 +1,5 @@
+"""Lock tests: a second holder is turned away, and the lock is released after an exception."""
+
 import json
 
 import pytest

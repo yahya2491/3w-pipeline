@@ -1,3 +1,5 @@
+"""Shared fixtures: one small Spark session, the schema contract and Parquet files built like the real ones."""
+
 import dataclasses
 import io
 

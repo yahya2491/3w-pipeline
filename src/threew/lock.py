@@ -1,4 +1,4 @@
-"""One ingest run at a time per storage root, using an advisory flock on a lock file.
+"""One run at a time per storage root, using an advisory flock on a lock file.
 
 The lock is released when the holding process exits, even if it crashes, so it can never be left stuck. The lock
 file itself stays; it holds a note on who has the lock, for the run that gets turned away.

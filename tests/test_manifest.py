@@ -127,7 +127,7 @@ def test_landing_path_is_stored_relative(manifest):
 
 
 def test_step14_columns_are_nullable_and_round_trip(manifest):
-    before = row()  # written before step 14: nulls
+    before = row()  # written before footer inspection existed: nulls
     after = row(
         "data/5/SIMULATED_00042.parquet", num_rows=61000, schema_fingerprint="f" * 16, schema_ok=True, codec="BROTLI"
     )

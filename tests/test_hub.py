@@ -1,4 +1,4 @@
-"""Hub client pieces that work without the network. The full fake hub comes later."""
+"""Hub client pieces that work without the network. The fake hub for whole runs is in fakes.py."""
 
 import logging
 

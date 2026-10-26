@@ -4,6 +4,8 @@ pretty_name: Petrobras 3W Dataset (mirror)
 tags: [time-series, anomaly-detection, oil-and-gas]
 ---
 
+<!-- Uploaded to Hugging Face as the dataset card by scripts/publish_to_hf.py. -->
+
 # Petrobras 3W Dataset (mirror)
 
 ## Source

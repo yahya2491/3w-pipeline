@@ -1,4 +1,4 @@
-"""Run identity: every ingest run gets one ID, used for its staging folder, manifest rows and report."""
+"""Run identity: every run gets one ID, a UTC time plus a random suffix, used for staging, manifest rows and report."""
 
 import uuid
 from datetime import UTC, datetime

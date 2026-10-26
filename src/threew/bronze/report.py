@@ -1,4 +1,4 @@
-"""The run report: one JSON file per ingest run in <storage.runs>/, written even when the run fails or is skipped."""
+"""The run report: one JSON file per run in <storage.runs>/, written even when the run fails or is skipped."""
 
 import json
 import logging

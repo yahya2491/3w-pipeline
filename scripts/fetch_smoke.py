@@ -1,6 +1,6 @@
 """Download and verify the first N planned files into a throwaway staging folder, then delete it.
 
-Measures download speed and estimates a full run. Never writes to landing or the manifest.
+Measures download speed and estimates how long a full run would take. Never writes to landing or the manifest.
 
 Usage:
     python scripts/fetch_smoke.py --env dev --limit 3

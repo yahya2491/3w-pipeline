@@ -1,4 +1,4 @@
-"""Smoke test: the environment is the pinned one and Spark can run a job."""
+"""Smoke test: the environment is the pinned one, and Spark can run a job."""
 
 import sys
 

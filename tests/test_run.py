@@ -1,4 +1,4 @@
-"""Full Bronze runs with the fake hub and a small Spark session."""
+"""Whole Bronze runs, from ingest to the ready marker, with the fake hub and a small Spark session."""
 
 import dataclasses
 import json
