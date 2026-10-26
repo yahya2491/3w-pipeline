@@ -1,89 +1,89 @@
 {
-  "macro_f1": 0.9447623863979062,
-  "fault_recall": 0.9619637447605314,
+  "macro_f1": 0.9280616620400434,
+  "fault_recall": 0.947827138241048,
   "per_source_macro_f1": {
-    "DRAWN": 0.6338051205092383,
-    "REAL": 0.6898719763686034,
-    "SIMULATED": 0.9810740345777968
+    "DRAWN": 0.6041156431267839,
+    "REAL": 0.6604232398182791,
+    "SIMULATED": 0.9835409224086082
   },
   "per_class": {
     "Normal Operation": {
-      "precision": 0.8219171180249402,
-      "recall": 0.831193314990319,
-      "f1-score": 0.8265291904695555,
-      "support": 39252.0
+      "precision": 0.8303036802688258,
+      "recall": 0.825904524846653,
+      "f1-score": 0.8280982601254991,
+      "support": 56245.0
     },
     "Abrupt Increase of BSW": {
-      "precision": 0.994838278435887,
-      "recall": 0.9900953507280656,
-      "f1-score": 0.9924611480541612,
+      "precision": 0.9968955715140634,
+      "recall": 0.9850321531524873,
+      "f1-score": 0.9909283563222664,
       "support": 27058.0
     },
     "Spurious Closure of DHSV": {
-      "precision": 0.9983449580328644,
-      "recall": 0.9970484061393152,
-      "f1-score": 0.9976962608541556,
-      "support": 8470.0
+      "precision": 0.9915254237288136,
+      "recall": 0.9950389794472005,
+      "f1-score": 0.9932790944464096,
+      "support": 1411.0
     },
     "Severe Slugging": {
-      "precision": 0.9930867407232333,
-      "recall": 0.9806861944217529,
-      "f1-score": 0.9868475133579943,
+      "precision": 0.9917892374032725,
+      "recall": 0.9796942467032326,
+      "f1-score": 0.9857046408547862,
       "support": 17138.0
     },
     "Flow Instability": {
-      "precision": 0.8936362608793942,
-      "recall": 0.9584192023275548,
-      "f1-score": 0.9248947122133833,
+      "precision": 0.851890978237904,
+      "recall": 0.9775730391562614,
+      "f1-score": 0.9104149026248941,
       "support": 8249.0
     },
     "Rapid Productivity Loss": {
-      "precision": 0.9891636218028931,
-      "recall": 0.9938145885192728,
-      "f1-score": 0.991483650867313,
-      "support": 39771.0
+      "precision": 0.9824597748774256,
+      "recall": 0.9936674970316393,
+      "f1-score": 0.9880318533265429,
+      "support": 42953.0
     },
     "Quick Restriction in PCK": {
-      "precision": 0.9879552137525447,
-      "recall": 0.9659423895615635,
-      "f1-score": 0.9768248022140841,
+      "precision": 0.9784904617085983,
+      "recall": 0.9783822635041742,
+      "f1-score": 0.978436359615172,
       "support": 18087.0
     },
     "Scaling in PCK": {
-      "precision": 0.9113148697906881,
-      "recall": 0.9017588219982895,
-      "f1-score": 0.9065116626794258,
+      "precision": 0.879980026393694,
+      "recall": 0.917413453314989,
+      "f1-score": 0.8983069361004915,
       "support": 26893.0
     },
     "Hydrate in Production Line": {
-      "precision": 0.8502104224034914,
-      "recall": 0.8808741992786779,
-      "f1-score": 0.8652707275803723,
+      "precision": 0.7524741015105041,
+      "recall": 0.6998977229907951,
+      "f1-score": 0.7252342704149933,
       "support": 18577.0
     },
     "Hydrate in Service Line": {
-      "precision": 0.9993734033836217,
-      "recall": 0.9596408405072665,
-      "f1-score": 0.9791041956886171,
+      "precision": 0.9992815747880646,
+      "recall": 0.9656576876793483,
+      "f1-score": 0.9821819465693774,
       "support": 21606.0
     },
-    "accuracy": 0.9369971701591729,
+    "accuracy": 0.9163032025422199,
     "macro avg": {
-      "precision": 0.9439840887229558,
-      "recall": 0.9459473308472077,
-      "f1-score": 0.9447623863979062,
-      "support": 225101.0
+      "precision": 0.9255090830431165,
+      "recall": 0.9318261567826781,
+      "f1-score": 0.9280616620400434,
+      "support": 238217.0
     },
     "weighted avg": {
-      "precision": 0.9379403762991846,
-      "recall": 0.9369971701591729,
-      "f1-score": 0.9373440286884971,
-      "support": 225101.0
+      "precision": 0.9160977155425575,
+      "recall": 0.9163032025422199,
+      "f1-score": 0.9158928238498302,
+      "support": 238217.0
     }
   },
   "best_params": {
-    "max_depth": 8,
-    "n_estimators": 73,
+    "max_depth": 6,
+    "n_estimators": 82,
     "learning_rate": 0.1,
     "subsample": 0.8,
     "colsample_bytree": 0.8,
@@ -92,20 +92,20 @@
   },
   "tuning": {
     "4": {
-      "val_macro_f1": 0.9095970306061009,
-      "best_iteration": 60
+      "val_macro_f1": 0.9151386512785539,
+      "best_iteration": 63
     },
     "6": {
-      "val_macro_f1": 0.9155188334343556,
-      "best_iteration": 51
+      "val_macro_f1": 0.9305285138763256,
+      "best_iteration": 64
     },
     "8": {
-      "val_macro_f1": 0.9169086340496835,
-      "best_iteration": 57
+      "val_macro_f1": 0.9229951526005135,
+      "best_iteration": 63
     }
   },
-  "tune_seconds": 78.22323632240295,
-  "fit_seconds": 19.956177234649658,
+  "tune_seconds": 88.92440342903137,
+  "fit_seconds": 21.02244257926941,
   "xgboost_version": "3.2.0",
-  "git_commit": "0e4a943"
+  "git_commit": "9feb823"
 }
