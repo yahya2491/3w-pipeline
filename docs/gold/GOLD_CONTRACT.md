@@ -11,7 +11,7 @@ Contract version: **1**.
 | Well-operations engineers | Which undesirable events occur on which real wells, how long does each take to develop, and how much of its labelling is inferred? | Which wells and event types to prioritise for follow-up | SQL views `well_event_summary` and `event_type_summary` |
 | Event-classifier team | Can a model recognise the event at a point in time from the last 120 seconds of sensor data? | Which model to deploy | Table `window_features` |
 
-The classifier in [`gold/model/`](../../gold/model/) is a **demo consumer**. Its Random Forest and XGBoost results
+The classifier in [`consumers/event_classifier/`](../../consumers/event_classifier/) is a **demo consumer**. Its Random Forest and XGBoost results
 show that `window_features` can be used as delivered. They are not part of the Gold product.
 
 Gold does not serve real-time detection, raw per-second readings (use Silver) or individual sensor statistics.
@@ -121,6 +121,13 @@ python gold/build_gold.py --env prod --silver-root /mnt/silver-data/3w-data/silv
 If Silver is not ready, Gold stops before writing anything. If a check fails, the previous `gold_ready.json`
 stays, so consumers keep the last good build. Its `built_at` and `silver.run_id` show how old it is.
 
+Full-data evidence: the [VM build](../evidence/gold/prod/gold_ready.json) of 26 October 2026 read Silver run
+`20261025T150850992057Z-ceebdeae` (the scheduled publication) and passed all four checks in 4 min 10 s. It holds
+2,228 recordings, 4,423 phases covering all 76,587,318 Silver rows, and 1,259,641 windows. Every recording has one of
+four phase patterns: normal → transient → steady (1,053), normal only (637), steady only (449, Events 3 and 4) or
+normal → transient (89). Both view results are saved:
+[per well](../evidence/gold/prod/well_event_summary.csv) and [per event type](../evidence/gold/prod/event_type_summary.csv).
+
 Dev evidence: the [30-recording build](../evidence/gold/dev/gold_ready.json) passed all four checks (1,931,052
 Silver rows in 67 phases; 31,597 windows), and its two [view](../evidence/gold/dev/well_event_summary.csv)
 [results](../evidence/gold/dev/event_type_summary.csv) are saved as CSV. A build with a forced check failure
@@ -138,11 +145,10 @@ exited with code 1 and left the previous marker unchanged.
 ## 8 Limits
 
 - Phases and timings depend on the supplied and inferred row classes; Gold does not detect events itself.
-- Each real recording has 3,600 observations (one hour) whose class Silver inferred: 1,119 × 3,600 is exactly
-  Silver's 4,028,400 inferred classes. In the dev sample they fall in the recording's first phase, so the normal
-  lead time of a real recording includes up to an hour of inferred normal operation. `avg_inferred_label_share`
-  in the views shows how much each figure rests on inferred labels.
-- An event recording can contain only normal rows (in the dev sample, both real Event 9 recordings). It is
-  counted in `recordings`, but its timings are empty.
+- Each of the 1,119 real recordings has exactly 3,600 observations (one hour) whose class Silver inferred, all in
+  its first phase; simulated and drawn recordings have none. So a real recording's normal lead time includes up to
+  an hour of inferred normal operation, and for Events 3 and 4, which start in the steady phase, the first hour of
+  the event is inferred. `avg_inferred_label_share` in the views shows how much each figure rests on inferred labels.
+- 43 real Event 9 recordings contain only normal rows. They are counted in `recordings`, but their timings are empty.
 - Access is a convention on the shared VM account, not enforced by file permissions.
 - Gold is rebuilt by hand; it is not yet part of the scheduled workflow.
