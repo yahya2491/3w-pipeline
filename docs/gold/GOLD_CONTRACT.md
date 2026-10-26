@@ -12,7 +12,8 @@ Contract version: **1**.
 | Event-classifier team | Can a model recognise the event at a point in time from the last 120 seconds of sensor data? | Which model to deploy | Table `window_features` |
 
 The classifier in [`consumers/event_classifier/`](../../consumers/event_classifier/) is a **demo consumer**. Its Random Forest and XGBoost results
-show that `window_features` can be used as delivered. They are not part of the Gold product.
+show that `window_features` can be used as delivered: on the full build they reach macro F1 0.925 and 0.928 on
+held-out recordings. They are not part of the Gold product.
 
 Gold does not serve real-time detection, raw per-second readings (use Silver) or individual sensor statistics.
 

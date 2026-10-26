@@ -2,13 +2,16 @@
 
 ## 1 Project statement
 
-`How do Random Forest and XGBoost compare in detecting and classifying undesirable operating conditions across labelled Petrobras 3W event categories using Silver-prepared sensor values and 120-second features?`
+We build a batch data pipeline on Spark that turns the raw Petrobras 3W dataset (v2.0.0) into a governed Gold data product about **well events**: which undesirable events occur on which wells, and how they develop. The pipeline follows the Medallion architecture (Bronze, Silver, Gold) and runs on our UiS OpenStack VM, with GitHub Actions for testing and scheduling.
 
-We build a batch data pipeline on Spark that turns the raw Petrobras 3W dataset (v2.0.0) into trusted, analysis-ready data for detecting and classifying undesirable events in offshore oil wells. The pipeline follows the Medallion architecture (Bronze, Silver, Gold) and runs end to end through GitHub Actions on our UiS OpenStack VM.
+Gold serves two consumers:
 
-The planned Gold output is a labelled, window-level feature table for comparing Random Forest and XGBoost on the same examples and feature sets. Silver also serves as a reusable prepared dataset for other analyses.
+- **Well-operations engineers** use its views to see which events occur on which real wells, how long an event takes to develop from its transient to its steady phase, and how much of that rests on inferred labels. They decide which wells and event types to prioritise.
+- **An event-classification team** uses its window feature table to train models and decide which one to deploy. A Random Forest and XGBoost demo shows that the table can be used as delivered.
 
-Out of scope: real-time or streaming ingestion, live well data, and dashboards beyond what is needed to validate the outputs.
+Silver also serves as a reusable prepared dataset for other analyses.
+
+Out of scope: real-time or streaming ingestion, live well data, dashboards, and deploying a model.
 
 ## 2 Dataset description
 
@@ -195,21 +198,51 @@ remains under `/home/ubuntu/3w-data/`. See the
 
 ## 5 Gold layer
 
-Gold shapes Silver into sampled labelled endpoints for comparing Random Forest
-and XGBoost. The current builder uses 21 mean/deviation/change features from
-seven sensor families, with per-sensor completeness checks, rather than a
-majority class over a fixed five-minute window. It maps transient/steady classes
-to event identities, splits whole recordings deterministically and keeps
-inferred targets out of held-out evaluation. Recording/event metadata and target
-provenance are excluded from model predictors.
+Gold is one data product, **well events**, built from the published Silver marker.
+The [Gold contract](gold/GOLD_CONTRACT.md) defines its consumers, tables, metrics
+and checks.
 
-The [Gold handover](gold/GOLD_HANDOVER.md) documents commands, sampling, limits
-and the overwrite behavior of the Gold table. Model implementations and existing
-results are under `gold/model/`; they must not be presented as retraining results
-on the new Silver publication without rebuilding Gold and rerunning evaluation.
-Report per-event support, precision/recall, macro F1, confusion matrices and a
-baseline on the same held-out examples. Detection at an endpoint does not
-establish advance warning before an event or generalization to unseen wells.
+| Table | One row is | Consumer | Rows |
+| --- | --- | --- | ---: |
+| `recordings` | One recording: well, source, event, time span, inferred-label share. | Operations engineers | 2,228 |
+| `event_phases` | One continuous normal, transient or steady stretch of a recording. | Operations engineers | 4,423 |
+| `window_features` | One labelled 120-second window per minute, split by whole recording. | Event classifier | 1,259,641 |
+
+*Why it differs from Silver.* Silver keeps one row per observation, 76.6 million
+in total. Gold answers questions about events, so its grain is the recording, the
+phase and the sampled window.
+
+*Metrics and interfaces.* Normal lead time, time to steady and event duration are
+defined once in the contract and computed on demand by two SQL views:
+`well_event_summary` for real wells, and `event_type_summary` with real, simulated
+and drawn recordings kept apart. The tables are stored because each needs a full
+pass over Silver; the views read only the small tables, so they always agree with
+them. The classifier reads `window_features` directly.
+
+*Correctness and readiness.* Gold writes each build to its own run folder and checks
+the written tables. Phases must cover every Silver row, keys must be unique and
+resolve, no recording may be in both splits and no inferred label may be in the
+test split. Only then does Gold replace `gold_ready.json`. Otherwise the last good
+build stays published, and its marker shows which Silver run it came from. The
+full build on 26 October 2026 passed all four checks in 4 min 10 s.
+
+*Usefulness.* The Random Forest and XGBoost demo in `consumers/event_classifier/`
+reads `window_features` through the marker and is evaluated on held-out recordings.
+On 238,217 test windows, macro F1 is 0.925 for Random Forest and 0.928 for
+XGBoost. Over 2,000 recording-level bootstrap resamples the 95% interval of the
+difference is −0.004 to +0.009, so the two are tied overall. On real wells they
+score 0.633 and 0.660, and XGBoost is ahead in every resample. Both raise many
+false alarms in the normal stretch before a real event (67–82% of those windows,
+against 3–4% in normal recordings), and 90–100% of those alarms name that
+recording's own event. They therefore recognise a recording's operating state
+more than the fault onset. A model given only which sensors are
+missing scores 0.328, so the features carry signal beyond missingness. Results
+are in `consumers/event_classifier/results/`.
+
+*Limits.* Phases and timings rest on the row classes. Each real recording has one
+inferred hour in its first phase, and 43 real Event 9 recordings contain no event rows.
+Detection at a window endpoint does not establish advance warning before an event
+or generalization to unseen wells.
 
 ## 6 Delivery and operation
 
@@ -225,5 +258,6 @@ All production changes reach main through PRs. Bronze is scheduled Mondays at
 fetches latest main, records its commit and can reuse unchanged verified output.
 New builds retain additional complete output copies; only job-specific temporary
 files are automatically cleaned. The saved Silver builds were manual runs and
-do not prove that the new scheduled workflow has executed. Gold is currently a
-separate manual build/model step, not an automated versioned publication chain.
+do not prove that the new scheduled workflow has executed. Gold is built by hand
+from the published Silver marker into versioned runs with its own ready marker;
+it is not yet started automatically by the Silver workflow.

@@ -99,11 +99,11 @@ presence alone does not prove domain validity; zero is not missing.
 ## Models and evidence
 
 Random Forest and XGBoost implementations and saved results are under
-[gold/model](../../gold/model/). Preserve their original interpretation: those
-results do not demonstrate retraining or evaluation on the newly published
-79-column Silver data. Rebuild the Gold table and retrain before claiming new
-scores. The saved results were trained on the earlier `gold_table`, which used
-every-10-row sampling for event 2 and a per-class cap of 200,000.
+[consumers/event_classifier](../../consumers/event_classifier/), a consumer of
+Gold. The saved results were retrained at commit `9feb823` on Gold run
+`20261026T194903Z-e2521f`, built from Silver run `20261025T150850992057Z-ceebdeae`.
+Macro F1 is 0.925 (Random Forest) and 0.928 (XGBoost). Training windows are
+capped at 200,000 per class; the test split is used in full.
 
 Compare models on the same supplied-label test examples and report per-event
 support, precision, recall, macro F1 and a confusion matrix. Include a baseline

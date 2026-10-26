@@ -54,7 +54,8 @@ src/threew/          Python package (named threew because package names can't st
   source/            reading the pinned dataset from Hugging Face
   bronze/            Bronze ingestion job
   silver/            Silver profiling, transformations, quality summaries and dev runner
-gold/                Gold build, SQL views and query script; gold/model/ is the demo classifier
+gold/                Gold build, SQL views and query script
+consumers/           Gold consumers; event_classifier/ is the Random Forest / XGBoost demo
 tests/               tests, run against the installed package
 conf/                dev / prod configuration
 scripts/             one-off scripts, e.g. publish_to_hf.py
