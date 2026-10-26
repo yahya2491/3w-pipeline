@@ -1,10 +1,13 @@
 import os
 
-# paths can be changed with environment variables, e.g. on a laptop for DAT540
-GOLD_PATH = os.environ.get("GOLD_PATH", "/mnt/silver-data/gold/gold_table")
+# The demo reads Gold only through its ready marker, as the Gold contract asks of every consumer.
+# Paths can be changed with environment variables, e.g. GOLD_READY=data/dev/gold/gold_ready.json on a laptop.
+GOLD_READY = os.environ.get("GOLD_READY", "/mnt/silver-data/gold/gold_ready.json")
+GOLD_CONTRACT_VERSION = 1  # the window_features columns this code was written for
 RESULTS_DIR = os.environ.get("RESULTS_DIR", "results")
 
 SEED = 42
+TRAIN_CAP = 200_000  # at most this many training windows per class, so the largest classes don't dominate
 
 FEATURE_SUFFIXES = ("_mean_120s", "_stddev_120s", "_change")
 EXPECTED_N_FEATURES = 21
