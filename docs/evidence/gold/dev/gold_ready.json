@@ -1,0 +1,58 @@
+{
+  "run_id": "20261026T192826Z-5771f1",
+  "built_at": "2026-10-26T19:28:41.137651+00:00",
+  "passed": true,
+  "contract_version": 1,
+  "env": "dev",
+  "code_version": {
+    "commit": "fcf8f66e0e55c130ea770e66333a9daee7fdb59b",
+    "dirty": false
+  },
+  "silver": {
+    "root": "/home/yahya/Collage/Semester3/DAT535 Data Engineering/Project/data/dev/silver",
+    "run_id": "20261026T191303916912Z-ee7370f1",
+    "contract_version": 4,
+    "published_at": "2026-10-26T19:20:43.444073+00:00"
+  },
+  "tables": {
+    "recordings": {
+      "path": "/home/yahya/Collage/Semester3/DAT535 Data Engineering/Project/data/dev/gold/runs/20261026T192826Z-5771f1/recordings",
+      "rows": 30
+    },
+    "event_phases": {
+      "path": "/home/yahya/Collage/Semester3/DAT535 Data Engineering/Project/data/dev/gold/runs/20261026T192826Z-5771f1/event_phases",
+      "rows": 67
+    },
+    "window_features": {
+      "path": "/home/yahya/Collage/Semester3/DAT535 Data Engineering/Project/data/dev/gold/runs/20261026T192826Z-5771f1/window_features",
+      "rows": 31597
+    }
+  },
+  "checks": [
+    {
+      "name": "phases_cover_every_silver_row",
+      "passed": true,
+      "silver_rows": 1931052,
+      "gold_rows": 1931052,
+      "mismatched_recordings": 0
+    },
+    {
+      "name": "keys_unique_and_resolve",
+      "passed": true,
+      "duplicate_recordings": 0,
+      "duplicate_phases": 0,
+      "orphan_phases": 0,
+      "orphan_windows": 0
+    },
+    {
+      "name": "each_recording_in_one_split",
+      "passed": true,
+      "recordings_in_both": 0
+    },
+    {
+      "name": "no_inferred_labels_in_test",
+      "passed": true,
+      "inferred_test_rows": 0
+    }
+  ]
+}

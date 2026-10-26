@@ -1,0 +1,15 @@
+well_id,event_id,event_name,recordings,avg_normal_lead_min,avg_time_to_steady_min,total_event_hours,avg_inferred_label_share
+1,0,Normal Operation,3,,,,0.167
+1,1,Abrupt Increase of BSW,1,793.6,163.5,4.0,0.058
+1,3,Severe Slugging,1,0.0,,6.0,0.167
+1,4,Flow Instability,3,0.0,,8.9,0.335
+1,7,Scaling in PCK,1,622.5,638.9,10.9,0.047
+2,2,Spurious Closure of DHSV,1,122.6,85.8,1.5,0.283
+2,6,Quick Restriction in PCK,2,267.3,27.2,3.0,0.184
+3,2,Spurious Closure of DHSV,1,203.4,115.5,2.0,0.187
+6,7,Scaling in PCK,1,150.0,1991.7,34.1,0.027
+10,9,Hydrate in Service Line,2,,,,0.115
+14,3,Severe Slugging,1,0.0,,5.9,0.168
+15,5,Rapid Productivity Loss,1,250.5,153.0,2.7,0.145
+16,5,Rapid Productivity Loss,1,89.6,34.2,0.6,0.478
+19,8,Hydrate in Production Line,2,1257.7,3150.2,113.0,0.013

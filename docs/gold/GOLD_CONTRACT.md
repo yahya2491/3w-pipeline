@@ -121,6 +121,11 @@ python gold/build_gold.py --env prod --silver-root /mnt/silver-data/3w-data/silv
 If Silver is not ready, Gold stops before writing anything. If a check fails, the previous `gold_ready.json`
 stays, so consumers keep the last good build. Its `built_at` and `silver.run_id` show how old it is.
 
+Dev evidence: the [30-recording build](../evidence/gold/dev/gold_ready.json) passed all four checks (1,931,052
+Silver rows in 67 phases; 31,597 windows), and its two [view](../evidence/gold/dev/well_event_summary.csv)
+[results](../evidence/gold/dev/event_type_summary.csv) are saved as CSV. A build with a forced check failure
+exited with code 1 and left the previous marker unchanged.
+
 ## 7 Ownership, lineage and change
 
 - **Owner:** yahya2491 owns Gold; ohassane100 owns the Silver input.
