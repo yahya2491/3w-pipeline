@@ -18,12 +18,13 @@ source .venv/bin/activate
 mountpoint -q /mnt/silver-data &&
 SPARK_LOCAL_DIRS=/mnt/silver-data/spark-tmp \
 TMPDIR=/mnt/silver-data/spark-tmp \
-python gold/build_gold_table.py \
+python gold/build_gold.py --env prod \
   --silver-root /mnt/silver-data/3w-data/silver-v3
 ```
 
-The builder writes `/mnt/silver-data/gold/gold_table` in overwrite mode; running
-it replaces that Gold table. It resolves `silver_ready.json` once, requires
+The builder writes a new run under `/mnt/silver-data/gold/runs/` and publishes
+`/mnt/silver-data/gold/gold_ready.json` only after its checks pass; the
+[Gold contract](GOLD_CONTRACT.md) defines its tables. It resolves `silver_ready.json` once, requires
 contract version 4 and successful reconciliation, and checks that the selected
 observation table belongs to that run. Read whole table directories, not single
 part files. Do not mix tables from different runs or read the whole `runs/` tree.
@@ -59,7 +60,7 @@ identified by `class_was_inferred`. These are assumed labels, not newly recovere
 expert annotations. Original labels and source missingness remain in Bronze and
 the quality summaries. See [assumptions](../silver/SILVER_ASSUMPTIONS.md).
 
-The current [Gold builder](../../gold/build_gold_table.py) selects consistent,
+The current [Gold builder](../../gold/build_gold.py) selects consistent,
 non-null clean targets and maps transient classes 101-109 to event identities
 1-9. It retains `class_was_inferred`, permits inferred targets in training only,
 and excludes them from held-out evaluation. Labels, inference flags,
@@ -75,8 +76,8 @@ wells; a well-grouped evaluation would be a separate experiment.
 The builder selects 21 mean/deviation/change predictors from the seven sensor
 families, requires complete history for each retained sensor group, applies its
 existing numerical feature guard and keeps rows with at least one usable group.
-It samples endpoints every 60 source rows (every 10 for event 2), then applies a
-per-class sampling target of 200,000. This is detection at a sampled endpoint,
+It samples endpoints every 60 source rows. Class balancing and sampling are left
+to the model consumer. This is detection at a sampled endpoint,
 not prediction before an event begins or a majority label over a whole window.
 Fit any model preprocessing using training data only.
 
@@ -101,8 +102,8 @@ Random Forest and XGBoost implementations and saved results are under
 [gold/model](../../gold/model/). Preserve their original interpretation: those
 results do not demonstrate retraining or evaluation on the newly published
 79-column Silver data. Rebuild the Gold table and retrain before claiming new
-scores. The Gold builder overwrites its table and does not currently implement
-an automatic versioned publication/ready-marker workflow.
+scores. The saved results were trained on the earlier `gold_table`, which used
+every-10-row sampling for event 2 and a per-class cap of 200,000.
 
 Compare models on the same supplied-label test examples and report per-event
 support, precision, recall, macro F1 and a confusion matrix. Include a baseline

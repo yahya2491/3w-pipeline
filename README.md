@@ -26,9 +26,9 @@ skips matching verified output. It activates after the workflow reaches main
 through a PR. Commands and VM prerequisites are in the
 [run guide](docs/silver/SILVER_RUN_GUIDE.md).
 
-Gold resolves the current Silver ready marker and consumes clean class targets.
-Inferred targets can train the model; held-out evaluation uses supplied labels.
-[Gold code](gold/build_gold_table.py) and existing model results remain available.
+Gold is a well-event product for operations engineers and an event classifier:
+three tables, SQL views and a ready marker published only after four checks pass.
+See the [Gold contract](docs/gold/GOLD_CONTRACT.md) and [Gold builder](gold/build_gold.py).
 Two [full VM builds](docs/evidence/silver/v3/README.md) of the current 79-column
 schema passed all 32 checks across 2,228 recordings and 76,587,318 observations.
 Each saved 8.55 GB of Parquet across seven tables. Runtimes were 6 h 19 min 21 s
@@ -54,6 +54,7 @@ src/threew/          Python package (named threew because package names can't st
   source/            reading the pinned dataset from Hugging Face
   bronze/            Bronze ingestion job
   silver/            Silver profiling, transformations, quality summaries and dev runner
+gold/                Gold build, SQL views and query script; gold/model/ is the demo classifier
 tests/               tests, run against the installed package
 conf/                dev / prod configuration
 scripts/             one-off scripts, e.g. publish_to_hf.py
