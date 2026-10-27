@@ -89,6 +89,13 @@ evidence. Unchanged output can still be reused below that floor.
 
 --skip-unchanged compares source-file versions/counts and recording metadata,
 resolved rules/configuration, the contract, runtime source and locked dependencies.
+Runtime Python files are compared by syntax structure without comments, formatting
+or module/class/function docstrings. Executable string values remain included.
+Dependency-lock comments and blank lines are ignored, while pins, options and URL
+hashes remain included. Package TOML is parsed so comments and formatting do not
+change its signature. Actual package settings still count as changes.
+This signature version requires one rebuild of publications made with the old
+signature; later comment-only edits reuse the newly published output.
 It ignores changing Bronze run IDs when content is unchanged. Reuse requires a
 successful current-schema marker and all seven output directories with recorded
 Parquet byte sizes. It does not rescan all output values for same-length external

@@ -1,7 +1,10 @@
 """Content signatures for reusing a successfully published Silver build."""
 
+import ast
 import hashlib
 import json
+import re
+import tomllib
 from pathlib import Path
 
 from threew.config import REPO_ROOT
@@ -18,23 +21,58 @@ TABLE_NAMES = (
 )
 
 
+class _WithoutDocstrings(ast.NodeTransformer):
+    """Remove documentation strings, preserving executable string constants."""
+
+    def _visit_body(self, node):
+        self.generic_visit(node)
+        if (
+            node.body
+            and isinstance(node.body[0], ast.Expr)
+            and isinstance(node.body[0].value, ast.Constant)
+            and isinstance(node.body[0].value.value, str)
+        ):
+            node.body.pop(0)
+        if not node.body and not isinstance(node, ast.Module):
+            node.body.append(ast.Pass())
+        return node
+
+    visit_Module = _visit_body
+    visit_ClassDef = _visit_body
+    visit_FunctionDef = _visit_body
+    visit_AsyncFunctionDef = _visit_body
+
+
+def _runtime_content(path):
+    if path.suffix == ".py":
+        tree = _WithoutDocstrings().visit(ast.parse(path.read_bytes(), filename=str(path)))
+        return ast.dump(tree, include_attributes=False).encode()
+    if path.name == "pyproject.toml":
+        with path.open("rb") as source:
+            return json.dumps(tomllib.load(source), sort_keys=True, default=str).encode()
+    # pip comments start at the beginning of a line or after whitespace. Keep
+    # URL fragments such as #sha256=... and all dependency pins/options intact.
+    lines = (re.sub(r"(^|\s+)#.*$", "", line).strip() for line in path.read_text(encoding="utf-8").splitlines())
+    return "\n".join(line for line in lines if line).encode()
+
+
 def runtime_digest(root=REPO_ROOT):
-    """Hash runtime sources and locked dependencies, ignoring unrelated Gold work."""
+    """Hash runtime structure and settings, excluding comments and docstrings."""
     root = Path(root)
     files = [*root.joinpath("src/threew").rglob("*.py")]
     files += [root / name for name in ("requirements.lock", "pyproject.toml")]
-    digest = hashlib.sha256()
+    digest = hashlib.sha256(b"silver-runtime-v2\0")
     for path in sorted(files):
         if path.is_file():
             digest.update(path.relative_to(root).as_posix().encode() + b"\0")
-            digest.update(path.read_bytes() + b"\0")
+            digest.update(_runtime_content(path) + b"\0")
     return digest.hexdigest()
 
 
 def build_signature(cfg, bronze_marker, manifest_rows, manifest_counts, rules, batch_rows, contract_sha256):
     """Ignore ingestion run IDs when the exact source versions and settings match."""
     payload = {
-        "format": 1,
+        "format": 2,
         "config": cfg.to_dict(),
         "source": bronze_marker["source"],
         "input_rows": bronze_marker["rows"],
