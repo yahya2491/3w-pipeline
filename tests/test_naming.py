@@ -1,3 +1,5 @@
+"""File-name parsing tests: real, simulated and drawn names, rejected names, and the path as the key."""
+
 from datetime import datetime
 
 import pytest

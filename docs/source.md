@@ -1,6 +1,6 @@
 # Data source
 
-The pipeline reads the 3W dataset from a Hugging Face mirror, pinned to one immutable commit.
+The pipeline reads the 3W dataset from our Hugging Face mirror, pinned to one commit that cannot change.
 
 | | |
 |---|---|

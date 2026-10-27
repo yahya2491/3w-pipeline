@@ -1,3 +1,5 @@
+"""Run report tests: valid JSON, exit codes, errors, phase timing and the code version."""
+
 import json
 import re
 from datetime import UTC, datetime

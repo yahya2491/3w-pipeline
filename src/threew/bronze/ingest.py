@@ -129,7 +129,7 @@ def _run_log(path: Path) -> Iterator[None]:
 
 
 def ingest_phases(cfg: Config, client: HubClient, report: RunReport, run_id, started_at, sleep) -> RunStatus:
-    """Pin check, listing, plan, download and verify, land and inspect: steps 8 to 15."""
+    """Pin check, listing, plan, download and verify, then land and inspect each file."""
     source, ingest = cfg.source, cfg.ingest
 
     def retry(fn):

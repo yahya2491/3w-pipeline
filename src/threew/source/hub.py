@@ -1,7 +1,7 @@
 """The only module that talks to Hugging Face: resolve a tag, list files, download one.
 
 The rest of the pipeline depends on the HubClient protocol, never on huggingface_hub, so tests can use a fake
-hub and a different source (S3, ...) only needs a new client.
+hub and a different source (for example S3) only needs a new client.
 """
 
 import fnmatch

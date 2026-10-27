@@ -34,7 +34,7 @@ MANIFEST_SCHEMA = pa.schema(
         pa.field("landing_path", pa.string()),  # relative to storage.root; null when FAILED
         pa.field("status", pa.string(), nullable=False),  # LANDED or FAILED
         pa.field("error", pa.string()),  # only when FAILED
-        # Filled in step 14; nullable so rows written before then stay valid
+        # Filled by footer inspection; nullable so rows written before it existed stay valid
         pa.field("num_rows", pa.int64()),  # from the Parquet footer
         pa.field("schema_fingerprint", pa.string()),  # hash of column names and types
         pa.field("schema_ok", pa.bool_()),  # matches the contract

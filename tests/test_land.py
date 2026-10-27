@@ -189,7 +189,7 @@ def test_crash_after_the_move_is_recovered_by_the_next_run(storage, manifest, co
     plan = build_plan([remote_for(PATH, data)], manifest.current(), sample_per_class=None)
     assert [(c.path, reason) for c, reason in plan.to_download] == [(PATH, Reason.NEW)]
 
-    # The next run lands it in its own run folder; the orphan stays for step 15 to report
+    # The next run lands it in its own run folder; the orphan stays for the leftover check to report
     land([staged_ok(storage, PATH, data, run_id="run-2")], storage, manifest, contract, run_id="run-2")
     recovered = target_of(storage, run_id="run-2")
     assert manifest.current()["landing_path"].to_pylist() == [recovered.relative_to(storage.root).as_posix()]

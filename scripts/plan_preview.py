@@ -1,4 +1,4 @@
-"""Show what an ingest run would download, without downloading anything.
+"""Show which files an ingest run would download, without downloading anything.
 
 Usage:
     python scripts/plan_preview.py --env prod

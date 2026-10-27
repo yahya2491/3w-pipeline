@@ -1,4 +1,6 @@
-"""Convert every landed file into the Bronze table (temporary entry point; step 19 folds it into the main run).
+"""Convert every landed file into the Bronze table, on its own.
+
+The full Bronze run (python -m threew.bronze.run) does the same as its convert phase.
 
 Usage:
     python scripts/build_bronze.py --env dev

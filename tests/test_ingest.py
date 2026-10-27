@@ -1,4 +1,4 @@
-"""End-to-end ingest with a fake hub: temporary folders, no network, no Spark."""
+"""Whole ingest runs with a fake hub: temporary folders, no network, no Spark."""
 
 import dataclasses
 import json

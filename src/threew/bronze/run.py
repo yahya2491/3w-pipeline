@@ -4,10 +4,10 @@ Usage:
     python -m threew.bronze.run --env dev [--deep] [--report-copy DIR]
 
 Phases, in order:
-    ingest     steps 8-15: download, verify, land and inspect new and changed files (PARTIAL or FAILED as before)
+    ingest     download, verify, land and inspect new and changed files (PARTIAL or FAILED, as in ingest.py)
     convert    convert landed files whose Bronze output doesn't exist yet; a failure makes the run PARTIAL
     prune      delete Bronze outputs that no current manifest row points to; an error makes the run FAILED
-    reconcile  the six checks of step 18, fast (--deep adds countDistinct); any failed check makes the run FAILED
+    reconcile  the six checks in reconcile.py, fast (--deep adds countDistinct); any failed check makes the run FAILED
     publish    write <root>/bronze/bronze_ready.json, only if everything above was SUCCESS
 
 The ready marker is withdrawn as soon as a run holds the lock and written again only at the end of a fully

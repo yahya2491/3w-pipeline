@@ -1,4 +1,4 @@
-"""Plan tests: pure inputs, no network, no Spark."""
+"""Plan tests: pure inputs, so no network and no Spark."""
 
 import random
 from collections import Counter, defaultdict

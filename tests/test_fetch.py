@@ -1,4 +1,4 @@
-"""Fetch tests with a fake client that writes chosen bytes: no network."""
+"""Download and verify tests, with a fake client that writes chosen bytes: no network."""
 
 import hashlib
 import os

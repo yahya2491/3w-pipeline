@@ -1,4 +1,4 @@
-"""Mirror the petrobras/3W dataset (Parquet files) to a Hugging Face dataset repo.
+"""Mirror the petrobras/3W dataset (Parquet files) to our Hugging Face dataset repo, unchanged.
 
 Usage:
     python scripts/publish_to_hf.py --only 2   # test with one small class (no card, no tag)

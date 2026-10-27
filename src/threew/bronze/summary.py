@@ -1,4 +1,4 @@
-"""A run report as Markdown, for the GitHub run page: status, source, one row per phase, totals and every problem."""
+"""A run report as Markdown for the GitHub Actions run page: status, source, one row per phase, totals and every problem."""
 
 from typing import Any
 

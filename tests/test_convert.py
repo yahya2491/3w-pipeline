@@ -1,4 +1,4 @@
-"""Bronze conversion tests, with small files written like the real ones: Brotli, timestamp[ns], some nulls."""
+"""Conversion tests, with small files written like the real ones: Brotli, nanosecond timestamps, some nulls."""
 
 import hashlib
 from datetime import UTC, datetime

@@ -1,6 +1,6 @@
 """Check a landed file's structure against the schema contract, reading only the Parquet footer.
 
-Step 12 proves the bytes are the published ones; this proves they have the columns and types Bronze expects.
+fetch.py proves the bytes are the published ones; this proves they have the columns and types Bronze expects.
 """
 
 import hashlib

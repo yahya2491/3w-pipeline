@@ -1,4 +1,4 @@
-"""Test doubles shared by the ingest and Bronze run tests."""
+"""Test doubles shared by the ingest and Bronze run tests: a fake Hugging Face hub and HTTP errors."""
 
 import hashlib
 from collections import defaultdict

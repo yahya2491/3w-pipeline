@@ -1,4 +1,4 @@
-"""Reconcile the Bronze table against the manifest and the landing files with Spark.
+"""Reconcile the Bronze table with the manifest and the landing files, using Spark, outside a full run.
 
 Prints each check and writes the result to <storage.runs>/reconcile_<timestamp>.json, with the physical plan of
 the per-file query next to it. With --evidence, the plan also goes to docs/evidence/bronze/reconcile_plan_<env>.txt

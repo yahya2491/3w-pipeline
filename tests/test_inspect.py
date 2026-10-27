@@ -1,4 +1,4 @@
-"""Footer inspection against the schema contract, with small Parquet files written by the tests."""
+"""Footer inspection against the schema contract, using small Parquet files written by the tests."""
 
 import configparser
 from pathlib import Path

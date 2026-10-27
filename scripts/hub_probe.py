@@ -1,4 +1,4 @@
-"""Print what the pinned Hugging Face source holds, before anything is ingested.
+"""Print what the pinned Hugging Face source holds, without ingesting anything.
 
 Usage:
     python scripts/hub_probe.py --env prod

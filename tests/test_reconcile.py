@@ -1,4 +1,4 @@
-"""Reconciliation tests: a tiny Bronze table built with convert_file, Spark on one core."""
+"""Reconciliation tests: a tiny Bronze table built with convert_file, checked by Spark on one core."""
 
 import dataclasses
 import hashlib

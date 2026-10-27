@@ -1,3 +1,5 @@
+"""Leftover checks: landed files without a manifest row, and stale staging folders."""
+
 from datetime import UTC, datetime
 
 import pytest

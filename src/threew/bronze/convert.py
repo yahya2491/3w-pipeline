@@ -1,4 +1,4 @@
-"""Convert landed files into the Bronze table: the source columns unchanged, plus lineage columns.
+"""Convert landed files into the Bronze table: the source values unchanged, plus four lineage columns.
 
 Layout, under storage.bronze (= <root>/bronze/3w_observations):
 
