@@ -2,7 +2,8 @@
 
 Gold turns validated Silver data into one product, **well events**, for two consumers. This document defines who
 uses it, what each table means, how the metrics are calculated and what is checked before Gold is published.
-Contract version: **1**.
+Contract version: **1**. For VM commands, publication selection and classifier
+usage, see the [run and consumer guide](GOLD_HANDOVER.md).
 
 ## 1 Consumers and purpose
 
