@@ -30,12 +30,12 @@ class QualityRules:
     valve_states: tuple[float, ...]
     choke_forward_fill_max_seconds: int
     expected_interval_seconds: int
-    feature_window_seconds: int = 120
+    feature_window_seconds: int = 120  # The exported feature names assume this window length.
     feature_sensors: tuple[str, ...] = FEATURE_SENSORS
-    missing_classes: str = "backfill_leading_and_matching"
+    missing_classes: str = "backfill_leading_and_matching"  # Fill leading gaps and matching internal gaps by default.
 
     def snapshot(self) -> dict:
-        resolved = asdict(self)
+        resolved = asdict(self)  # Save the settings we actually used, including defaults.
         return {
             "version": self.version,
             "sha256": hashlib.sha256(json.dumps(resolved, sort_keys=True).encode()).hexdigest(),
@@ -44,13 +44,13 @@ class QualityRules:
 
 
 def _mapping(value, keys, context):
-    if not isinstance(value, dict) or set(value) != set(keys):
+    if not isinstance(value, dict) or set(value) != set(keys):  # Reject typos or missing settings instead of guessing.
         raise ValueError(f"Silver rules {context}: expected exactly {', '.join(sorted(keys))}")
     return value
 
 
 def load_rules(path: Path = DEFAULT_RULES_PATH) -> QualityRules:
-    raw = _mapping(
+    raw = _mapping(  # Read the rules and check the top-level structure first.
         yaml.safe_load(Path(path).read_text()), ("version", "domains", "cleaning", "sequence", "features"), "root"
     )
     domains = _mapping(raw["domains"], ("opening_min_pct", "opening_max_pct", "valve_states"), "domains")
@@ -83,7 +83,7 @@ def load_rules(path: Path = DEFAULT_RULES_PATH) -> QualityRules:
         raise ValueError("Silver rules versions, durations and intervals must be positive integers")
     if raw["version"] != 1 or sequence["expected_interval_seconds"] != 1:
         raise ValueError("Only Silver rule version 1 and the source's one-second sampling are supported")
-    if features["window_seconds"] != 120:
+    if features["window_seconds"] != 120:  # A different history length would need a contract change.
         raise ValueError("The current Silver contract supports a 120-second feature window")
     bounds = [domains["opening_min_pct"], domains["opening_max_pct"]]
     states = domains["valve_states"]
@@ -92,14 +92,14 @@ def load_rules(path: Path = DEFAULT_RULES_PATH) -> QualityRules:
     if (
         any(type(v) not in (int, float) or not math.isfinite(v) for v in [*bounds, *states])
         or bounds[0] >= bounds[1]
-        or len(set(states)) != len(states)
+        or len(set(states)) != len(states)  # Repeated valve codes usually mean the rules file has a mistake.
     ):
         raise ValueError("Silver rules have invalid opening bounds or duplicate valve states")
     return QualityRules(
         **integers,
         opening_min_pct=float(bounds[0]),
         opening_max_pct=float(bounds[1]),
-        valve_states=tuple(float(v) for v in states),
+        valve_states=tuple(float(v) for v in states),  # Normalise numeric types before saving the resolved rules.
         feature_sensors=tuple(features["sensors"]),
         missing_classes=cleaning["missing_classes"],
     )

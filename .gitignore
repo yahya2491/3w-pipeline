@@ -22,3 +22,6 @@ derby.log
 
 # CI reports and logs
 out/
+
+# Local lint caches
+.ruff_cache/

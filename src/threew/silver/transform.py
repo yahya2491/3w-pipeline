@@ -54,7 +54,7 @@ def _validate_manifest_rows(rows: Sequence[Mapping[str, Any]]) -> None:
     if not rows:
         raise ValueError("Cannot build Silver observations without current manifest rows.")
 
-    seen_paths = set()
+    seen_paths = set()  # We need one current recording per source path.
     for row in rows:
         for name in ("_source_path", "_file_sha256", "_manifest_source_type", "_manifest_label", "instance_id"):
             if row.get(name) is None:
@@ -62,7 +62,7 @@ def _validate_manifest_rows(rows: Sequence[Mapping[str, Any]]) -> None:
         source_path = row["_source_path"]
         if not isinstance(source_path, str) or not source_path:
             raise ValueError("Manifest source paths must be non-empty strings.")
-        if source_path in seen_paths:
+        if source_path in seen_paths:  # Reject duplicates before a join can multiply observations.
             raise ValueError(f"Manifest has more than one current recording for {source_path!r}.")
         seen_paths.add(source_path)
         if not isinstance(row["_file_sha256"], str) or not row["_file_sha256"]:
@@ -82,17 +82,17 @@ def _validate_manifest_rows(rows: Sequence[Mapping[str, Any]]) -> None:
 
 
 def _manifest_dataframe(spark: SparkSession, rows: Sequence[Mapping[str, Any]]) -> DataFrame:
-    _validate_manifest_rows(rows)
+    _validate_manifest_rows(rows)  # Check the small catalogue before turning it into a DataFrame.
     return spark.createDataFrame([dict(row) for row in rows], schema=MANIFEST_SCHEMA)
 
 
 def build_silver_observations(bronze: DataFrame, manifest_rows: Sequence[Mapping[str, Any]]) -> DataFrame:
     """Rename and enrich Bronze rows, failing when recording metadata is ambiguous or inconsistent."""
-    missing = set(BRONZE_TYPES) - set(bronze.columns)
+    missing = set(BRONZE_TYPES) - set(bronze.columns)  # Do not silently run with an incomplete input schema.
     if missing:
         raise ValueError(f"Bronze table is missing required columns: {', '.join(sorted(missing))}")
 
-    extra = set(bronze.columns) - set(BRONZE_TYPES)
+    extra = set(bronze.columns) - set(BRONZE_TYPES)  # New source columns need a deliberate contract update.
     if extra:
         raise ValueError(f"Bronze table has unexpected columns: {', '.join(sorted(extra))}")
 
@@ -105,9 +105,9 @@ def build_silver_observations(bronze: DataFrame, manifest_rows: Sequence[Mapping
     if wrong_types:
         raise ValueError("Bronze table has unexpected field types: " + "; ".join(wrong_types))
 
-    manifest = _manifest_dataframe(bronze.sparkSession, manifest_rows)
+    manifest = _manifest_dataframe(bronze.sparkSession, manifest_rows)  # Small catalogue for the join below.
     joined = bronze.join(F.broadcast(manifest), on=["_source_path", "_file_sha256"], how="left")
-    checks = joined.agg(
+    checks = joined.agg(  # The left join keeps unmatched file versions visible so we can reject them.
         F.count(F.when(F.col("instance_id").isNull(), 1)).alias("unmatched_rows"),
         F.count(F.when(~F.col("source_type").eqNullSafe(F.col("_manifest_source_type")), 1)).alias(
             "source_type_mismatches"
@@ -115,14 +115,14 @@ def build_silver_observations(bronze: DataFrame, manifest_rows: Sequence[Mapping
         F.count(F.when(~F.col("label").eqNullSafe(F.col("_manifest_label")), 1)).alias("label_mismatches"),
     ).first()
 
-    if checks["unmatched_rows"]:
+    if checks["unmatched_rows"]:  # Every observation must belong to a current manifest file version.
         raise ValueError(f"{checks['unmatched_rows']:,} Bronze rows have no current manifest match.")
     if checks["source_type_mismatches"]:
         raise ValueError("Bronze source_type does not match the current manifest.")
     if checks["label_mismatches"]:
         raise ValueError("Bronze label does not match the current manifest.")
 
-    columns = [
+    columns = [  # Keep source identity while renaming the sensor and label fields.
         F.col("source_type"),
         F.col("label").cast(IntegerType()).alias("instance_label"),
         F.col("class").cast(ShortType()).alias("class_code"),
@@ -139,25 +139,25 @@ def build_silver_observations(bronze: DataFrame, manifest_rows: Sequence[Mapping
     ]
     silver = joined.select(*columns)
 
-    return add_event_descriptions(silver)
+    return add_event_descriptions(silver)  # These first descriptions refer to the original row class.
 
 
 def add_event_descriptions(observations: DataFrame, class_column: str = "class_code") -> DataFrame:
     """Describe the selected class column while retaining recording-event context."""
     event_name_map = F.create_map(*[item for code, name in EVENT_NAMES.items() for item in (F.lit(code), F.lit(name))])
     class_code = F.col(class_column).cast(IntegerType())
-    instance_label = F.col("instance_label")
+    instance_label = F.col("instance_label")  # The recording event is context, not a replacement row label.
     row_event_code = (
         F.when(class_code == 0, F.lit(0))
         .when(class_code.between(1, 9), class_code)
-        .when(class_code.between(101, 109), class_code - F.lit(100))
+        .when(class_code.between(101, 109), class_code - F.lit(100))  # Map transient classes to event names.
         .otherwise(F.lit(None).cast(IntegerType()))
     )
 
     valid_normal_period = instance_label.isin(*NORMAL_LABELS) & (class_code == 0)
     valid_steady_event = instance_label.between(1, 9) & (class_code == instance_label)
     valid_transient_event = instance_label.isin(*TRANSIENT_LABELS) & (class_code == instance_label + F.lit(100))
-    class_matches_recording = valid_normal_period | valid_steady_event | valid_transient_event
+    class_matches_recording = valid_normal_period | valid_steady_event | valid_transient_event  # Check allowed phases.
 
     return (
         observations.withColumn("instance_event_name", F.element_at(event_name_map, instance_label))

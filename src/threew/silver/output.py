@@ -4,8 +4,8 @@ from threew.silver.reference import OPENINGS, SENSOR_FIELDS
 from threew.silver.rules import FEATURE_SENSORS
 from threew.silver.transform import add_event_descriptions
 
-CONTRACT_VERSION = 4
-CONTEXT_COLUMNS = (
+CONTRACT_VERSION = 4  # Readers use this version to reject incompatible exports.
+CONTEXT_COLUMNS = (  # Keep the keys and recording context needed to trace rows back to Bronze.
     "source_type",
     "instance_label",
     "state_code",
@@ -17,10 +17,10 @@ CONTEXT_COLUMNS = (
     "well_id",
     "instance_start",
 )
-OUTPUT_COLUMNS = (
+OUTPUT_COLUMNS = (  # This explicit projection fixes the public column order and drops raw duplicates.
     *CONTEXT_COLUMNS,
-    "class_code_clean",
-    "class_was_inferred",
+    "class_code_clean",  # The exported target may be supplied or inferred; the next flag tells us which.
+    "class_was_inferred",  # Keep this out of predictors and use it to exclude inferred evaluation targets.
     "instance_event_name",
     "row_event_name",
     "row_event_phase",
@@ -38,6 +38,6 @@ OUTPUT_COLUMNS = (
 )
 
 
-def export_observations(prepared):
+def export_observations(prepared):  # Describe the clean target; source issues are kept separately.
     """Save one clean value per sensor/class and describe the exported class."""
     return add_event_descriptions(prepared, "class_code_clean").select(*OUTPUT_COLUMNS)

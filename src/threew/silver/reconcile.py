@@ -50,15 +50,14 @@ REQUIRED_OBSERVATION_FIELDS = (
 
 def same_rows(left: DataFrame, right: DataFrame) -> bool:
     """Exact logical equality, including duplicates and nulls, regardless of row order."""
-    weight = "__threew_row_weight"
-    while weight in left.columns:
+    weight = "__threew_row_weight"  # Equal rows cancel out, including their duplicate counts.
+    while weight in left.columns:  # Avoid overwriting a real data column with our temporary weight.
         weight += "_"
     balance = weight + "_balance"
     while balance in left.columns:
         balance += "_"
-    # Cancel equal row multiplicities in one comparison instead of two EXCEPT ALL jobs.
     signed = left.withColumn(weight, F.lit(1)).unionByName(right.select(*left.columns).withColumn(weight, F.lit(-1)))
-    differences = signed.groupBy(*left.columns).agg(F.sum(weight).alias(balance))
+    differences = signed.groupBy(*left.columns).agg(F.sum(weight).alias(balance))  # Equal rows sum to zero.
     return differences.filter(F.col(balance) != 0).limit(1).count() == 0
 
 
@@ -68,11 +67,11 @@ def schema_matches(df: DataFrame, types: Mapping[str, Any]) -> bool:
 
 
 def unique_non_null_keys(df: DataFrame, fields: Sequence[str]) -> bool:
-    missing = F.lit(False)
+    missing = F.lit(False)  # Check every part of the key; one null is enough to reject the row.
     for name in fields:
         missing = missing | F.col(name).isNull()
     return (
-        df.filter(missing).limit(1).count() == 0
+        df.filter(missing).limit(1).count() == 0  # Finding one bad key is enough; no need to count them all.
         and df.groupBy(*fields).count().filter("count > 1").limit(1).count() == 0
     )
 
@@ -90,7 +89,7 @@ def input_checks(
     return {
         "bronze_rows_match_ready_marker": total == marker["rows"],
         "bronze_recordings_match_ready_marker": bronze_counts.count() == marker["files"],
-        "bronze_recording_counts_match_manifest": same_rows(expected, bronze_counts),
+        "bronze_recording_counts_match_manifest": same_rows(expected, bronze_counts),  # Totals can hide mismatches.
     }
 
 
@@ -105,14 +104,12 @@ def output_checks(
     rules=None,
 ) -> dict[str, bool]:
     """Validate saved tables against Bronze, the contract and freshly computed summaries."""
-    source = build_silver_observations(bronze, manifest_rows)
+    source = build_silver_observations(bronze, manifest_rows)  # Rebuild expected values from Bronze.
     expected = export_observations(prepare_observations(source, rules)) if rules is not None else source
     summaries = build_quality_summaries(source)
     issues = None
     try:
-        # Recompute from Bronze. Explicit-value tests check the transformation rules;
-        # reconciliation checks that saved values match those rules.
-        checks = {
+        checks = {  # Check saved output here; explicit-value tests check the rules themselves.
             "silver_schema_matches_contract": schema_matches(
                 observations,
                 {f.name: f.dataType for f in expected.schema} if rules is not None else BASE_OBSERVATION_TYPES,
@@ -124,9 +121,9 @@ def output_checks(
                 sensors, {f.name: f.dataType for f in summaries.sensor_availability.schema}
             ),
         }
-        if not all(checks.values()):
+        if not all(checks.values()):  # Stop before comparing values if the schemas are incompatible.
             return checks
-        required_null = F.lit(False)
+        required_null = F.lit(False)  # Required context cannot disappear during the export.
         for name in REQUIRED_OBSERVATION_FIELDS:
             if name in expected.columns:
                 required_null = required_null | F.col(name).isNull()
@@ -172,7 +169,7 @@ def output_checks(
         )
         if rules is not None:
             derived = [name for name in expected.columns if name not in BASE_OBSERVATION_TYPES]
-            reference = expected.select(*OBSERVATION_KEY, *derived)
+            reference = expected.select(*OBSERVATION_KEY, *derived)  # Also compare prepared fields against the rules.
             checks["silver_prepared_values_match_rules"] = same_rows(
                 reference, observations.select(*OBSERVATION_KEY, *derived)
             )
@@ -184,7 +181,7 @@ def output_checks(
                 **build_reference_tables(bronze.sparkSession, rules),
             }
             for name, reference in expected_additional.items():
-                candidate = additional[name]
+                candidate = additional[name]  # Check the saved issue and reference tables against fresh results.
                 correct_schema = schema_matches(candidate, {f.name: f.dataType for f in reference.schema})
                 checks[f"{name}_schema_matches"] = correct_schema
                 checks[f"{name}_values_match"] = correct_schema and same_rows(reference, candidate)
@@ -194,5 +191,5 @@ def output_checks(
         return checks
     finally:
         if issues is not None:
-            cleanup_spark(issues.unpersist, "release expected issues")
+            cleanup_spark(issues.unpersist, "release expected issues")  # Release the cache even if comparison failed.
         cleanup_spark(summaries.unpersist, "release expected summaries")

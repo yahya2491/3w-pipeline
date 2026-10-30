@@ -42,7 +42,7 @@ The VM's attached volume is mounted at `/mnt/silver-data`. Production Bronze rem
 under `/home/ubuntu/3w-data/`. Scheduled Silver reads that Bronze publication and saves to
 `/mnt/silver-data/silver-schedule/`, using its own job directories under
 `/mnt/silver-data/spark-tmp/` for temporary data. Older copied data remains under
-`/mnt/silver-data/3w-data/` and is not the scheduled input. See [VM storage](docs/silver/VM_STORAGE.md) and the
+`/mnt/silver-data/3w-data/` and is not the scheduled input. See [VM storage](docs/silver/SILVER_RUN_GUIDE.md#vm-storage) and the
 [Silver run guide](docs/silver/SILVER_RUN_GUIDE.md) for the exact paths and commands.
 
 Pipeline run dates and times are UTC. Source observation clocks remain timezone-free and unchanged.
@@ -63,6 +63,10 @@ hf/README.md         dataset card shown on Hugging Face
 docs/                project documentation
 .github/workflows/   CI
 ```
+
+Keep contracts, operating guides, the project report and cited validation evidence
+in Git. Pipeline data and run artifacts belong under the configured storage roots
+or in CI artifacts.
 
 ## Setup
 

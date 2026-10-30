@@ -62,8 +62,6 @@ One row in the main Silver table represents one original observation, with all 2
 
 To trace an observation back to its source, we use three fields together: `_source_path` identifies the original file, `_file_sha256` identifies its exact version, and `_row_in_file` identifies the row's original position. The recording name, `instance_id`, is not sufficient on its own because some names appear in more than one event folder. We use the source path and file fingerprint to join each observation to Bronze's current file catalogue and add the recording details.
 
-Silver saves seven Parquet tables. The counts below agree across both full 79-column builds on 24-25 October 2026. Both passed all 32 checks; the [saved comparison](evidence/silver/v3/comparison.log) reports identical schemas and complete contents for all seven tables. Reports, markers and timings are in the [evidence index](evidence/silver/v3/README.md).
-
 | Table | Purpose | Rows |
 | --- | --- | ---: |
 | `silver_observations` | One row per original observation, with clean sensor/class values, provenance and recording/event context. Originals remain in Bronze. | 76,587,318 |
