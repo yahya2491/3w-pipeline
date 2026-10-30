@@ -10,7 +10,8 @@ def prepare_class_labels(observations, rules):
     """Add clean labels and a non-null flag identifying inferred source-null classes."""
     prepared = _infer_class_labels(observations, rules)  # Keep the inference flag separate from the fill rules.
     return prepared.withColumn(
-        "class_was_inferred", F.col("class_code").isNull() & F.col("class_code_clean").isNotNull()  # Flag fills.
+        "class_was_inferred",
+        F.col("class_code").isNull() & F.col("class_code_clean").isNotNull(),  # Flag fills.
     )
 
 
@@ -52,7 +53,9 @@ def _infer_class_labels(observations, rules):
         *RECORDING_KEY
     )
     labels = observations.select(*OBSERVATION_KEY, "class_code", "class_label_status").join(  # Keep window rows narrow.
-        F.broadcast(candidates), list(RECORDING_KEY), "left_semi"  # Only recordings with later gaps need these windows.
+        F.broadcast(candidates),
+        list(RECORDING_KEY),
+        "left_semi",  # Only recordings with later gaps need these windows.
     )
     ordered = Window.partitionBy(*RECORDING_KEY).orderBy("_row_in_file")
     original = F.when(  # Use supplied labels as anchors, never labels we filled earlier.

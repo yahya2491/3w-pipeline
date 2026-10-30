@@ -29,7 +29,8 @@ def prepare_observations(observations: DataFrame, rules: QualityRules) -> DataFr
     ordered = Window.partitionBy(*RECORDING_KEY).orderBy("_row_in_file")  # Keep source order.
     prefix = ordered.rowsBetween(Window.unboundedPreceding, Window.currentRow)
     df = prepare_class_labels(observations, rules).withColumn(
-        "_prep_us", F.unix_micros(F.col("timestamp").cast("timestamp"))  # Use microseconds for repair ages.
+        "_prep_us",
+        F.unix_micros(F.col("timestamp").cast("timestamp")),  # Use microseconds for repair ages.
     )
     df = df.select(
         "*",
