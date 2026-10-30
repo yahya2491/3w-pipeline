@@ -22,12 +22,11 @@ SUMMARIES = ("well_event_summary", "event_type_summary")
 
 def register_views(spark, tables):
     """Register the Gold tables as temp views, then create the views defined in views.sql."""
-    for name, df in tables.items():
+    for name, df in tables.items():  # Both engineer summaries share these published input tables.
         df.createOrReplaceTempView(name)
-    for statement in VIEWS_SQL.read_text().split(";"):
-        # drop comment lines so the empty piece after the last semicolon is skipped
+    for statement in VIEWS_SQL.read_text().split(";"):  # SQL statements are separated by semicolons.
         sql = "\n".join(line for line in statement.splitlines() if not line.strip().startswith("--")).strip()
-        if sql:
+        if sql:  # Skip comments and the empty fragment after the final semicolon.
             spark.sql(sql)
 
 
@@ -40,7 +39,7 @@ def main(argv=None):
 
     cfg = load_config(args.env)
     gold_root = args.gold_root or (PROD_GOLD_ROOT if args.env == "prod" else cfg.storage.root / "gold")
-    marker = json.loads((gold_root / "gold_ready.json").read_text())
+    marker = json.loads((gold_root / "gold_ready.json").read_text())  # Resolve the publication once for both summaries.
     print(f"Gold run {marker['run_id']} (built {marker['built_at']}, Silver run {marker['silver']['run_id']})")
 
     spark = get_spark(dataclasses.replace(cfg, spark=dataclasses.replace(cfg.spark, app_name="3w-gold-query")))
@@ -51,14 +50,14 @@ def main(argv=None):
             df = spark.table(view)
             print(f"\n{view}")
             df.show(200, truncate=False)
-            if args.csv:
+            if args.csv:  # CSV export is optional; the views remain computed on demand.
                 args.csv.mkdir(parents=True, exist_ok=True)
                 with open(args.csv / f"{view}.csv", "w", newline="") as f:
                     writer = csv.writer(f)
-                    writer.writerow(df.columns)
+                    writer.writerow(df.columns)  # Keep the column names in the exported evidence.
                     writer.writerows(df.collect())
     finally:
-        cleanup_spark(spark.stop, "stop Spark")
+        cleanup_spark(spark.stop, "stop Spark")  # Release Spark if a query or CSV export fails too.
 
 
 if __name__ == "__main__":

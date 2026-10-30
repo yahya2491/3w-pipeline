@@ -41,10 +41,10 @@ VALUE_LIMIT = 1e12  # Silver keeps corrupt readings such as -1.18e42 Pa; beyond 
 def resolve_silver_input(root):
     """Read one ready marker; never mix publications or guess an output folder."""
     root = Path(root)
-    marker = json.loads((root / "silver_ready.json").read_text())
+    marker = json.loads((root / "silver_ready.json").read_text())  # Read one Silver publication.
     if marker.get("contract_version") != CONTRACT_VERSION or marker.get("reconcile", {}).get("passed") is not True:
         raise ValueError("Gold requires a verified current Silver publication; rebuild Silver first")
-    path = Path(marker["tables"]["silver_observations"]["path"])
+    path = Path(marker["tables"]["silver_observations"]["path"])  # Only observations are used to build Gold.
     if path.resolve() != root.resolve() / "runs" / marker["run_id"] / "silver_observations" or not path.is_dir():
         raise ValueError("Silver observations do not belong to the selected ready publication")
     return marker, path
@@ -55,16 +55,12 @@ def seconds_between(start, end):
     return F.expr(f"timestampdiff(SECOND, {start}, {end})")
 
 
-# ---------------------------------------------------------------- operations tables
-
-
 def build_recordings(obs):
     """One row per recording: well, source, event, time span and how much of its labelling is inferred."""
     return (
         obs.groupBy(F.col("_source_path").alias("recording_id"))
         .agg(
-            # these are the same on every row of a recording
-            F.first("instance_id").alias("instance_id"),
+            F.first("instance_id").alias("instance_id"),  # Recording metadata is the same on every source row.
             F.first("well_id").alias("well_id"),
             F.first("source_type").alias("source_type"),
             F.first("instance_label").alias("event_id"),
@@ -72,7 +68,7 @@ def build_recordings(obs):
             F.min("timestamp").alias("start_ts"),
             F.max("timestamp").alias("end_ts"),
             F.count(F.lit(1)).alias("n_rows"),
-            F.sum(F.col("class_was_inferred").cast("int")).alias("n_inferred"),
+            F.sum(F.col("class_was_inferred").cast("int")).alias("n_inferred"),  # Count assumed labels.
         )
         .withColumn("duration_s", seconds_between("start_ts", "end_ts"))
         .withColumn("inferred_label_share", F.round(F.col("n_inferred") / F.col("n_rows"), 4))
@@ -85,9 +81,9 @@ def build_event_phases(obs):
     Rows are taken in their original order; a new phase starts at the first row and wherever the
     class differs from the previous row. A running count of those starts numbers the phases 1, 2, ...
     """
-    in_order = Window.partitionBy("_source_path").orderBy("_row_in_file")
-    previous_class = F.lag("class_code_clean").over(in_order)
-    is_first_row = F.lag("_row_in_file").over(in_order).isNull()
+    in_order = Window.partitionBy("_source_path").orderBy("_row_in_file")  # Use source order, not timestamp order.
+    previous_class = F.lag("class_code_clean").over(in_order)  # Class changes define phase boundaries.
+    is_first_row = F.lag("_row_in_file").over(in_order).isNull()  # The first row must start a phase too.
     rows = (
         obs.select(
             "_source_path",
@@ -105,8 +101,7 @@ def build_event_phases(obs):
     return (
         rows.groupBy(F.col("_source_path").alias("recording_id"), "phase_seq")
         .agg(
-            # one class per phase, so its code, name and phase are the same on every row
-            F.first("class_code_clean").alias("class_code"),
+            F.first("class_code_clean").alias("class_code"),  # Each phase has one class, including null for unknown.
             F.first("row_event_name").alias("event_name"),
             F.first("row_event_phase").alias("phase"),
             F.min("_row_in_file").alias("start_row"),
@@ -115,17 +110,14 @@ def build_event_phases(obs):
             F.max("timestamp").alias("end_ts"),
             F.first("recording_start").alias("recording_start"),
             F.count(F.lit(1)).alias("n_rows"),
-            F.sum(F.col("class_was_inferred").cast("int")).alias("n_inferred"),
+            F.sum(F.col("class_was_inferred").cast("int")).alias("n_inferred"),  # Count assumed labels.
         )
         .withColumn("event_id", (F.col("class_code") % 100).cast("int"))  # 101-109 and 1-9 are events 1-9
         .withColumn("start_offset_s", seconds_between("recording_start", "start_ts"))
         .withColumn("end_offset_s", seconds_between("recording_start", "end_ts"))
         .withColumn("duration_s", F.col("end_offset_s") - F.col("start_offset_s"))
-        .drop("recording_start")
+        .drop("recording_start")  # The start was only needed to calculate offsets.
     )
-
-
-# ---------------------------------------------------------------- classifier table
 
 
 def prepare_windows(obs):
@@ -135,21 +127,19 @@ def prepare_windows(obs):
         raise ValueError("Silver has no temporal sensor features")
     df = obs.filter(F.col("class_code_clean").isNotNull() & (F.col("class_label_status") == "consistent"))
     df = df.withColumn("class_code", F.col("class_code_clean"))
-    df = df.withColumn("label", (F.col("class_code") % 100).cast("int"))
+    df = df.withColumn("label", (F.col("class_code") % 100).cast("int"))  # Map transient 105 and steady 5 to Event 5.
     feature_cols = []
     updates = {}
     for sensor in sensors:
         names = [f"{sensor}_{stat}" for stat in ("mean_120s", "stddev_120s", "change")]
-        ok = F.col(f"{sensor}_count_120s") == 120
+        ok = F.col(f"{sensor}_count_120s") == 120  # Require a full history for this sensor group.
         for name in names:
-            # a null value counts as fine here, otherwise one null would wipe the other two
-            ok = ok & F.coalesce(F.abs(F.col(name)) <= VALUE_LIMIT, F.lit(True))
+            ok = ok & F.coalesce(F.abs(F.col(name)) <= VALUE_LIMIT, F.lit(True))  # Keep siblings if null.
         updates.update({name: F.when(ok, F.col(name)) for name in names})
         feature_cols += names
-    # withColumns replaces all of them at once, so every check sees the original values
-    df = df.withColumns(updates)
+    df = df.withColumns(updates)  # Apply together so every guard sees the original features.
     df = df.filter(F.coalesce(*[F.col(c) for c in feature_cols]).isNotNull())
-    df = df.filter(F.col("_row_in_file") % STRIDE == 0)
+    df = df.filter(F.col("_row_in_file") % STRIDE == 0)  # Sample endpoints every 60 source rows.
     keep = ["_source_path", "source_type", "well_id", "_row_in_file", "class_code", "class_was_inferred", "label"]
     return df.select(*keep, *feature_cols).withColumnRenamed("_source_path", "recording_id")
 
@@ -159,20 +149,15 @@ def split_windows(df):
     rec = df.groupBy("recording_id").agg(
         F.max("label").alias("recording_event"), F.first("source_type").alias("rec_source")
     )
-    # within each (event, source) group, order recordings by a seeded hash; the first 20% go to test
     ordered = Window.partitionBy("recording_event", "rec_source").orderBy(F.xxhash64("recording_id", F.lit(SEED)))
-    rec = rec.withColumn("rank", F.percent_rank().over(ordered))
+    rec = rec.withColumn("rank", F.percent_rank().over(ordered))  # Rank whole recordings within event/source groups.
     rec = rec.withColumn("split", F.when(F.col("rank") < TEST_FRACTION, "test").otherwise("train"))
     df = df.join(F.broadcast(rec.select("recording_id", "recording_event", "split")), on="recording_id")
-    return df.filter((F.col("split") == "train") | ~F.col("class_was_inferred"))
+    return df.filter((F.col("split") == "train") | ~F.col("class_was_inferred"))  # Keep inferred labels out of test.
 
 
 def build_window_features(obs):
-    # cached because the split reads the prepared rows twice (once per recording, once in the join)
-    return split_windows(prepare_windows(obs).cache())
-
-
-# ---------------------------------------------------------------- publish checks
+    return split_windows(prepare_windows(obs).cache())  # The split reads prepared rows twice; share that work.
 
 
 def check(name, passed, **numbers):
@@ -183,7 +168,7 @@ def run_checks(silver_rows, recordings, event_phases, window_features):
     """The four checks from the Gold contract. Gold is published only if all of them pass."""
     phase_rows = event_phases.groupBy("recording_id").agg(F.sum("n_rows").alias("phase_rows"))
     mismatched = (
-        recordings.join(phase_rows, "recording_id", "full")
+        recordings.join(phase_rows, "recording_id", "full")  # A missing recording on either side must be visible.
         .filter(~F.col("n_rows").eqNullSafe(F.col("phase_rows")))
         .count()
     )
@@ -193,7 +178,7 @@ def run_checks(silver_rows, recordings, event_phases, window_features):
     distinct_recordings = recordings.select("recording_id").distinct().count()
     duplicate_phases = event_phases.groupBy("recording_id", "phase_seq").count().filter("count > 1").count()
     orphan_phases = event_phases.join(recordings, "recording_id", "left_anti").count()
-    orphan_windows = window_features.join(recordings, "recording_id", "left_anti").count()
+    orphan_windows = window_features.join(recordings, "recording_id", "left_anti").count()  # Check window ownership.
 
     in_both_splits = (
         window_features.groupBy("recording_id").agg(F.countDistinct("split").alias("n")).filter("n > 1").count()
@@ -219,9 +204,6 @@ def run_checks(silver_rows, recordings, event_phases, window_features):
         check("each_recording_in_one_split", in_both_splits == 0, recordings_in_both=in_both_splits),
         check("no_inferred_labels_in_test", inferred_in_test == 0, inferred_test_rows=inferred_in_test),
     ]
-
-
-# ---------------------------------------------------------------- run
 
 
 def new_run_id():
@@ -250,9 +232,9 @@ def write_json(path, payload):
     """Write to a temporary file and rename it, so readers never see a half-written file."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp")
+    tmp = path.with_name(path.name + ".tmp")  # Write complete JSON before replacing the publication marker.
     tmp.write_text(json.dumps(payload, indent=2, default=str) + "\n")
-    os.replace(tmp, path)
+    os.replace(tmp, path)  # Readers see either the old complete marker or the new one.
 
 
 def main(argv=None):
@@ -269,7 +251,7 @@ def main(argv=None):
 
     silver_marker, source = resolve_silver_input(silver_root)
     run_id = new_run_id()
-    run_dir = gold_root / "runs" / run_id
+    run_dir = gold_root / "runs" / run_id  # Keep each build separate from the last published result.
     print(f"Gold run {run_id}: Silver run {silver_marker['run_id']} -> {run_dir}")
 
     spark = get_spark(dataclasses.replace(cfg, spark=dataclasses.replace(cfg.spark, app_name="3w-gold")))
@@ -280,13 +262,11 @@ def main(argv=None):
             "event_phases": build_event_phases,
             "window_features": build_window_features,
         }
-        for name, build in builders.items():
-            # each table is small enough for one file; repartition keeps the work before it parallel
+        for name, build in builders.items():  # Write one part per small output table; earlier work stays parallel.
             build(obs).repartition(1).write.parquet(str(run_dir / name))
             print(f"  wrote {name}")
 
-        # check the tables as written, not the plans that produced them
-        tables = {name: spark.read.parquet(str(run_dir / name)) for name in builders}
+        tables = {name: spark.read.parquet(str(run_dir / name)) for name in builders}  # Validate the saved tables.
         checks = run_checks(obs.count(), **tables)
         passed = all(c["passed"] for c in checks)
         report = {
@@ -311,7 +291,7 @@ def main(argv=None):
     write_json(run_dir / "_report.json", report)
     for c in checks:
         print(f"  {'PASS' if c['passed'] else 'FAIL'} {c['name']}")
-    if not passed:
+    if not passed:  # A failed build must leave the previous ready marker in place.
         print(f"Gold NOT published; the previous gold_ready.json is unchanged. See {run_dir / '_report.json'}")
         return 1
     write_json(gold_root / "gold_ready.json", report)
