@@ -21,7 +21,7 @@ from threew.spark import get_spark
 def coverage_by_source_and_label(df: DataFrame) -> DataFrame:
     """Count rows, source-file versions, and missing row labels per recording category."""
     return (
-        df.groupBy("source_type", "label")
+        df.groupBy("source_type", "label")  # Keep real, simulated and drawn coverage separate.
         .agg(
             F.count("*").alias("rows"),
             F.countDistinct(F.struct("_source_path", "_file_sha256")).alias("recordings"),
@@ -52,7 +52,7 @@ def sensor_missingness(df: DataFrame, sensor_names: tuple[str, ...]) -> list[dic
             )
         )
 
-    counts = df.agg(F.count("*").alias("total_rows"), *expressions).first().asDict()
+    counts = df.agg(F.count("*").alias("total_rows"), *expressions).first().asDict()  # Scan once for all sensors.
     return [
         {
             "sensor": name,
@@ -75,11 +75,11 @@ def recording_sensor_counts(df: DataFrame, sensor_names: tuple[str, ...]) -> Dat
     if not sensor_names:
         return df.select(*recording_keys).distinct().withColumn("sensors_present", F.lit(0))
 
-    present_columns = []
+    present_columns = []  # Build one presence indicator per sensor before counting usable channels.
     for index, name in enumerate(sensor_names):
         present_columns.append(F.max(F.when(is_finite(F.col(name)), 1).otherwise(0)).alias(f"sensor_{index}_present"))
 
-    per_sensor = df.groupBy(*recording_keys).agg(*present_columns)
+    per_sensor = df.groupBy(*recording_keys).agg(*present_columns)  # Reduce to recording-level coverage.
     count_expression = sum(F.col(f"sensor_{index}_present") for index in range(len(sensor_names)))
     return per_sensor.withColumn("sensors_present", count_expression)
 
@@ -114,7 +114,7 @@ def sensor_recording_availability(per_recording: DataFrame, sensor_names: tuple[
             for index in range(len(sensor_names))
         ],
     )
-    sensor_entries = F.array(
+    sensor_entries = F.array(  # Turn the wide per-sensor totals into rows for display.
         *[
             F.struct(
                 F.lit(name).alias("sensor"),
@@ -143,8 +143,8 @@ def timestamp_quality_by_recording(df: DataFrame) -> DataFrame:
     if missing_columns:
         raise ValueError(f"Bronze table is missing columns: {', '.join(sorted(missing_columns))}")
 
-    recording_keys = ("source_type", "label", "_source_path", "_file_sha256")
-    ordered = Window.partitionBy("_source_path", "_file_sha256").orderBy("_row_in_file")
+    recording_keys = ("source_type", "label", "_source_path", "_file_sha256")  # Keep file versions separate.
+    ordered = Window.partitionBy("_source_path", "_file_sha256").orderBy("_row_in_file")  # Keep original order.
     with_previous = (
         df.withColumn("_profile_timestamp", F.col("timestamp"))
         .withColumn("_profile_previous_timestamp", F.lag("_profile_timestamp").over(ordered))
@@ -195,13 +195,13 @@ def timestamp_quality_summary(per_recording: DataFrame) -> DataFrame:
 
 def profile_bronze(cfg: Config) -> None:
     """Print a read-only overview of Bronze sensors, labels, and timestamp consistency."""
-    marker = read_bronze_ready_marker(cfg)
+    marker = read_bronze_ready_marker(cfg)  # Profiling still requires a verified Bronze publication.
     sensor_names = tuple(
         name for name, type_name in load_contract(cfg.schema.contract).items() if type_name == "double"
     )
 
     spark: SparkSession = get_spark(cfg)
-    spark.sparkContext.setLogLevel("WARN")
+    spark.sparkContext.setLogLevel("WARN")  # Keep the printed profile readable among Spark messages.
     try:
         df = spark.read.parquet(str(cfg.storage.bronze))
 
@@ -252,7 +252,7 @@ def profile_bronze(cfg: Config) -> None:
         print("\nTimestamp checks by source type and label (intervals compare adjacent rows in original file order):")
         timestamp_quality_summary(per_recording_times).show(100, truncate=False)
     finally:
-        spark.stop()
+        spark.stop()  # Release the session even when a profiling query fails.
 
 
 def main(argv: list[str] | None = None) -> int:

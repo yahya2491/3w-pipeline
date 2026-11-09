@@ -30,7 +30,7 @@ class QualitySummaries(NamedTuple):
 
     def unpersist(self) -> None:
         """Release the small shared recording-level cache after both outputs are consumed."""
-        self.recording_metrics.unpersist()
+        self.recording_metrics.unpersist()  # Both summaries share this cache, so release it after both are consumed.
 
 
 def is_finite(value: Column) -> Column:
@@ -45,7 +45,7 @@ def with_timestamp_intervals(silver: DataFrame) -> DataFrame:
         silver.withColumn("_quality_timestamp", F.col("timestamp"))
         .withColumn(
             "_quality_previous_timestamp",
-            F.lag("_quality_timestamp").over(ordered),
+            F.lag("_quality_timestamp").over(ordered),  # Compare in source order, even if time goes backwards.
         )
         .withColumn(
             "_quality_interval_seconds",
@@ -69,20 +69,20 @@ def _recording_metrics(silver: DataFrame) -> DataFrame:
     if missing_columns:
         raise ValueError(f"Silver table is missing columns: {', '.join(sorted(missing_columns))}")
 
-    timed = with_timestamp_intervals(silver)
+    timed = with_timestamp_intervals(silver)  # Add intervals without replacing any source timestamp.
 
     sensor_metrics = []
     for index, name in enumerate(SENSOR_FIELDS):
-        finite = is_finite(F.col(name))
+        finite = is_finite(F.col(name))  # Coverage measures presence; domain checks are handled elsewhere.
         sensor_metrics.append(F.sum(F.when(finite, 1).otherwise(0)).alias(f"_sensor_{index}_finite_rows"))
 
-    metrics = timed.groupBy(*RECORDING_FIELDS).agg(
+    metrics = timed.groupBy(*RECORDING_FIELDS).agg(  # Collapse the wide observations to one row per recording.
         F.count("*").alias("recording_rows"),
         F.count(F.when(F.col("class_code").isNull(), 1)).alias("unlabeled_rows"),
         F.count(F.when(F.col("state_code").isNull(), 1)).alias("null_state_rows"),
         F.count(F.when(F.col("timestamp").isNull(), 1)).alias("null_timestamp_rows"),
-        F.count("timestamp").alias("_non_null_timestamp_rows"),
-        F.countDistinct("timestamp").alias("_distinct_timestamp_rows"),
+        F.count("timestamp").alias("_non_null_timestamp_rows"),  # Null clocks do not count as duplicate timestamps.
+        F.countDistinct("timestamp").alias("_distinct_timestamp_rows"),  # Repeated clocks may be non-adjacent too.
         F.count(F.when(F.col("_quality_interval_seconds").isNotNull(), 1)).alias("timestamp_intervals_compared"),
         F.count(F.when(F.col("_quality_interval_seconds") == 1, 1)).alias("one_second_intervals"),
         F.count(F.when(F.col("_quality_interval_seconds") == 0, 1)).alias("repeated_adjacent_timestamps"),
@@ -100,7 +100,7 @@ def _recording_metrics(silver: DataFrame) -> DataFrame:
         "duplicate_timestamp_rows",
         F.col("_non_null_timestamp_rows") - F.col("_distinct_timestamp_rows"),
     )
-    sensors_present = F.lit(0)
+    sensors_present = F.lit(0)  # Count a sensor as present if it has at least one finite reading.
     for index in range(len(SENSOR_FIELDS)):
         sensors_present = sensors_present + F.when(F.col(f"_sensor_{index}_finite_rows") > 0, 1).otherwise(0)
 
@@ -117,7 +117,7 @@ def build_quality_summaries(silver: DataFrame) -> QualitySummaries:
     A sensor is considered present only when it has at least one finite value.
     Domain validity is checked separately in the issue table and clean columns.
     """
-    metrics = _recording_metrics(silver).persist(StorageLevel.MEMORY_AND_DISK)
+    metrics = _recording_metrics(silver).persist(StorageLevel.MEMORY_AND_DISK)  # Share this small summary.
 
     instance_quality_columns = [
         *RECORDING_FIELDS,
@@ -138,9 +138,9 @@ def build_quality_summaries(silver: DataFrame) -> QualitySummaries:
         "sensors_missing_entire_recording",
         "no_sensors_present",
     ]
-    instance_quality = metrics.select(*instance_quality_columns)
+    instance_quality = metrics.select(*instance_quality_columns)  # Leave temporary per-sensor totals out of this table.
 
-    sensor_entries = F.array(
+    sensor_entries = F.array(  # Bundle sensor totals so we can turn them into separate rows.
         *[
             F.struct(
                 F.lit(name).alias("sensor_name"),
@@ -150,7 +150,7 @@ def build_quality_summaries(silver: DataFrame) -> QualitySummaries:
         ]
     )
     sensor_availability = (
-        metrics.withColumn("_sensor", F.explode(sensor_entries))
+        metrics.withColumn("_sensor", F.explode(sensor_entries))  # Produce one row per sensor per recording.
         .select(
             *RECORDING_FIELDS,
             "recording_rows",

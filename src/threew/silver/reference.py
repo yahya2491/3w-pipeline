@@ -10,10 +10,10 @@ from pyspark.sql import SparkSession
 REFERENCE_VERSION = 1
 REFERENCE_SOURCE = "docs/bronze/BRONZE_REFERENCE.md sections 6 and 7"
 SOURCE_TYPES = ("REAL", "SIMULATED", "DRAWN")
-RECORDING_KEY = ("_source_path", "_file_sha256")
-OBSERVATION_KEY = (*RECORDING_KEY, "_row_in_file")
+RECORDING_KEY = ("_source_path", "_file_sha256")  # Names alone are not unique across event folders.
+OBSERVATION_KEY = (*RECORDING_KEY, "_row_in_file")  # Keep row identity even when timestamps repeat.
 
-SENSOR_RENAMES = {
+SENSOR_RENAMES = {  # Translate source abbreviations while retaining their original measurement units.
     "ABER-CKGL": "gas_lift_choke_opening_pct",
     "ABER-CKP": "production_choke_opening_pct",
     "ESTADO-DHSV": "downhole_safety_valve_state",
@@ -57,20 +57,20 @@ EVENT_NAMES = {
     8: "Hydrate in Production Line",
     9: "Hydrate in Service Line",
 }
-TRANSIENT_LABELS = (1, 2, 5, 6, 7, 8, 9)
+TRANSIENT_LABELS = (1, 2, 5, 6, 7, 8, 9)  # Events 3 and 4 have no documented transient class.
 
 
-NORMAL_LABELS = (0, *TRANSIENT_LABELS)
+NORMAL_LABELS = (0, *TRANSIENT_LABELS)  # Events 3 and 4 do not include normal periods in their recordings.
 
 
 def sensor_definition(source_name: str, sensor_name: str) -> dict:
     """Document the source unit and only domains justified by the source meaning."""
     allowed_values = None
-    minimum = maximum = None
+    minimum = maximum = None  # Do not invent physical limits for pressure, temperature or flow.
     if source_name.startswith("ESTADO-"):
-        unit, allowed_values = "source_code", [0.0, 0.5, 1.0]
+        unit, allowed_values = "source_code", [0.0, 0.5, 1.0]  # Valve states are codes, not percentages.
     elif source_name.startswith("ABER-"):
-        unit, minimum, maximum = "percent", 0.0, 100.0
+        unit, minimum, maximum = "percent", 0.0, 100.0  # Only openings have a documented continuous range here.
     elif sensor_name.endswith("_pa"):
         unit = "Pa"
     elif sensor_name.endswith("_m3_s"):
@@ -99,7 +99,7 @@ SENSOR_DEFINITIONS = tuple(sensor_definition(source, name) for source, name in S
 
 def sensor_definitions(rules=None):
     """Resolve domain rules once for validation, cleaning and published references."""
-    if rules is None:
+    if rules is None:  # Use source defaults when no explicit rules were supplied.
         return SENSOR_DEFINITIONS
     return tuple(
         {
@@ -133,7 +133,7 @@ def build_reference_tables(spark: SparkSession, rules=None) -> dict:
             "supports_steady": code != 0,
             "supports_transient": code in TRANSIENT_LABELS,
             "steady_class_code": code if code != 0 else None,
-            "transient_class_code": 100 + code if code in TRANSIENT_LABELS else None,
+            "transient_class_code": 100 + code if code in TRANSIENT_LABELS else None,  # For example, Event 5 uses 105.
             "definition_source": REFERENCE_SOURCE,
             "reference_version": REFERENCE_VERSION,
         }

@@ -30,27 +30,27 @@ def plan_batches(
     def keyed(rows):
         result, paths = {}, set()
         for row in rows:
-            key = tuple(row[name] for name in RECORDING_KEY)
+            key = tuple(row[name] for name in RECORDING_KEY)  # Identify each recording by path and exact file hash.
             if any(not isinstance(value, str) or not value for value in key) or key[0] in paths:
                 raise ValueError("The recording catalogue must have one non-null current version per source path.")
             result[key] = dict(row)
-            paths.add(key[0])
+            paths.add(key[0])  # Do not let two versions of one source path enter the same catalogue.
         return result
 
     details, sizes = keyed(metadata), keyed(counts)
-    if not details or details.keys() != sizes.keys():
+    if not details or details.keys() != sizes.keys():  # Metadata and counts must cover exactly the same recordings.
         raise ValueError("Recording metadata and counts must describe the same non-empty catalogue.")
     batches, pending, pending_rows = [], [], 0
-    for key in sorted(sizes):
+    for key in sorted(sizes):  # We keep recordings whole so each one keeps its full history.
         size = sizes[key]["bronze_rows"]
         if type(size) is not int or size < 0:
             raise ValueError("Recording row counts must be non-negative integers.")
-        if pending and pending_rows + size > target_rows:
+        if pending and pending_rows + size > target_rows:  # An oversized recording gets its own batch.
             batches.append(RecordingBatch([details[k] for k in pending], [sizes[k] for k in pending]))
-            pending, pending_rows = [], 0
+            pending, pending_rows = [], 0  # The previous batch is full; start collecting the next one.
         pending.append(key)
         pending_rows += size
-    if pending:
+    if pending:  # Keep the final batch even when it is smaller than the target.
         batches.append(RecordingBatch([details[k] for k in pending], [sizes[k] for k in pending]))
     return batches
 
@@ -69,17 +69,17 @@ def merge_quality_summaries(parts: Sequence[Mapping[str, Any]]) -> dict[str, Any
     }
     rules, recording, sensors = Counter(), Counter(), {}
     for part in parts:
-        recording.update(part["recording_totals"])
+        recording.update(part["recording_totals"])  # Add counts across disjoint batches, rather than averaging them.
         for row in part["by_rule"]:
             rules[(row["issue_code"], row["severity"], row["affected_use"])] += row["count"]
         for row in part["sensor_availability"]:
             sensor = sensors.setdefault(row["sensor_name"], Counter())
-            sensor.update({name: value for name, value in row.items() if name != "sensor_name"})
+            sensor.update({name: value for name, value in row.items() if name != "sensor_name"})  # Merge per sensor.
     quarantined, rows = totals["rows_with_quarantine_issues"], totals["observation_rows"]
     return {
         **totals,
         "quarantine_row_percent": round(100 * quarantined / rows, 4) if rows else 0.0,
-        "has_quality_errors": quarantined > 0,
+        "has_quality_errors": quarantined > 0,  # Source errors can exist in a successfully published build.
         "by_rule": [
             {"issue_code": code, "severity": severity, "affected_use": use, "count": count}
             for (code, severity, use), count in sorted(rules.items())

@@ -49,11 +49,11 @@ SparkFactory = Callable[[Config], AbstractContextManager[SparkSession]]
 @contextmanager
 def spark_session(cfg: Config) -> Iterator[SparkSession]:
     session = get_spark(cfg)
-    session.sparkContext.setLogLevel("WARN")
+    session.sparkContext.setLogLevel("WARN")  # Keep progress messages visible without Spark task chatter.
     try:
         yield session
     finally:
-        cleanup_spark(session.stop, "stop session")
+        cleanup_spark(session.stop, "stop session")  # Try to release Spark even if the batch raised an error.
 
 
 def _write_json_atomically(path: Path, payload: dict[str, Any]) -> None:
@@ -61,9 +61,9 @@ def _write_json_atomically(path: Path, payload: dict[str, Any]) -> None:
     temporary_path = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
     try:
         temporary_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        os.replace(temporary_path, path)
+        os.replace(temporary_path, path)  # Readers see either the old complete JSON or the new complete JSON.
     finally:
-        temporary_path.unlink(missing_ok=True)
+        temporary_path.unlink(missing_ok=True)  # Do not leave a half-written report behind after an error.
 
 
 def _overlap(a: Path, b: Path) -> bool:
@@ -75,9 +75,9 @@ def _output_root(cfg: Config, output_root: Path | None) -> Path:
         raise ValueError(
             "Production input requires an explicit isolated --output-root; canonical production Silver is protected."
         )
-    if output_root is None:
+    if output_root is None:  # Development can use its configured Silver directory.
         return cfg.storage.silver
-    path = Path(output_root).expanduser().resolve()
+    path = Path(output_root).expanduser().resolve()  # Resolve aliases before checking for protected path overlap.
     protected = (cfg.storage.bronze.parent, cfg.storage.landing.parent, cfg.storage.staging)
     if path == cfg.storage.root or cfg.storage.root.is_relative_to(path) or any(_overlap(path, p) for p in protected):
         raise ValueError("Silver output must be separate from Bronze, landing, staging and their ancestors.")
@@ -93,21 +93,21 @@ def _phase(report: dict[str, Any], name: str) -> Iterator[None]:
     try:
         yield
     finally:
-        previous = report["phase_seconds"].get(name, 0)
+        previous = report["phase_seconds"].get(name, 0)  # A phase runs in several batches, so add to its earlier time.
         report["phase_seconds"][name] = round(previous + time.monotonic() - started, 3)
 
 
 def _require_checks(report: dict[str, Any], checks: dict[str, bool]) -> None:
     report["reconcile"]["checks"].update(checks)
     failed = [name for name, passed in checks.items() if not passed]
-    if failed:
+    if failed:  # Any failed reconciliation check blocks publication.
         raise RuntimeError(f"Silver reconciliation failed: {', '.join(failed)}")
 
 
 def _run_batch(spark, cfg, batch, table_paths, rules, report, batch_report, *, first):
     """Append one disjoint batch and verify only its newly written Parquet files."""
     keys = spark.createDataFrame(batch.counts, "_source_path string, _file_sha256 string, bronze_rows long")
-    bronze = (
+    bronze = (  # Read only the recordings and exact file versions assigned to this batch.
         spark.read.parquet(str(cfg.storage.bronze))
         .filter(
             F.col("source_type").isin(sorted({row["_manifest_source_type"] for row in batch.metadata}))
@@ -117,7 +117,7 @@ def _run_batch(spark, cfg, batch, table_paths, rules, report, batch_report, *, f
         .join(F.broadcast(keys.select(*RECORDING_KEY)), list(RECORDING_KEY), "left_semi")
     )
     bronze_counts = bronze.groupBy(*RECORDING_KEY).count().withColumnRenamed("count", "bronze_rows")
-    bronze_counts.persist(StorageLevel.MEMORY_AND_DISK)
+    bronze_counts.persist(StorageLevel.MEMORY_AND_DISK)  # Reuse the small counts table across input and output checks.
     try:
         with _phase(report, "input_checks"):
             checks = input_checks(spark, bronze_counts, {"rows": batch.rows, "files": len(batch.counts)}, batch.counts)
@@ -129,11 +129,10 @@ def _run_batch(spark, cfg, batch, table_paths, rules, report, batch_report, *, f
             )
             batch_report["checks"].update(checks)
             _require_checks(report, checks)
-        with _phase(report, "transform_and_write"):
+        with _phase(report, "transform_and_write"):  # Save the wide table to Parquet rather than caching it.
             source_silver = build_silver_observations(bronze, batch.metadata)
-            # Never persist the wide observation table: Parquet is the saved copy.
             silver = export_observations(prepare_observations(source_silver, rules))
-            summaries = build_quality_summaries(source_silver)
+            summaries = build_quality_summaries(source_silver)  # Report source problems even when cleaning fixes them.
             issues = build_quality_issues(source_silver, rules).persist(StorageLevel.MEMORY_AND_DISK)
             tables = {
                 "silver_observations": silver,
@@ -142,26 +141,26 @@ def _run_batch(spark, cfg, batch, table_paths, rules, report, batch_report, *, f
                 "quality_issues": issues,
                 "quality_quarantine": quarantine_issues(issues),
             }
-            if first:
+            if first:  # The reference tables are shared, so write them once.
                 tables.update(build_reference_tables(spark, rules))
             batch_files = {}
             try:
                 for name, table in tables.items():
                     path = table_paths[name]
-                    before = set(path.glob("*.parquet"))
+                    before = set(path.glob("*.parquet"))  # Track new files so we only verify this batch's output.
                     writer = table.write.mode("errorifexists" if first else "append")
                     if name == "silver_observations":
                         writer = writer.option("parquet.block.size", 32 * 1024 * 1024).option(
                             "parquet.page.size", 256 * 1024
                         )
-                    writer.parquet(str(path))
+                    writer.parquet(str(path))  # Verification reads these saved files, not just the in-memory DataFrame.
                     batch_files[name] = sorted(set(path.glob("*.parquet")) - before)
-                    if not batch_files[name]:
+                    if not batch_files[name]:  # Even an empty output table needs its Parquet schema saved.
                         raise RuntimeError(f"No Parquet file was written for batch table {name}.")
             finally:
                 cleanup_spark(issues.unpersist, "release issues")
                 cleanup_spark(summaries.unpersist, "release summaries")
-        with _phase(report, "read_back_and_check"):
+        with _phase(report, "read_back_and_check"):  # Check what was actually written to disk.
             saved = {
                 name: spark.read.parquet(*[str(path) for path in batch_files[name]])
                 if name in batch_files
@@ -216,13 +215,13 @@ def run_silver(
         raise ValueError("batch_rows must be a positive integer.")
     if not math.isfinite(min_free_gib) or min_free_gib < 0:
         raise ValueError("Minimum free GiB must be finite and non-negative.")
-    silver_root = _output_root(cfg, output_root)
+    silver_root = _output_root(cfg, output_root)  # Validate the destination before creating any output.
     rules = load_rules(rules_path)
     now, started = datetime.now(UTC), time.monotonic()
     run_id = f"{now:%Y%m%dT%H%M%S%fZ}-{uuid.uuid4().hex[:8]}"
-    run_root = silver_root / "runs" / run_id
+    run_root = silver_root / "runs" / run_id  # Each attempt gets its own folder, keeping older builds intact.
     report_path = silver_root / "_runs" / f"{run_id}.json"
-    ready_path = silver_root / "silver_ready.json"
+    ready_path = silver_root / "silver_ready.json"  # This selects the latest successfully published run.
     table_paths = {
         name: run_root / name
         for name in (
@@ -262,10 +261,10 @@ def run_silver(
         "reconcile": {"passed": False, "checks": {}, "counts": {}},
         "published": False,
     }
-    with ExitStack() as held:
+    with ExitStack() as held:  # Keep both locks held through errors, reporting and publication.
         try:
             owner = {"run_id": run_id, "started_at": now.isoformat(), "layer": "silver"}
-            with _phase(report, "lock"):
+            with _phase(report, "lock"):  # Keep Bronze locked until Silver has finished publishing.
                 held.enter_context(run_lock(cfg.storage.state / LOCK_FILE, owner))
                 held.enter_context(run_lock(silver_root / "_state" / "silver.lock", owner))
             with _phase(report, "input"):
@@ -285,8 +284,8 @@ def run_silver(
                     report["skip_reason"] = "unchanged"
                     report["reused_run_id"] = previous["run_id"]
                     print(f"Silver unchanged; reusing verified run {previous['run_id']}", flush=True)
-                    return previous
-                if min_free_gib:
+                    return previous  # Reuse the verified output without starting Spark.
+                if min_free_gib:  # Check space only for a new build; matching output was already reusable above.
                     free = shutil.disk_usage(silver_root).free
                     report["disk_preflight"] = {"free_bytes": free, "minimum_gib": min_free_gib}
                     if free < min_free_gib * 1024**3:
@@ -295,10 +294,8 @@ def run_silver(
                         )
             batches = plan_batches(manifest_rows, manifest_counts, batch_rows)
             report["execution"]["batch_count"] = len(batches)
-            # Audit the whole input before batch filters can hide missing/extra recordings.
-            # Only the small per-recording counts are cached here.
             with spark_factory(cfg) as spark, _phase(report, "input_checks"):
-                bronze_counts = (
+                bronze_counts = (  # Check the whole input before batch filters can hide missing or extra files.
                     spark.read.parquet(str(cfg.storage.bronze))
                     .groupBy(*RECORDING_KEY)
                     .count()
@@ -320,7 +317,7 @@ def run_silver(
                     "status": "RUNNING",
                     "checks": {},
                 }
-                report["batches"].append(batch_report)
+                report["batches"].append(batch_report)  # Keep per-batch evidence so a failure can be located later.
                 _write_json_atomically(report_path, report)
                 print(
                     f"Silver batch {index}/{len(batches)}: {len(batch.counts)} complete recordings, "
@@ -329,8 +326,7 @@ def run_silver(
                     flush=True,
                 )
                 try:
-                    # Stop each SparkContext to release its cache and shuffle directories.
-                    with spark_factory(cfg) as spark:
+                    with spark_factory(cfg) as spark:  # Restart Spark per batch to release cache and shuffle files.
                         batch_counts, preparation, quality = _run_batch(
                             spark, cfg, batch, table_paths, rules, report, batch_report, first=index == 1
                         )
@@ -342,20 +338,19 @@ def run_silver(
                         }
                     )
                     preparation_totals.update(preparation)
-                    quality_parts.append(quality)
+                    quality_parts.append(quality)  # Merge counts rather than averaging batch percentages.
                     batch_report["status"] = "SUCCESS"
-                except BaseException:
+                except BaseException:  # Record interrupted batches as failed as well as ordinary exceptions.
                     batch_report["status"] = "FAILED"
                     raise
                 finally:
                     batch_report["duration_seconds"] = round(time.monotonic() - batch_started, 3)
                     _write_json_atomically(report_path, report)
                 print(f"Silver batch {index}/{len(batches)} verified; Spark temporary data released", flush=True)
-            counts = {
+            counts = {  # Each recording belongs to one batch, so these totals can be added.
                 "bronze_rows": bronze_marker["rows"],
                 "bronze_recordings": bronze_marker["files"],
                 "silver_observation_rows": table_totals["silver_observations"],
-                # Batches have complete, disjoint recordings and exact per-recording checks.
                 "silver_recordings": sum(len(batch.counts) for batch in batches),
                 **{f"{name}_rows": value for name, value in table_totals.items() if name != "silver_observations"},
             }
@@ -374,10 +369,10 @@ def run_silver(
             report["preparation_summary"] = dict(preparation_totals)
             report["quality_summary"] = merge_quality_summaries(quality_parts)
             with _phase(report, "publish"):
-                if read_bronze_ready_marker(cfg) != bronze_marker:
+                if read_bronze_ready_marker(cfg) != bronze_marker:  # Recheck the input marker before publishing.
                     raise RuntimeError("Bronze ready marker changed during the Silver run.")
                 report["reconcile"]["checks"]["bronze_marker_unchanged"] = True
-                report["reconcile"]["passed"] = True
+                report["reconcile"]["passed"] = True  # Every batch and total check must pass first.
                 report["status"], report["published"] = "SUCCESS", True
                 report["finished_at"] = datetime.now(UTC).isoformat()
                 report["duration_seconds"] = round(time.monotonic() - started, 3)
@@ -399,7 +394,7 @@ def run_silver(
                     "build_signature": report["build_signature"],
                     "execution": report["execution"],
                 }
-                _write_json_atomically(ready_path, marker)
+                _write_json_atomically(ready_path, marker)  # Publish last; failures leave the previous marker in place.
         except BaseException as exc:
             report["status"] = "SKIPPED" if isinstance(exc, LockHeld) else "FAILED"
             report["published"] = False
@@ -409,12 +404,12 @@ def run_silver(
         finally:
             report["finished_at"] = datetime.now(UTC).isoformat()
             report["duration_seconds"] = round(time.monotonic() - started, 3)
-            if report["status"] != "SUCCESS":
+            if report["status"] != "SUCCESS":  # Keep a final report for failed, interrupted and skipped attempts too.
                 _write_json_atomically(report_path, report)
             if report_copy is not None:
 
                 def copy_report():
-                    destination = Path(report_copy)
+                    destination = Path(report_copy)  # Copy this attempt for CI without changing the stored report.
                     destination.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(report_path, destination / report_path.name)
 
@@ -458,7 +453,7 @@ def main(argv: list[str] | None = None) -> int:
             report_copy=args.report_copy,
             min_free_gib=args.min_free_gib,
         )
-    except LockHeld as exc:
+    except LockHeld as exc:  # Another writer is already working; a lock skip is not a pipeline failure.
         print(f"Silver skipped: {exc}", file=sys.stderr)
         return 0
     except Exception:

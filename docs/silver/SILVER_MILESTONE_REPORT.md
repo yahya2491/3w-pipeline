@@ -85,7 +85,7 @@ the manual evidence does not demonstrate a scheduled execution.
 Bronze remains under `/home/ubuntu/3w-data/`. Unchanged verified Silver output
 can be reused; new or forced builds retain complete additional output copies.
 Only the scheduled job's own scratch is automatically removed. See the
-[run guide](SILVER_RUN_GUIDE.md) and [storage guide](VM_STORAGE.md).
+[run guide](SILVER_RUN_GUIDE.md) and [storage guide](SILVER_RUN_GUIDE.md#vm-storage).
 
 Gold reads one successful current-contract ready marker, uses clean targets,
 keeps inferred labels out of held-out evaluation, and splits whole recordings.

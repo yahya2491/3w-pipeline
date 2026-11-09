@@ -15,7 +15,7 @@ from pyspark.sql.window import Window
 from threew.silver.quality import is_finite, with_timestamp_intervals
 from threew.silver.reference import OBSERVATION_KEY, RECORDING_KEY, sensor_definitions
 
-ISSUE_KEY = (*OBSERVATION_KEY, "field_name", "issue_code")
+ISSUE_KEY = (*OBSERVATION_KEY, "field_name", "issue_code")  # One row may have several different issues.
 USAGE_POLICY = {
     "timestamps": "Preserve source time and row order; flag problems. Never infer replacement timestamps.",
     "duplicate_identity": "Stop on repeated source-path/file-hash/row-position keys, including identical copies.",
@@ -31,12 +31,12 @@ USAGE_POLICY = {
 
 def build_quality_issues(observations: DataFrame, rules=None) -> DataFrame:
     """One issue per affected row/field/rule, with scope-specific usage guidance."""
-    definitions = sensor_definitions(rules)
+    definitions = sensor_definitions(rules)  # Use the same domains as cleaning and the published sensor reference.
     timed = with_timestamp_intervals(observations).withColumn(
         "_same_timestamp_rows",
-        F.count("*").over(Window.partitionBy(*RECORDING_KEY, "timestamp")),
+        F.count("*").over(Window.partitionBy(*RECORDING_KEY, "timestamp")),  # Flag every row sharing the same clock.
     )
-    entries = []
+    entries = []  # Collect conditional issue structs before expanding them into rows.
 
     def add(condition, field, code, severity, use, reason, action, value):
         entries.append(
@@ -49,7 +49,7 @@ def build_quality_issues(observations: DataFrame, rules=None) -> DataFrame:
                     F.lit(use).alias("affected_use"),
                     F.lit(reason).alias("reason"),
                     F.lit(action).alias("recommended_action"),
-                    value.cast("string").alias("observed_value"),
+                    value.cast("string").alias("observed_value"),  # Store readings and timestamps in one column.
                 ),
             )
         )
@@ -184,14 +184,14 @@ def build_quality_issues(observations: DataFrame, rules=None) -> DataFrame:
         "Keep the row and labels; exclude it from tasks requiring a sensor measurement.",
         F.lit(None),
     )
-    return timed.select(
+    return timed.select(  # Drop non-matching rules and emit one row for each actual issue.
         *OBSERVATION_KEY, F.explode(F.filter(F.array(*entries), lambda entry: entry.isNotNull())).alias("issue")
     ).select(*OBSERVATION_KEY, "issue.*")
 
 
 def quarantine_issues(issues: DataFrame) -> DataFrame:
     """An inspectable error-only subset; it does not delete observations."""
-    return issues.filter(F.col("severity") == "error")
+    return issues.filter(F.col("severity") == "error")  # Quarantine issues, without removing observations.
 
 
 def summarize_quality(issues: DataFrame, quality: DataFrame, sensors: DataFrame, observation_rows: int) -> dict:
@@ -200,7 +200,7 @@ def summarize_quality(issues: DataFrame, quality: DataFrame, sensors: DataFrame,
         row.asDict()
         for row in issues.groupBy("issue_code", "severity", "affected_use").count().orderBy("issue_code").collect()
     ]
-    issue_rows = issues.select(*OBSERVATION_KEY).distinct().count()
+    issue_rows = issues.select(*OBSERVATION_KEY).distinct().count()  # Count affected observations only once.
     quarantine_rows = quarantine_issues(issues).select(*OBSERVATION_KEY).distinct().count()
     quality_fields = (
         "unlabeled_rows",
@@ -232,12 +232,12 @@ def summarize_quality(issues: DataFrame, quality: DataFrame, sensors: DataFrame,
     ]
     return {
         "observation_rows": observation_rows,
-        "issue_entries": sum(row["count"] for row in by_rule),
+        "issue_entries": sum(row["count"] for row in by_rule),  # Issue entries can outnumber affected observations.
         "rows_with_issues": issue_rows,
         "quarantine_issue_entries": sum(row["count"] for row in by_rule if row["severity"] == "error"),
         "rows_with_quarantine_issues": quarantine_rows,
         "quarantine_row_percent": round(100 * quarantine_rows / observation_rows, 4) if observation_rows else 0.0,
-        "has_quality_errors": quarantine_rows > 0,
+        "has_quality_errors": quarantine_rows > 0,  # This describes the source, not whether the pipeline succeeded.
         "by_rule": by_rule,
         "recording_totals": recording,
         "sensor_availability": availability,
