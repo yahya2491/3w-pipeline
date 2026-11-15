@@ -38,6 +38,8 @@ COMPRESSION = "snappy"
 
 
 class ConvertStatus(StrEnum):
+    """The outcome of converting one landed file."""
+
     OK = "OK"
     FAILED = "FAILED"
     SKIPPED = "SKIPPED"  # not converted on purpose, e.g. the file didn't match the schema contract
@@ -45,6 +47,8 @@ class ConvertStatus(StrEnum):
 
 @dataclass(frozen=True)
 class ConvertResult:
+    """What happened to one file in the convert phase, for the run report."""
+
     source_path: str  # path on Hugging Face, the instance's unique key
     status: ConvertStatus
     rows_in: int | None
@@ -72,12 +76,14 @@ def convert_file(landed_path: Path, manifest_row: Mapping[str, Any], out_dir: Pa
     rows_in = None
     tmp = None
 
+    # every failure goes through here: delete the half-written temp file, return a FAILED result
     def failed(error: str) -> ConvertResult:
         if tmp is not None:
             tmp.unlink(missing_ok=True)
         return ConvertResult(source_path, ConvertStatus.FAILED, rows_in, None, None, None, None, _since(start), error)
 
     try:
+        # read with pyarrow: Spark 3.5 can't read these files itself (no Brotli codec, no timestamp[ns])
         table = pq.read_table(landed_path)
         rows_in = table.num_rows
         input_bytes = landed_path.stat().st_size
@@ -91,6 +97,8 @@ def convert_file(landed_path: Path, manifest_row: Mapping[str, Any], out_dir: Pa
 
         # Built in C++ (pa.repeat, cumulative_sum) rather than from Python lists, which hold Python's global lock
         # for every row and stop the threads from running in parallel
+        # lineage: every row says which file and version it came from, which run landed it, and its position
+        # in the file (_row_in_file = 0, 1, ..., n-1). Silver and Gold use these to trace and order rows
         n = table.num_rows
         lineage = {
             "_source_path": pa.repeat(pa.scalar(source_path, pa.string()), n),
@@ -103,6 +111,7 @@ def convert_file(landed_path: Path, manifest_row: Mapping[str, Any], out_dir: Pa
         # The source files' pandas metadata describes a datetime64[ns] index, which is no longer true
         table = table.replace_schema_metadata(None)
 
+        # atomic write: temp file, fsync, check the row count, then rename to the final name
         final = out_dir / output_relpath(manifest_row, file_sha256)
         final.parent.mkdir(parents=True, exist_ok=True)
         tmp = final.with_name(f".{final.name}.tmp")  # a dot-file: Spark never reads it
@@ -110,7 +119,7 @@ def convert_file(landed_path: Path, manifest_row: Mapping[str, Any], out_dir: Pa
             pq.write_table(table, f, compression=COMPRESSION)
             f.flush()
             os.fsync(f.fileno())
-        rows_out = pq.read_metadata(tmp).num_rows
+        rows_out = pq.read_metadata(tmp).num_rows  # read back from the written footer, not from memory
         if rows_out != rows_in:
             return failed(f"wrote {rows_out} rows, read {rows_in}")
         os.replace(tmp, final)  # atomic: the final name only ever holds a complete file
@@ -134,11 +143,13 @@ def convert_all(
     results: dict[str, ConvertResult] = {}
     todo = []
     for row in rows:
+        # a file that didn't match the contract (or was never inspected) is skipped, never converted
         if row["schema_ok"] is not True:
             reason = "not inspected" if row["schema_ok"] is None else "schema_ok is false"
             results[row["path"]] = ConvertResult(
                 row["path"], ConvertStatus.SKIPPED, None, None, None, None, None, 0.0, reason
             )
+        # only_pending: an output that already exists is complete (atomic write), so it isn't converted again
         elif not (only_pending and expected_output(row, storage_cfg).exists()):
             todo.append(row)
 
@@ -147,6 +158,7 @@ def convert_all(
 
     # Threads: pyarrow decodes and encodes outside Python's global lock, so this uses all the cores
     with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="convert") as pool:
+        # pool.map gives results back in input order; convert_file never raises, so one bad file can't stop it
         for done, result in enumerate(pool.map(convert, todo), start=1):
             results[result.source_path] = result
             if result.status is ConvertStatus.FAILED:
@@ -173,14 +185,18 @@ def prune_outputs(manifest: Manifest, storage_cfg: StorageConfig) -> dict[str, l
     bronze = storage_cfg.bronze
     if not bronze.exists():
         return {"removed": [], "temporary_removed": []}
+    # keep: the output of every current file that matched the contract. Everything else is stale
     keep = {expected_output(r, storage_cfg) for r in manifest.current().to_pylist() if r["schema_ok"] is True}
     outputs = sorted(bronze.rglob("*.parquet"))
+    # safety: nothing to keep but files on disk means the manifest is wrong, not that the whole table is stale
     if outputs and not keep:
         raise PruneError(f"the manifest lists no convertible files, but {bronze} has {len(outputs)}: refusing")
     removed = [p for p in outputs if p not in keep and not p.name.startswith(".")]
+    # temp files left by a crashed write (prune runs after convert, under the lock, so none is being written)
     temporary = sorted(p for p in bronze.rglob(".*.tmp") if p.is_file())
     for path in removed + temporary:
         path.unlink()
+    # then remove label= and source_type= folders that are now empty, deepest first
     for folder in sorted({p.parent for p in removed + temporary}, key=lambda d: len(d.parts), reverse=True):
         for empty in (folder, folder.parent):  # label=, then source_type=, if nothing is left in them
             if empty != bronze and empty.exists() and not any(empty.iterdir()):
@@ -192,4 +208,5 @@ def prune_outputs(manifest: Manifest, storage_cfg: StorageConfig) -> dict[str, l
 
 
 def _since(start: float) -> float:
+    """Seconds since start, rounded to milliseconds."""
     return round(time.monotonic() - start, 3)

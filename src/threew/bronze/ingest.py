@@ -67,30 +67,35 @@ def execute(cfg: Config, body: RunBody, *, report_copy: Path | None = None) -> i
         with _run_log(cfg.storage.runs / f"{run_id}.log"):
             return _execute(cfg, body, run_id, started_at)
     finally:
+        # in finally, so the copy (for the workflow's artifact) also happens after a crash
         if report_copy is not None:
             copy_run_files(cfg.storage.runs, run_id, report_copy)
 
 
 def _execute(cfg: Config, body: RunBody, run_id: str, started_at: datetime) -> int:
+    """Take the lock, run body, and always finish and write the report. Returns the exit code."""
+    # the report starts with what is needed to reproduce the run: code commit, package versions, full config
     report = RunReport(run_id, started_at, cfg.env)
     report["code"] = code_info()
     report["config"] = cfg.to_dict()
-    status, error, note = RunStatus.FAILED, None, None
+    status, error, note = RunStatus.FAILED, None, None  # assume the worst until body says otherwise
 
     with ExitStack() as held:  # releases the lock only after the report is written
         try:
+            # the lock file records who holds it, so a skipped run can say which run was in the way
             owner = {"run_id": run_id, "started_at": started_at.isoformat(), "host": report["run"]["host"]}
             held.enter_context(run_lock(cfg.storage.state / LOCK_FILE, owner))
             status = body(report, run_id, started_at)
-        except LockHeld as e:
+        except LockHeld as e:  # another run is going: skip (exit 0), don't fail
             status, note = RunStatus.SKIPPED, str(e)
-        except Exception as e:
+        except Exception as e:  # any error fails the run, but is caught so the report still gets written
             status, error = RunStatus.FAILED, e
             log.exception("run %s failed", run_id)
         except BaseException as e:  # e.g. Ctrl-C: still record it, then stop
             status, error = RunStatus.FAILED, e
             raise
         finally:
+            # always: final status, duration and exit code, then <runs>/<run_id>.json, then a summary in the log
             exit_code = report.finish(status, error, note)
             path = report.write(cfg.storage.runs)
             _log_summary(report, path)
@@ -132,10 +137,12 @@ def ingest_phases(cfg: Config, client: HubClient, report: RunReport, run_id, sta
     """Pin check, listing, plan, download and verify, then land and inspect each file."""
     source, ingest = cfg.source, cfg.ingest
 
+    # every network call goes through with_retry: timeouts, 408, 429 and 5xx are retried, 401 and 404 are not
     def retry(fn):
         return with_retry(fn, ingest.max_retries, ingest.retry_backoff_seconds, sleep=sleep)
 
     log.info("run %s (%s): %s @ %s", run_id, cfg.env, source.repo_id, source.revision)
+    # pin: check what the tag points to now. Downloads always use the pinned commit SHA, even if the tag moved
     with report.phase("pin"):
         pin = retry(lambda: verify_pin(client, source))
     report["source"] = {
@@ -147,8 +154,10 @@ def ingest_phases(cfg: Config, client: HubClient, report: RunReport, run_id, sta
         "tag_moved": pin.tag_moved,
     }
 
+    # list: every data file at the pinned commit, with its size and sha256. Nothing is downloaded yet
     with report.phase("list"):
         listing = retry(lambda: client.list_files(source.revision, source.include))
+    # plan: compare the listing with what the manifest says is landed -> NEW, CHANGED or unchanged
     manifest = Manifest(cfg.storage.state)
     with report.phase("plan"):
         plan = build_plan(listing, manifest.current(), ingest.sample_per_class)
@@ -159,6 +168,7 @@ def ingest_phases(cfg: Config, client: HubClient, report: RunReport, run_id, sta
         "rejected_names": [{"path": p, "reason": r} for p, r in plan.rejected],
     }
 
+    # fetch: download the planned files in parallel into staging/<run_id>/ and verify size and sha256
     with report.phase("fetch"):
         start = time.monotonic()
         results = fetch_all(
@@ -173,6 +183,8 @@ def ingest_phases(cfg: Config, client: HubClient, report: RunReport, run_id, sta
         )
         report["fetch"] = fetch_stats(results, time.monotonic() - start)
 
+    # land: check each verified file's schema against the contract, move it into landing (read-only),
+    # and append one manifest row per file
     contract = load_contract(cfg.schema.contract)
     with report.phase("land"):
         landing = land_results(
@@ -193,6 +205,7 @@ def ingest_phases(cfg: Config, client: HubClient, report: RunReport, run_id, sta
         "fail_on_drift": cfg.schema.fail_on_drift,
         **schema_summary(landing.inspections),
     }
+    # every file that failed (download, verify or land), with how many download attempts it took
     attempts = {r.candidate.path: r.attempts for r in results}
     failures = [
         {"path": row["path"], "error": row["error"], "attempts": attempts.get(row["path"])}
@@ -201,10 +214,12 @@ def ingest_phases(cfg: Config, client: HubClient, report: RunReport, run_id, sta
     ]
     report["failures"] = failures
 
+    # checks: report leftovers (landing files no manifest row knows, old staging folders). Nothing is deleted
     with report.phase("checks"):
         report["orphans"] = find_orphans(cfg.storage, manifest)
         report["stale_staging"] = find_stale_staging(cfg.storage.staging, run_id)
 
+    # totals for this run and for everything landed so far
     landed = [row for row in rows if row["status"] == Status.LANDED]
     current = manifest.current()
     report["totals"] = {
@@ -219,6 +234,7 @@ def ingest_phases(cfg: Config, client: HubClient, report: RunReport, run_id, sta
         "rows_total": sum(n or 0 for n in current["num_rows"].to_pylist()),
     }
 
+    # the status: a schema change upstream fails the run in prod; any failed file makes it PARTIAL
     if cfg.schema.fail_on_drift and report["schema"]["drifted"]:
         return RunStatus.FAILED
     if failures:
@@ -251,6 +267,7 @@ def schema_summary(inspections: dict[str, Inspection]) -> dict[str, Any]:
 
 
 def _log_summary(report: RunReport, path) -> None:
+    """Log a short summary of the run report: status, plan, fetch, landing, convert, reconcile and publish."""
     run, plan, fetch, totals = report["run"], report["plan"], report["fetch"], report["totals"]
     log.info("run %s: %s (exit %s) in %ss", run["run_id"], run["status"], run["exit_code"], run["duration_seconds"])
     if run["note"]:
@@ -308,6 +325,7 @@ def _log_summary(report: RunReport, path) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Command line entry point for an ingest-only run (no convert, reconcile or publish)."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--env", choices=["dev", "prod"], required=True)
     parser.add_argument("--report-copy", type=Path, metavar="DIR", help="copy the run's report and log into DIR")

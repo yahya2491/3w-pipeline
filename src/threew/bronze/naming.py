@@ -23,6 +23,8 @@ TIMESTAMP_FORMAT = "%Y%m%d%H%M%S"
 
 
 class SourceType(StrEnum):
+    """Where a recording comes from: a real well, a simulator, or drawn by hand by experts."""
+
     REAL = "REAL"
     SIMULATED = "SIMULATED"
     DRAWN = "DRAWN"
@@ -30,6 +32,8 @@ class SourceType(StrEnum):
 
 @dataclass(frozen=True)
 class InstanceInfo:
+    """What a file's path says about the recording in it."""
+
     path: str
     label: int
     source_type: SourceType
@@ -39,6 +43,8 @@ class InstanceInfo:
 
 
 class NameParseError(ValueError):
+    """A path that doesn't follow the 3W naming rules, with the reason why."""
+
     def __init__(self, path: str, reason: str) -> None:
         super().__init__(f"{path}: {reason}")
         self.path = path
@@ -51,8 +57,9 @@ def parse_path(path: str) -> InstanceInfo:
     m = PATH_RE.fullmatch(path)
     if m is None:
         raise NameParseError(path, _why_path_does_not_match(path))
-    label, name = int(m[1]), m[2]
+    label, name = int(m[1]), m[2]  # the folder digit is the label (event 0-9)
 
+    # the prefix decides the source type, and each type has its own name format
     if name.startswith("WELL-"):
         n = REAL_RE.fullmatch(name)
         if n is None:
@@ -82,6 +89,7 @@ def parse_all(paths: Iterable[str]) -> tuple[list[InstanceInfo], list[tuple[str,
 
 
 def _parse_timestamp(path: str, ts: str) -> datetime:
+    """Read the 14-digit YYYYMMDDHHMMSS start time from a real file name; impossible dates are rejected."""
     try:
         parsed = datetime.strptime(ts, TIMESTAMP_FORMAT)  # noqa: DTZ007  naive on purpose, 3W gives no timezone
     except ValueError as e:

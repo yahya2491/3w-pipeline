@@ -22,6 +22,8 @@ SAMPLE_ORDER = (SourceType.REAL, SourceType.SIMULATED, SourceType.DRAWN)
 
 
 class Reason(StrEnum):
+    """Why a file is downloaded: it was never landed (NEW), or it was landed with different content (CHANGED)."""
+
     NEW = "NEW"
     CHANGED = "CHANGED"
 
@@ -49,12 +51,15 @@ class Candidate:
 
 @dataclass(frozen=True)
 class Plan:
+    """The result of planning: what to download and why, and what was unchanged, removed upstream or rejected."""
+
     to_download: tuple[tuple[Candidate, Reason], ...]  # sorted by path
     unchanged: int
     removed_upstream: tuple[str, ...]  # landed before, no longer in the listing
     rejected: tuple[tuple[str, str], ...]  # (path, reason) for names that don't parse
 
     def summary(self) -> dict[str, Any]:
+        """The plan's counts for the run report."""
         reasons = Counter(reason for _, reason in self.to_download)
         per_class = Counter(candidate.info.label for candidate, _ in self.to_download)
         return {
@@ -75,6 +80,7 @@ def build_plan(listing: Sequence[RemoteFile], current_manifest: pa.Table, sample
     current_manifest is Manifest.current(): one LANDED row per path. Rows with another status are ignored, so a
     file that only ever FAILED comes back as NEW. sample_per_class=None plans every file.
     """
+    # refuse input that is clearly wrong, instead of planning a run on it
     if not listing:
         raise ValueError("the listing is empty: wrong revision or include pattern? Refusing to plan an empty run")
     paths = [f.path for f in listing]
@@ -82,10 +88,12 @@ def build_plan(listing: Sequence[RemoteFile], current_manifest: pa.Table, sample
         raise ValueError("the listing has duplicate paths")
 
     remote_by_path = {f.path: f for f in listing}
-    parsed, rejected = parse_all(paths)
+    parsed, rejected = parse_all(paths)  # a bad file name is rejected with a reason, it doesn't stop the plan
+    # dev keeps a small sample per class; prod (sample_per_class None) keeps every file
     candidates = _sample([Candidate(remote_by_path[info.path], info) for info in parsed], sample_per_class)
-    landed = _landed_content_keys(current_manifest)
+    landed = _landed_content_keys(current_manifest)  # path -> content key of the version already landed
 
+    # the decision for each file: never landed -> NEW, landed with other content -> CHANGED, same content -> skip
     to_download: list[tuple[Candidate, Reason]] = []
     unchanged = 0
     for candidate in candidates:
@@ -125,6 +133,7 @@ def _sample(candidates: list[Candidate], per_class: int | None) -> list[Candidat
 
 
 def _landed_content_keys(current_manifest: pa.Table) -> dict[str, str]:
+    """path -> content key of its LANDED version. Raises if a path has two LANDED rows (the wrong manifest view)."""
     landed = current_manifest.filter(pc.equal(current_manifest["status"], Status.LANDED.value))
     keys: dict[str, str] = {}
     columns = (landed["path"].to_pylist(), landed["sha256"].to_pylist(), landed["blob_id"].to_pylist())

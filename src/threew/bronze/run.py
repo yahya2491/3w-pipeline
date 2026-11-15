@@ -42,6 +42,8 @@ from threew.spark import get_spark
 
 log = logging.getLogger(__name__)
 
+# Something that gives a Spark session as a context manager. The real one is spark_session below; tests pass a
+# factory that reuses one local session, so a full run can be tested without starting Spark for every test.
 SparkFactory = Callable[[Config], AbstractContextManager[SparkSession]]
 
 
@@ -70,6 +72,8 @@ def run_bronze(
     With report_copy, the run's report, log and reconcile plan are copied into that folder at the very end.
     """
 
+    # execute() gives every run the same frame (run ID, log file, lock, report written whatever happens);
+    # body is the part specific to a full Bronze run
     def body(report: RunReport, run_id: str, started_at: datetime) -> RunStatus:
         return _bronze_phases(cfg, client, report, run_id, started_at, sleep, deep, spark_factory)
 
@@ -77,13 +81,21 @@ def run_bronze(
 
 
 def _bronze_phases(cfg, client, report: RunReport, run_id, started_at, sleep, deep, spark_factory) -> RunStatus:
+    """The five phases of a full run, in order: ingest, convert, prune, reconcile, publish. Returns the run's status.
+
+    Each phase runs inside report.phase(name), which records how long it took even if it raises.
+    """
     withdraw_marker(cfg)  # the table is about to change: not ready until this run says so
+
+    # ingest: pin, list, plan, fetch, land, checks. FAILED stops the run here; PARTIAL carries on
     status = ingest_phases(cfg, client, report, run_id, started_at, sleep)
     if status is RunStatus.FAILED:
         report["publish"] = _not_published(cfg, "the ingest phase FAILED")
         return status
+    # every later phase starts from the manifest, the record of every file that has been landed
     manifest = Manifest(cfg.storage.state)
 
+    # convert: landed file -> Bronze Parquet file, only for files whose output doesn't exist yet
     with report.phase("convert"):
         start = time.monotonic()
         results = convert_all(manifest, cfg.storage, cfg.ingest.workers, only_pending=True)
@@ -104,19 +116,24 @@ def _bronze_phases(cfg, client, report: RunReport, run_id, started_at, sleep, de
         "skipped_files": [{"path": r.source_path, "reason": r.error} for r in skipped],
     }
     if failed:
-        status = RunStatus.PARTIAL
+        status = RunStatus.PARTIAL  # one file that fails to convert doesn't stop the others
 
+    # prune: delete Bronze files that no current manifest row points to (e.g. the old version of a CHANGED file)
     with report.phase("prune"):
         report["prune"] = prune_outputs(manifest, cfg.storage)
 
-    # Files whose conversion failed are missing on purpose: check the rest of the table, and stay PARTIAL
+    # reconcile: the six checks, with Spark (the only phase that starts Spark).
+    # Files whose conversion failed are missing on purpose: check the rest of the table, and stay PARTIAL.
+    # A file is identified by (path, sha256), so a later version of the same path is not excluded by mistake.
     sha_by_path = dict(zip(*(manifest.current()[c].to_pylist() for c in ("path", "sha256")), strict=True))
     exclude = frozenset((r.source_path, sha_by_path[r.source_path]) for r in failed)
     with report.phase("reconcile"), spark_factory(cfg) as spark:
         result = reconcile(spark, cfg, manifest, deep=deep, exclude=exclude)
     report["reconcile"] = result.to_dict()
+    # save Spark's physical plan next to the report: it shows the manifest join is a BroadcastHashJoin
     (cfg.storage.runs / f"{run_id}_reconcile_plan.txt").parent.mkdir(parents=True, exist_ok=True)
     (cfg.storage.runs / f"{run_id}_reconcile_plan.txt").write_text(result.plan)
+    # add the Bronze table's own file and row counts (as Spark counted them) to the run totals
     if report["totals"] is not None:
         checks = {c.number: c for c in result.checks}
         report["totals"] |= {
@@ -124,15 +141,18 @@ def _bronze_phases(cfg, client, report: RunReport, run_id, started_at, sleep, de
             "bronze_rows": checks[2].details["spark"],
         }
 
+    # a failed check means the table can't be trusted: no marker, and the run is FAILED
     if not result.passed:
         withdraw_marker(cfg)
         failed_checks = [c.number for c in result.checks if not c.passed]
         report["publish"] = _not_published(cfg, f"reconciliation failed: checks {failed_checks}")
         return RunStatus.FAILED
+    # the checks passed but some file failed earlier: the table is consistent but incomplete, so don't publish
     if status is not RunStatus.SUCCESS:
         report["publish"] = _not_published(cfg, f"the run is {status.value}")
         return status
 
+    # publish: only a fully successful run gets here
     with report.phase("publish"):
         marker = publish_marker(cfg, report, result, run_id)
     report["publish"] = {"written": True, "path": str(cfg.storage.bronze_ready), "reason": None, "marker": marker}
@@ -154,6 +174,7 @@ def publish_marker(cfg: Config, report: RunReport, result: ReconcileResult, run_
         "code_commit": report["code"]["commit"],
         "report": str(cfg.storage.runs / f"{run_id}.json"),
     }
+    # atomic write: write a temporary file, then rename it over the marker, so a reader never sees half a file
     path = cfg.storage.bronze_ready
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f".{path.name}.tmp")
@@ -163,14 +184,17 @@ def publish_marker(cfg: Config, report: RunReport, result: ReconcileResult, run_
 
 
 def withdraw_marker(cfg: Config) -> None:
+    """Delete bronze_ready.json if it exists, so Silver won't read the table until a successful run writes it again."""
     cfg.storage.bronze_ready.unlink(missing_ok=True)
 
 
 def _not_published(cfg: Config, reason: str) -> dict[str, Any]:
+    """The report's publish section for a run that did not write the marker, with the reason why."""
     return {"written": False, "path": str(cfg.storage.bronze_ready), "reason": reason, "marker": None}
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Command line entry point: read the arguments, load the config, create the Hugging Face client and run."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--env", choices=["dev", "prod"], required=True)
     parser.add_argument("--deep", action="store_true", help="reconcile with countDistinct (a strict row-order proof)")
@@ -181,6 +205,7 @@ def main(argv: list[str] | None = None) -> int:
     logging.getLogger("py4j").setLevel(logging.WARNING)
 
     cfg = load_config(args.env)
+    # the only place the real Hugging Face client is created; everything below only sees the HubClient interface
     client = HfHubClient(cfg.source.repo_id, cfg.source.repo_type)
     return run_bronze(cfg, client, deep=args.deep, report_copy=args.report_copy)
 

@@ -14,6 +14,8 @@ import yaml
 
 @dataclass(frozen=True)
 class Inspection:
+    """The result of checking one file's footer against the contract."""
+
     readable: bool
     num_rows: int | None
     fingerprint: str | None  # same columns and types -> same fingerprint, whatever the column order
@@ -44,12 +46,14 @@ def fingerprint(columns: dict[str, str]) -> str:
 
 def inspect_file(path: Path, contract: dict[str, str]) -> Inspection:
     """Inspect one Parquet file's footer. Never raises for a bad file: it comes back readable=False."""
+    # only the footer (row count, schema, codecs) is read, not the data, so this is fast for any file size
     try:
         metadata = pq.read_metadata(path)
         schema = pq.read_schema(path)
     except (pa.ArrowException, OSError) as exc:
         return Inspection(False, None, None, False, (), (), (), None, f"{type(exc).__name__}: {exc}")
 
+    # compare with the contract by column name, so a different column order is not drift
     actual = {field.name: str(field.type) for field in schema}
     missing = tuple(name for name in contract if name not in actual)
     extra = tuple(name for name in actual if name not in contract)
@@ -58,6 +62,7 @@ def inspect_file(path: Path, contract: dict[str, str]) -> Inspection:
         for name, expected in contract.items()
         if name in actual and actual[name] != expected
     )
+    # compression of the first column chunk (BROTLI for 3W); None for a file with no row groups or columns
     codec = metadata.row_group(0).column(0).compression if metadata.num_row_groups and metadata.num_columns else None
     return Inspection(
         readable=True,

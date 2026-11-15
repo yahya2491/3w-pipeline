@@ -27,17 +27,23 @@ VERIFY_ATTEMPTS = 2
 
 
 class FetchStatus(StrEnum):
+    """The outcome of fetching one file."""
+
     OK = "OK"
     FAILED = "FAILED"
 
 
 class VerifiedBy(StrEnum):
+    """How a downloaded file was proven intact: by its sha256, or only by its size when there is no sha256."""
+
     SHA256 = "sha256"
     SIZE_ONLY = "size_only"  # Hugging Face gave no sha256 for the file
 
 
 @dataclass(frozen=True)
 class FetchResult:
+    """Everything the fetch learned about one file. land.py turns it into a manifest row."""
+
     candidate: Candidate
     reason: Reason
     status: FetchStatus
@@ -81,6 +87,7 @@ def fetch_one(
     calls = 0  # every download call
     rounds = 0  # download-then-verify rounds: the second one only after a bad file
 
+    # counts every call, including the extra calls with_retry makes after a network error
     def download() -> Path:
         nonlocal calls
         calls += 1
@@ -95,8 +102,10 @@ def fetch_one(
 
     error: str | None = None
     actual: str | None = None
+    # at most VERIFY_ATTEMPTS rounds of download, then verify
     for _ in range(VERIFY_ATTEMPTS):
         rounds += 1
+        # download, retrying network errors; a permanent error (or retries used up) ends this file as FAILED
         try:
             staged = with_retry(download, max_retries, backoff, sleep=sleep)
         except Exception as exc:  # noqa: BLE001  one file failing must never stop the others
@@ -106,8 +115,9 @@ def fetch_one(
         except OSError as exc:
             error, actual = f"could not read the downloaded file: {_describe(exc)}", None
         if error is None:
-            return result(FetchStatus.OK, staged, actual, None)
+            return result(FetchStatus.OK, staged, actual, None)  # size and sha256 match: done
         staged.unlink(missing_ok=True)  # never leave a bad file in staging
+    # still wrong after the second download: FAILED, with the last mismatch as the error
     return result(FetchStatus.FAILED, None, actual, error)
 
 
@@ -138,6 +148,7 @@ def fetch_all(
     # Threads, because the work is waiting on the network and the disk
     pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="fetch")
     try:
+        # submit every file at once; the pool runs `workers` of them at the same time
         futures = [
             pool.submit(
                 fetch_one,
@@ -152,13 +163,16 @@ def fetch_all(
             )
             for candidate, reason in plan_items
         ]
+        # results arrive in the order files finish, not plan order
         for done, future in enumerate(as_completed(futures), start=1):
-            res = future.result()
+            res = future.result()  # never raises: fetch_one turns every error into a FAILED result
             by_path[res.candidate.path] = res
+            # circuit breaker: one success proves the token and repo work, so later failures are about single files
             if res.status is FetchStatus.OK:
                 breaker_armed = False
             elif breaker_armed:
                 failures_before_first_ok += 1
+                # 10 failures and not one success: something global is wrong, stop instead of trying 2,000 files
                 if failures_before_first_ok >= max_consecutive_failures:
                     raise TooManyFailuresError(
                         f"{failures_before_first_ok} consecutive failures, likely auth/repo problem: {res.error}"
@@ -166,14 +180,17 @@ def fetch_all(
             if done % 100 == 0:
                 log.info("fetched %d/%d: %s", done, len(futures), format_stats(by_path.values(), start))
     finally:
+        # cancel_futures: after a breaker trip, files that haven't started yet are dropped
         pool.shutdown(wait=True, cancel_futures=True)
 
+    # back in plan order, so the manifest rows and the report come out the same way every run
     results = [by_path[candidate.path] for candidate, _ in plan_items]
     log.info("fetch done: %s", format_stats(results, start))
     return results
 
 
 def fetch_stats(results: Sequence[FetchResult], elapsed: float) -> dict[str, Any]:
+    """The fetch numbers for the run report: files, bytes, speed and retry counts."""
     ok = [r for r in results if r.status is FetchStatus.OK]
     ok_bytes = sum(r.candidate.remote.size for r in ok)
     return {
@@ -200,6 +217,7 @@ def retry_counts(results: Sequence[FetchResult]) -> dict[str, int]:
 
 
 def format_stats(results, start: float) -> str:
+    """One progress line for the log."""
     s = fetch_stats(list(results), time.monotonic() - start)
     return (
         f"{s['files']} files, {s['ok']} OK, {s['failed']} FAILED, {s['bytes']:,} bytes "
@@ -213,11 +231,13 @@ def _verify(staged: Path, remote: RemoteFile) -> tuple[str | None, str | None]:
     if size != remote.size:
         return f"size mismatch: expected {remote.size:,} bytes got {size:,}", None
     actual = sha256_of(staged)
+    # with no sha256 from Hugging Face the size was the only check; actual is still recorded
     if remote.sha256 and actual != remote.sha256:
         return f"checksum mismatch: expected {remote.sha256[:12]} got {actual[:12]}", actual
     return None, actual
 
 
 def _describe(exc: BaseException) -> str:
+    """A one-line error for the report: the exception type plus at most 300 characters of its message."""
     message = " ".join(str(exc).split())  # Hugging Face errors span several lines
     return f"{type(exc).__name__}: {message[:300]}"

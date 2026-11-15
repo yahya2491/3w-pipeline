@@ -43,12 +43,15 @@ SECTIONS = (
 
 
 class RunStatus(StrEnum):
+    """How a run ended. EXIT_CODES below turns it into the process exit code."""
+
     SUCCESS = "SUCCESS"  # everything planned landed (drift is listed, and allowed unless fail_on_drift)
     PARTIAL = "PARTIAL"  # the run finished, but some files are FAILED
     FAILED = "FAILED"  # the run stopped on an error, or drifted files with fail_on_drift on
     SKIPPED = "SKIPPED"  # another run held the lock
 
 
+# SKIPPED is 0: another run already doing the work is not an error. PARTIAL and FAILED turn the workflow red
 EXIT_CODES = {RunStatus.SUCCESS: 0, RunStatus.PARTIAL: 1, RunStatus.FAILED: 2, RunStatus.SKIPPED: 0}
 
 
@@ -58,6 +61,7 @@ class RunReport:
     def __init__(self, run_id: str, started_at: datetime, env: str) -> None:
         self.run_id = run_id
         self._start = time.monotonic()
+        # every section starts as null, so a finished report shows exactly how far the run got
         self.sections: dict[str, Any] = dict.fromkeys(SECTIONS)
         self.sections["run"] = {
             "run_id": run_id,
@@ -74,6 +78,7 @@ class RunReport:
         self.sections["phases"] = {}
 
     def __setitem__(self, section: str, value: Any) -> None:
+        """report["plan"] = {...}. An unknown section name is a bug, so it raises instead of adding a new one."""
         if section not in SECTIONS:
             raise KeyError(f"unknown report section {section!r}")
         self.sections[section] = value
@@ -91,6 +96,7 @@ class RunReport:
             self.sections["phases"][name] = round(time.monotonic() - start, 3)
 
     def finish(self, status: RunStatus, error: BaseException | None = None, note: str | None = None) -> int:
+        """Record the final status, duration, note and error (with its traceback). Returns the exit code."""
         run = self.sections["run"]
         run["finished_at"] = datetime.now(UTC)
         run["duration_seconds"] = round(time.monotonic() - self._start, 3)
@@ -106,6 +112,7 @@ class RunReport:
         return EXIT_CODES[status]
 
     def to_dict(self) -> dict[str, Any]:
+        """The report as JSON-ready data: datetimes, paths and enums become strings."""
         return _jsonable(self.sections)
 
     def write(self, runs_dir: Path) -> Path:
@@ -140,11 +147,13 @@ def code_info(repo_root: Path = REPO_ROOT) -> dict[str, Any]:
 
 
 def _git(repo_root: Path, *args: str) -> str:
+    """Run one git command in the repo and return its output."""
     out = subprocess.run(["git", *args], cwd=repo_root, check=True, capture_output=True, text=True, timeout=10)
     return out.stdout.strip()
 
 
 def _version(package: str) -> str | None:
+    """The installed version of a package, or None if it isn't installed."""
     try:
         return metadata.version(package)
     except metadata.PackageNotFoundError:
@@ -152,6 +161,7 @@ def _version(package: str) -> str | None:
 
 
 def _jsonable(value: Any) -> Any:
+    """Turn report values into JSON types, recursively. Anything unexpected is stored as text, with a warning."""
     if isinstance(value, dict):
         return {str(k): _jsonable(v) for k, v in value.items()}
     if isinstance(value, (list, tuple, set)):

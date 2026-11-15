@@ -21,6 +21,8 @@ log = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class RemoteFile:
+    """One file in the Hugging Face listing: everything known about it before downloading."""
+
     path: str
     size: int
     sha256: str | None  # from the LFS metadata; None for small files stored directly in git
@@ -28,6 +30,8 @@ class RemoteFile:
 
 
 class HubClient(Protocol):
+    """What the pipeline needs from a data source. HfHubClient is the real one; tests pass a fake with no network."""
+
     def resolve_revision(self, label: str) -> str:
         """The commit SHA a tag or branch points to right now."""
         ...
@@ -79,10 +83,12 @@ class HfHubClient:
 
 
 def matches(path: str, include: Sequence[str]) -> bool:
+    """True if path matches any include pattern, e.g. data/[0-9]/*.parquet. Case-sensitive on every OS."""
     return any(fnmatch.fnmatchcase(path, pattern) for pattern in include)
 
 
 def to_remote_file(entry: RepoFile) -> RemoteFile:
+    """Turn a huggingface_hub RepoFile into a RemoteFile. Only files stored with Git LFS have a sha256."""
     return RemoteFile(
         path=entry.path,
         size=entry.size,
@@ -93,6 +99,8 @@ def to_remote_file(entry: RepoFile) -> RemoteFile:
 
 @dataclass(frozen=True)
 class PinCheck:
+    """The result of the pin check: the tag, the pinned commit SHA, and the commit the tag points to now."""
+
     label: str
     pinned: str
     resolved: str

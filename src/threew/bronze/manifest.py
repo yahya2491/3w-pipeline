@@ -47,6 +47,8 @@ CHUNK_GLOB = "part-*.parquet"
 
 
 class Status(StrEnum):
+    """What happened to one ingest attempt of a file."""
+
     LANDED = "LANDED"
     FAILED = "FAILED"
 
@@ -56,6 +58,8 @@ class ManifestError(ValueError):
 
 
 class Manifest:
+    """Read and append the manifest. Rows are only ever added, never changed or deleted (append-only history)."""
+
     def __init__(self, state_dir: Path) -> None:
         self.dir = Path(state_dir) / "manifest"
 
@@ -67,6 +71,7 @@ class Manifest:
         tables = []
         for chunk in chunks:
             table = pq.read_table(chunk)
+            # every chunk must have exactly the manifest schema, or reading stops with an error
             if not table.schema.equals(MANIFEST_SCHEMA, check_metadata=False):
                 raise ManifestError(f"{chunk} does not have the manifest schema:\n{table.schema}")
             tables.append(table)
@@ -76,13 +81,14 @@ class Manifest:
         """Validate rows and write them as one new chunk. Returns the chunk's path, or None for no rows."""
         if not rows:
             return None
-        table = _to_table(rows)
+        table = _to_table(rows)  # validate first: a bad row is never stored
         self.dir.mkdir(parents=True, exist_ok=True)
         # The UTC timestamp makes names sort in write order; the uuid keeps concurrent writers apart
         name = f"part-{datetime.now(UTC):%Y%m%dT%H%M%S%fZ}-{uuid.uuid4().hex[:8]}.parquet"
         tmp = self.dir / f".{name}.tmp"
         with open(tmp, "wb") as f:
             pq.write_table(table, f)
+            # fsync: the bytes are on disk before the rename, so a power cut can't leave an empty chunk
             f.flush()
             os.fsync(f.fileno())
         final = self.dir / name
@@ -104,11 +110,13 @@ class Manifest:
         return pa.Table.from_pylist([newest[p] for p in sorted(newest)], schema=MANIFEST_SCHEMA)
 
     def _landed(self) -> pa.Table:
+        """Every LANDED row. FAILED rows are kept as history but never count as having the file."""
         table = self.read()
         return table.filter(pc.equal(table["status"], Status.LANDED.value))
 
 
 def _to_table(rows: Sequence[Mapping[str, Any]]) -> pa.Table:
+    """Check rows (exact columns, status rules, types, required values) and turn them into an Arrow table."""
     expected = set(MANIFEST_SCHEMA.names)
     for i, row in enumerate(rows):
         missing, extra = expected - row.keys(), row.keys() - expected
@@ -126,6 +134,7 @@ def _to_table(rows: Sequence[Mapping[str, Any]]) -> pa.Table:
 
 
 def _check_row(i: int, row: Mapping[str, Any]) -> None:
+    """Status rules: a LANDED row has a relative landing_path and no error; a FAILED row has an error and no path."""
     status, landing_path, error = row["status"], row["landing_path"], row["error"]
     if status == Status.LANDED:
         if landing_path is None or error is not None:

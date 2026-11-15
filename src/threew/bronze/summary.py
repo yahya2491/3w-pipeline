@@ -8,6 +8,7 @@ MAX_LISTED = 10  # per kind of problem; the rest is counted
 
 
 def summarize(report: dict[str, Any]) -> str:
+    """The whole job summary: header, source pin, phase table, totals, problems and the code commit."""
     run = report["run"]
     status = run["status"]
     lines = [
@@ -52,6 +53,7 @@ def summarize(report: dict[str, Any]) -> str:
 
 
 def _phase_rows(report: dict[str, Any]) -> list[tuple[str, str]]:
+    """One (phase, result) row per phase; a phase the run never reached shows a dash."""
     plan, fetch = report.get("plan"), report.get("fetch")
     ingest = NOT_REACHED
     if plan:
@@ -101,6 +103,7 @@ def _phase_rows(report: dict[str, Any]) -> list[tuple[str, str]]:
 
 
 def _problems(report: dict[str, Any]) -> list[str]:
+    """Every kind of problem the report records, as Markdown bullets; an empty list means a clean run."""
     problems: list[str] = []
     run = report["run"]
     if run.get("error"):
@@ -136,6 +139,7 @@ def _problems(report: dict[str, Any]) -> list[str]:
 
 
 def _listed(title: str, items: list[str]) -> list[str]:
+    """A titled bullet with its count and the first MAX_LISTED items; nothing at all when there are no items."""
     if not items:
         return []
     lines = [f"- **{title}** ({len(items)}):"] + [f"  - {item}" for item in items[:MAX_LISTED]]
@@ -145,6 +149,7 @@ def _listed(title: str, items: list[str]) -> list[str]:
 
 
 def _drift(d: dict[str, Any]) -> str:
+    """One drifted file's problem in one line: unreadable, or its missing, extra and retyped columns."""
     if not d["readable"]:
         return f"unreadable ({_one_line(d.get('error') or '')})"
     parts = []
@@ -158,6 +163,7 @@ def _drift(d: dict[str, Any]) -> str:
 
 
 def _check_detail(check: dict[str, Any]) -> str:
+    """A failed reconcile check's numbers in one line (the long lists stay in the report)."""
     details = {k: v for k, v in check["details"].items() if not isinstance(v, list | dict) and k != "shared_pass"}
     differences = check["details"].get("differences")
     if differences and isinstance(differences, list):
@@ -166,5 +172,6 @@ def _check_detail(check: dict[str, Any]) -> str:
 
 
 def _one_line(text: str, limit: int = 200) -> str:
+    """Collapse whitespace and newlines, and cut to limit characters, so a message fits one table cell."""
     text = " ".join(str(text).split())
     return text if len(text) <= limit else text[: limit - 1] + "…"

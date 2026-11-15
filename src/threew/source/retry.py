@@ -48,9 +48,10 @@ def with_retry(
         try:
             return fn()
         except Exception as exc:
+            # out of attempts, or an error that won't fix itself by waiting: give up and raise it
             if attempt == max_retries or not is_transient(exc):
                 raise
-            wait = backoff * 2**attempt
+            wait = backoff * 2**attempt  # 5, 10, 20 s with the default backoff of 5 s and 3 retries
             log.warning(
                 "attempt %d/%d failed (%s: %s), retrying in %gs",
                 attempt + 1,

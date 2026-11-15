@@ -56,13 +56,15 @@ LINEAGE_SCHEMA = [
     StructField("_row_in_file", LongType()),
 ]
 PARTITION_SCHEMA = [StructField("source_type", StringType()), StructField("label", IntegerType())]
-KEYS = ["_source_path", "_file_sha256"]
-FIDELITY_TYPES = ("REAL", "SIMULATED", "DRAWN")
+KEYS = ["_source_path", "_file_sha256"]  # one file version: the same path can come back with new content
+FIDELITY_TYPES = ("REAL", "SIMULATED", "DRAWN")  # check 6 compares one file of each source type
 MAX_LISTED = 20  # problems listed per check; the counts are always complete
 
 
 @dataclass
 class CheckResult:
+    """One check's outcome, with the numbers that back it up (they go into the run report)."""
+
     number: int
     name: str
     passed: bool
@@ -72,6 +74,8 @@ class CheckResult:
 
 @dataclass
 class ReconcileResult:
+    """All six checks, how long they took, and Spark's plan for the shared pass."""
+
     env: str
     bronze_path: str
     mode: str  # "fast" or "deep"
@@ -83,9 +87,11 @@ class ReconcileResult:
 
     @property
     def passed(self) -> bool:
+        """True only if every check passed."""
         return all(c.passed for c in self.checks)
 
     def to_dict(self) -> dict[str, Any]:
+        """The result for the run report. The plan text is left out; run.py saves it to its own file."""
         d = asdict(self)
         d["passed"] = self.passed
         d["plan_has_broadcast_hash_join"] = "BroadcastHashJoin" in self.plan
@@ -135,15 +141,16 @@ def reconcile(
     current = [r for r in manifest.current().to_pylist() if r["schema_ok"] is True]
     expected = [r for r in current if (r["path"], r["sha256"]) not in exclude]
     by_key = {(r["path"], r["sha256"]): r for r in expected}
+    # Spark lists the files and takes source_type and label from the folder names; the data is read by the checks
     bronze = spark.read.parquet(str(cfg.storage.bronze))
     checks: list[CheckResult] = []
 
-    # 1 Schema
+    # 1 Schema: Spark's schema vs the contract columns + the 4 lineage columns + the 2 partition columns
     start = time.monotonic()
     problems = schema_differences(bronze.schema, expected_schema(contract))
     checks.append(CheckResult(1, "schema", not problems, _since(start), {"differences": problems}))
 
-    # 2 Total rows
+    # 2 Total rows: one count over the whole table vs the sum of num_rows in the manifest
     start = time.monotonic()
     total = bronze.count()
     expected_total = sum(r["num_rows"] for r in expected)
@@ -154,10 +161,12 @@ def reconcile(
     )
 
     # 3, 4, 5: one pass over the table, joined with the broadcast manifest
+    # left join from Bronze's side: a file Bronze has but the manifest doesn't expect gets null m_ columns (extra);
+    # a file the manifest expects but Bronze lacks has no group at all (missing)
     start = time.monotonic()
     per_file = per_file_stats(bronze, distinct=deep)
     joined = per_file.join(F.broadcast(manifest_frame(spark, expected)), on=KEYS, how="left")
-    groups = joined.collect()
+    groups = joined.collect()  # small: about one row per file (2,228), not per observation
     pass_seconds = _since(start)
     plan = _explain(joined)
     checks += _per_file_checks(groups, by_key, pass_seconds, deep)
@@ -171,7 +180,7 @@ def reconcile(
     else:
         profile_data = {}
 
-    # 6 Fidelity
+    # 6 Fidelity: values read back through Spark vs the landing file read with pyarrow
     start = time.monotonic()
     checks.append(_fidelity_check(bronze, cfg, contract, expected, start))
     mode = "deep" if deep else "fast"
@@ -191,11 +200,13 @@ def per_file_stats(bronze: DataFrame, distinct: bool = True) -> DataFrame:
         F.sum(F.col("_row_in_file") * F.col("_row_in_file")).alias("sum_sq_row"),
     ]
     if distinct:
-        aggs.append(F.countDistinct("_row_in_file").alias("distinct_rows"))
+        aggs.append(F.countDistinct("_row_in_file").alias("distinct_rows"))  # the expensive one: deep mode only
+    # also grouped by the partition columns, so a file found in two folders shows up as two groups (check 4)
     return bronze.groupBy(*KEYS, "source_type", "label").agg(*aggs)
 
 
 def manifest_frame(spark: SparkSession, rows: list[dict[str, Any]]) -> DataFrame:
+    """The expected files as a small DataFrame to broadcast. The m_ columns are what the manifest says."""
     schema = StructType(
         [
             StructField("_source_path", StringType()),
@@ -212,6 +223,7 @@ def manifest_frame(spark: SparkSession, rows: list[dict[str, Any]]) -> DataFrame
 def _row_numbers_ok(g, deep: bool) -> bool:
     """0 .. n-1 has min 0, max n-1, sum n(n-1)/2 and sum of squares (n-1)n(2n-1)/6; deep also counts distinct."""
     n = g["rows"]
+    # integer arithmetic (//), so the comparison is exact even for files with many rows
     ok = (
         g["min_row"] == 0
         and g["max_row"] == n - 1
@@ -222,12 +234,14 @@ def _row_numbers_ok(g, deep: bool) -> bool:
 
 
 def _per_file_checks(groups, by_key: dict, pass_seconds: float, deep: bool) -> list[CheckResult]:
+    """Checks 3, 4 and 5, worked out in Python from the collected groups of the shared pass."""
+    # one file version normally has one group; more than one means it sits in more than one folder
     in_bronze: dict[tuple, list] = defaultdict(list)
     for g in groups:
         in_bronze[(g["_source_path"], g["_file_sha256"])].append(g)
 
-    missing = sorted(k for k in by_key if k not in in_bronze)
-    extra = sorted(k for k, gs in in_bronze.items() if gs[0]["m_num_rows"] is None)
+    missing = sorted(k for k in by_key if k not in in_bronze)  # the manifest expects it, Bronze has no rows
+    extra = sorted(k for k, gs in in_bronze.items() if gs[0]["m_num_rows"] is None)  # in Bronze, not expected
     mismatches, partition_problems, order_problems = [], [], []
     for key, gs in sorted(in_bronze.items()):
         for g in gs:  # 5: within one file, row numbers are exactly 0 .. n-1
@@ -236,13 +250,13 @@ def _per_file_checks(groups, by_key: dict, pass_seconds: float, deep: bool) -> l
                 problem |= {"sum": g["sum_row"], "distinct": g["distinct_rows"] if deep else None}
                 order_problems.append(problem)
         if key not in by_key:
-            continue
+            continue  # already counted as extra
         rows = sum(g["rows"] for g in gs)
-        if rows != by_key[key]["num_rows"]:  # 3
+        if rows != by_key[key]["num_rows"]:  # 3: Spark's row count for the file vs the manifest's (from the footer)
             mismatches.append({"file": list(key), "spark": rows, "manifest": by_key[key]["num_rows"]})
         found = sorted((g["source_type"], g["label"]) for g in gs)
         wanted = [(by_key[key]["source_type"], by_key[key]["label"])]
-        if found != wanted:  # 4
+        if found != wanted:  # 4: exactly one folder, the one the manifest says
             partition_problems.append({"file": list(key), "found": found, "manifest": wanted[0]})
 
     shared = {"shared_pass": "checks 3-5", "files_in_bronze": len(in_bronze), "files_in_manifest": len(by_key)}
@@ -288,10 +302,12 @@ def _fidelity_check(bronze: DataFrame, cfg: Config, contract: dict[str, str], ex
     """Row-by-row comparison for the first file (by path) of each source type."""
     files, problems = [], []
     for source_type in FIDELITY_TYPES:
+        # the first file by path: the same three files every run, so results compare across runs
         candidates = sorted((r for r in expected if r["source_type"] == source_type), key=lambda r: r["path"])
         if not candidates:
             continue
         row = candidates[0]
+        # the source of truth: the landing file, read with pyarrow, only the contract's columns
         source = pq.read_table(cfg.storage.root / row["landing_path"], columns=list(contract))
         # The conversion's cast is exact (safe=True), so comparing at microseconds compares the same instants
         source = source.set_column(
@@ -306,18 +322,19 @@ def _fidelity_check(bronze: DataFrame, cfg: Config, contract: dict[str, str], ex
                 & (F.col("_source_path") == row["path"])
                 & (F.col("_file_sha256") == row["sha256"])
             )
-            .orderBy("_row_in_file")
-            .select(*[F.col(f"`{name}`") for name in contract])
+            .orderBy("_row_in_file")  # back in the file's original row order
+            .select(*[F.col(f"`{name}`") for name in contract])  # backticks: 3W names have hyphens, e.g. P-PDG
             .collect()
         )
         differences = _compare(source, spark_rows, list(contract))
         files.append({"path": row["path"], "rows": source.num_rows, "values": source.num_rows * len(contract)})
         problems += [{"path": row["path"], **d} for d in differences]
-    passed = not problems and len(files) > 0
+    passed = not problems and len(files) > 0  # comparing no file at all doesn't count as a pass
     return CheckResult(6, "fidelity", passed, _since(start), {"files": files, "differences": problems[:MAX_LISTED]})
 
 
 def _compare(source: pa.Table, spark_rows, columns: list[str]) -> list[dict[str, Any]]:
+    """Value-by-value differences between the landing file and the Bronze rows, column by column (at most 20)."""
     if source.num_rows != len(spark_rows):
         return [{"problem": f"pyarrow read {source.num_rows} rows, Spark read {len(spark_rows)}"}]
     differences = []
@@ -331,6 +348,7 @@ def _compare(source: pa.Table, spark_rows, columns: list[str]) -> list[dict[str,
 
 
 def _same(a: Any, b: Any) -> bool:
+    """Equal for the fidelity check: same value and same Python type; None equals None and NaN equals NaN."""
     if isinstance(a, float) and isinstance(b, float) and math.isnan(a) and math.isnan(b):
         return True  # NaN never equals itself, but two NaNs are the same value here
     if isinstance(a, datetime) and isinstance(b, datetime) and (a.tzinfo or b.tzinfo):
@@ -339,6 +357,7 @@ def _same(a: Any, b: Any) -> bool:
 
 
 def _explain(df: DataFrame) -> str:
+    """Spark's formatted physical plan as text: it shows whether the manifest join is a BroadcastHashJoin."""
     buffer = io.StringIO()
     with redirect_stdout(buffer):  # DataFrame.explain prints from Python
         df.explain("formatted")
@@ -346,4 +365,5 @@ def _explain(df: DataFrame) -> str:
 
 
 def _since(start: float) -> float:
+    """Seconds since start, rounded to milliseconds."""
     return round(time.monotonic() - start, 3)

@@ -16,6 +16,7 @@ def find_orphans(storage: StorageConfig, manifest: Manifest) -> list[str]:
     """
     if not storage.landing.exists():
         return []
+    # what the manifest says has landed, compared with what is actually on disk
     table = manifest.read()
     status, landing_paths = table["status"].to_pylist(), table["landing_path"].to_pylist()
     recorded = {p for s, p in zip(status, landing_paths, strict=True) if s == Status.LANDED}

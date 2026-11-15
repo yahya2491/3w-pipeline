@@ -13,9 +13,9 @@ from typing import Any
 
 import yaml
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[2]  # src/threew/config.py -> the repository root
 CONF_DIR = REPO_ROOT / "conf"
-SHA_RE = re.compile(r"[0-9a-f]{40}")
+SHA_RE = re.compile(r"[0-9a-f]{40}")  # a full git commit ID: exactly 40 lowercase hex characters
 
 
 class ConfigError(ValueError):
@@ -24,6 +24,8 @@ class ConfigError(ValueError):
 
 @dataclass(frozen=True)
 class SourceConfig:
+    """Where the data comes from: the Hugging Face repo, the pinned commit and its tag, and which files to take."""
+
     repo_id: str
     repo_type: str
     revision: str
@@ -33,13 +35,15 @@ class SourceConfig:
 
 @dataclass(frozen=True)
 class StorageConfig:
+    """Every folder the pipeline uses. Only root is set in YAML; the rest is derived from it."""
+
     root: Path
     # Derived from root (not settable in YAML), so the rest of the code never builds paths by hand
     landing: Path = field(init=False)
     bronze: Path = field(init=False)
-    state: Path = field(init=False)
-    runs: Path = field(init=False)
-    # Downloads go to <staging>/<run_id>/ first. Same filesystem as landing, so step 13's os.replace is atomic
+    state: Path = field(init=False)  # the manifest and the lock file
+    runs: Path = field(init=False)  # run reports, logs and reconcile plans
+    # Downloads go to <staging>/<run_id>/ first. Same filesystem as landing, so land.py's os.replace is atomic
     staging: Path = field(init=False)
     silver: Path = field(init=False)
     silver_runs: Path = field(init=False)
@@ -62,6 +66,8 @@ class StorageConfig:
 
 @dataclass(frozen=True)
 class IngestConfig:
+    """How downloads and conversions run: threads, retries and backoff, and the dev sample size."""
+
     workers: int
     max_retries: int
     retry_backoff_seconds: float
@@ -70,12 +76,16 @@ class IngestConfig:
 
 @dataclass(frozen=True)
 class SchemaConfig:
+    """The schema contract file, and whether a file that doesn't match it fails the run (fail_on_drift)."""
+
     fail_on_drift: bool
     contract: Path  # expected columns and types; a relative path is resolved against the conf dir
 
 
 @dataclass(frozen=True)
 class SparkConfig:
+    """Settings for the Spark session that get_spark (spark.py) creates."""
+
     app_name: str
     master: str
     driver_memory: str
@@ -84,6 +94,8 @@ class SparkConfig:
 
 @dataclass(frozen=True)
 class Config:
+    """The whole resolved configuration for one environment. Frozen, so nothing can change it during a run."""
+
     env: str
     source: SourceConfig
     storage: StorageConfig
@@ -96,9 +108,11 @@ class Config:
         return _plain(dataclasses.asdict(self))
 
     def __str__(self) -> str:
+        """The resolved config as YAML, for printing."""
         return yaml.safe_dump(self.to_dict(), sort_keys=False)
 
 
+# YAML section name -> the dataclass it fills
 SECTIONS = {
     "source": SourceConfig,
     "storage": StorageConfig,
@@ -119,6 +133,7 @@ def load_config(env: str, conf_dir: Path = CONF_DIR) -> Config:
         available = sorted(p.stem for p in conf_dir.glob("*.yaml") if p.stem != "base")
         raise ConfigError(f"unknown env {env!r}, expected one of: {', '.join(available)}")
 
+    # base.yaml first, then the env file on top; each file is checked for unknown keys before merging
     merged: dict[str, Any] = {}
     for path in (conf_dir / "base.yaml", env_file):
         raw = _read_yaml(path)
@@ -128,6 +143,7 @@ def load_config(env: str, conf_dir: Path = CONF_DIR) -> Config:
 
 
 def _read_yaml(path: Path) -> dict[str, Any]:
+    """Read one YAML file; its top level must be a mapping of sections. An empty file is an empty mapping."""
     data = yaml.safe_load(path.read_text()) or {}
     if not isinstance(data, dict):
         raise ConfigError(f"{path.name}: expected a mapping at the top level")
@@ -158,17 +174,21 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
 
 
 def _build(env: str, merged: dict[str, Any], conf_dir: Path) -> Config:
+    """Check that every key is set, validate the values, resolve the paths, and build the frozen Config."""
+    # after the merge every key must be present: the code has no hidden defaults
     for section, cls in SECTIONS.items():
         missing = _settable_fields(cls) - merged.get(section, {}).keys()
         if missing:
             raise ConfigError(f"missing key(s) {', '.join(f'{section}.{k}' for k in sorted(missing))}")
 
+    # the data is always read at a commit SHA, never at a tag or branch that could move
     source = dict(merged["source"])
     revision = source["revision"]
     if not (isinstance(revision, str) and SHA_RE.fullmatch(revision)):
         raise ConfigError(f"source.revision must be a full 40-character commit SHA, got {revision!r}")
     source["include"] = tuple(source["include"])
 
+    # relative paths are resolved against the repo (root) or conf/ (contract), never the current directory
     root = merged["storage"]["root"]
     if root is None:
         raise ConfigError(f"storage.root must be set (in {env}.yaml)")
@@ -195,10 +215,12 @@ def _build(env: str, merged: dict[str, Any], conf_dir: Path) -> Config:
 
 
 def _settable_fields(cls: type) -> set[str]:
+    """The fields a YAML file may set; derived ones such as storage.bronze are left out."""
     return {f.name for f in dataclasses.fields(cls) if f.init}
 
 
 def _plain(value: Any) -> Any:
+    """Paths become strings and tuples become lists, so the config can go into a JSON report."""
     if isinstance(value, dict):
         return {k: _plain(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):

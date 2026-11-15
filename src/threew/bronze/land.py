@@ -33,11 +33,13 @@ from threew.config import StorageConfig
 
 log = logging.getLogger(__name__)
 
-READ_ONLY = 0o444
+READ_ONLY = 0o444  # r--r--r--: a landed file can't be changed by accident, not even by this pipeline
 
 
 @dataclass(frozen=True)
 class Landing:
+    """What land_results returns: the manifest rows it wrote and each inspected file's schema check."""
+
     rows: list[dict[str, Any]]  # one manifest row per result, in result order
     inspections: dict[str, Inspection]  # by repo path, for every inspected file: drift details for the run report
 
@@ -71,14 +73,15 @@ def land_results(
     """
     rows: list[dict[str, Any]] = []
     inspections: dict[str, Inspection] = {}
-    pending: list[dict[str, Any]] = []
+    pending: list[dict[str, Any]] = []  # rows not yet written to the manifest
     for result in results:
+        # one file at a time: land it (or record why not) and queue its manifest row
         row, inspection = _land_one(result, run_id, ingest_date, revision, storage_cfg, contract, fail_on_drift)
         rows.append(row)
         if inspection is not None:
             inspections[result.candidate.path] = inspection
         pending.append(row)
-        if len(pending) >= chunk_size:
+        if len(pending) >= chunk_size:  # each append is a new manifest chunk file
             manifest.append(pending)
             pending = []
     manifest.append(pending)  # no-op when empty
@@ -97,6 +100,8 @@ def _land_one(
     contract: dict[str, str],
     fail_on_drift: bool,
 ) -> tuple[dict[str, Any], Inspection | None]:
+    """Inspect and land one fetched file. Returns its manifest row (LANDED or FAILED) and its inspection."""
+    # a failed download becomes a FAILED row: there is nothing to land
     if result.status is not FetchStatus.OK:
         return _row(result, run_id, revision, Status.FAILED, None, result.error), None
 
@@ -107,6 +112,7 @@ def _land_one(
     inspection = inspect_file(staged, contract)  # footer only; the staged bytes are the verified ones
     if not inspection.schema_ok:
         log.warning("schema drift in %s: %s", result.candidate.path, drift_text(inspection))
+        # prod: a file that doesn't match the contract is not landed (dev lands it with schema_ok=False)
         if fail_on_drift:
             error = f"schema drift: {drift_text(inspection)}"
             return _row(result, run_id, revision, Status.FAILED, None, error, inspection), inspection
@@ -122,7 +128,7 @@ def _land_one(
         else:
             target.parent.mkdir(parents=True, exist_ok=True)
             os.replace(staged, target)  # atomic: staging and landing are on the same filesystem
-            os.chmod(target, READ_ONLY)
+            os.chmod(target, READ_ONLY)  # landing is never edited after this
     except OSError as exc:
         error = f"landing failed: {type(exc).__name__}: {exc}"
         return _row(result, run_id, revision, Status.FAILED, None, error), None
@@ -139,6 +145,7 @@ def _row(
     error: str | None,
     inspection: Inspection | None = None,
 ) -> dict[str, Any]:
+    """One manifest row: what the file is, where it came from, what happened to it and what its footer said."""
     info, remote = result.candidate.info, result.candidate.remote
     return {
         "run_id": run_id,
