@@ -1,3 +1,5 @@
+"""Load Gold's window_features table and turn it into the train and test sets the models use."""
+
 import json
 from dataclasses import dataclass
 
@@ -18,8 +20,10 @@ from config import (
 
 @dataclass
 class GoldData:
-    X_train: pd.DataFrame
-    y_train: pd.Series
+    """Everything a training script needs: features, labels and weights for train, and the test set with context."""
+
+    X_train: pd.DataFrame  # one row per window, the 21 feature columns
+    y_train: pd.Series  # the event 0-9
     w_train: pd.Series  # sample weights for class balance
     groups_train: pd.Series  # recording_id, for grouped cross-validation later
     X_test: pd.DataFrame
@@ -30,6 +34,7 @@ class GoldData:
 
 def window_features_path(ready=GOLD_READY):
     """The window_features folder of the published Gold run; refuse a build that failed or changed contract."""
+    # the Gold contract: consumers read only what the ready marker points to
     with open(ready) as f:
         marker = json.load(f)
     assert marker["passed"], "gold_ready.json points to a build that did not pass its checks"
@@ -40,13 +45,16 @@ def window_features_path(ready=GOLD_READY):
 
 def cap_per_class(df, cap=TRAIN_CAP):
     """Keep at most `cap` rows of each label, chosen at random with a fixed seed; smaller classes keep everything."""
+    # shuffle once, then keep each label's first `cap` rows: a seeded random sample per class
     shuffled = df.sample(frac=1, random_state=SEED)
     return shuffled[shuffled.groupby("label").cumcount() < cap]
 
 
 def load_gold(ready=GOLD_READY):
+    """Read the published window table, check it, cap the training classes and split it into train and test."""
     df = pd.read_parquet(window_features_path(ready))
 
+    # sorted, so the models get their columns in the same order every run
     feature_cols = sorted(c for c in df.columns if c.endswith(FEATURE_SUFFIXES))
 
     # leakage guard and sanity checks
@@ -60,6 +68,7 @@ def load_gold(ready=GOLD_READY):
     test = df[df["split"] == "test"]
     assert not set(train["recording_id"]) & set(test["recording_id"]), "a recording is in both splits"
 
+    # float32 halves the memory, and tree models don't need more precision
     X_train = train[feature_cols].astype("float32")
     X_test = test[feature_cols].astype("float32")
     # NaN is allowed (missing data), infinity is not
@@ -71,6 +80,7 @@ def load_gold(ready=GOLD_READY):
     return GoldData(
         X_train=X_train,
         y_train=y_train,
+        # "balanced": rarer classes weigh more, so every class counts the same in training
         w_train=pd.Series(compute_sample_weight("balanced", y_train), index=y_train.index),
         groups_train=train["recording_id"],
         X_test=X_test,

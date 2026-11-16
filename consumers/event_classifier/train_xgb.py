@@ -1,3 +1,5 @@
+"""XGBoost: choose the tree depth on held-out training recordings, fit the final model, then score it once on test."""
+
 import time
 
 import numpy as np
@@ -14,16 +16,18 @@ d = load_gold()
 
 # 1. validation split inside train: 20% of training recordings, grouped and stratified
 splitter = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=SEED)
+# only the first of the 5 folds is used: one validation set, 20% of the training recordings
 fit_idx, val_idx = next(splitter.split(d.X_train, d.y_train, groups=d.groups_train))
 X_fit, y_fit, w_fit = d.X_train.iloc[fit_idx], d.y_train.iloc[fit_idx], d.w_train.iloc[fit_idx]
 X_val, y_val, w_val = d.X_train.iloc[val_idx], d.y_train.iloc[val_idx], d.w_train.iloc[val_idx]
 assert not set(d.groups_train.iloc[fit_idx]) & set(d.groups_train.iloc[val_idx])
 
+# settings shared by every XGBoost model below; only the depth is tuned
 COMMON = {
     "learning_rate": 0.1,
     "subsample": 0.8,
     "colsample_bytree": 0.8,
-    "tree_method": "hist",
+    "tree_method": "hist",  # histogram splits: much faster on a million rows
     "n_jobs": 4,
     "random_state": SEED,
 }
@@ -32,6 +36,7 @@ COMMON = {
 tuning = {}
 t0 = time.time()
 for depth in [4, 6, 8]:
+    # up to 2000 trees, stopping once 50 rounds in a row bring no improvement on the validation recordings
     m = XGBClassifier(n_estimators=2000, max_depth=depth, early_stopping_rounds=50, eval_metric="mlogloss", **COMMON)
     m.fit(X_fit, y_fit, sample_weight=w_fit, eval_set=[(X_val, y_val)], sample_weight_eval_set=[w_val], verbose=False)
     f1 = f1_score(y_val, m.predict(X_val), average="macro")
