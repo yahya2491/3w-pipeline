@@ -1,3 +1,5 @@
+"""Scores, saved predictions, confusion matrix and permutation importance, done the same way for both models."""
+
 import json
 import os
 import subprocess
@@ -16,21 +18,24 @@ from sklearn.metrics import (
 
 from config import LABEL_NAMES, RESULTS_DIR, SEED
 
-LABELS = list(range(10))
+LABELS = list(range(10))  # all ten events, so a class the model never predicts still counts (as 0)
 
 
 def _out_dir(model_name):
+    """results/<model_name>/, created if it doesn't exist."""
     path = os.path.join(RESULTS_DIR, model_name)
     os.makedirs(path, exist_ok=True)
     return path
 
 
 def evaluate(model_name, y_true, y_pred, meta, extra=None):
+    """Score the test predictions and save metrics.json, predictions.parquet and the confusion matrix."""
     out = _out_dir(model_name)
     y_true = np.asarray(y_true)
     y_pred = np.asarray(y_pred)
     source = meta["source_type"].to_numpy()
 
+    # macro F1 per source type, over the classes that source has in the test set
     per_source = {}
     for src in np.unique(source):
         m = source == src
@@ -39,7 +44,7 @@ def evaluate(model_name, y_true, y_pred, meta, extra=None):
 
     metrics = {
         "macro_f1": f1_score(y_true, y_pred, labels=LABELS, average="macro", zero_division=0),
-        "fault_recall": recall_score(y_true != 0, y_pred != 0),
+        "fault_recall": recall_score(y_true != 0, y_pred != 0),  # an event (1-9) predicted as any event, not normal
         "per_source_macro_f1": per_source,
         "per_class": classification_report(
             y_true,
@@ -51,6 +56,7 @@ def evaluate(model_name, y_true, y_pred, meta, extra=None):
         ),
         **(extra or {}),
     }
+    # the code that produced these results
     try:
         commit = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], text=True).strip()
     except (OSError, subprocess.CalledProcessError):  # git not installed, or not run inside a git checkout
@@ -83,6 +89,8 @@ def evaluate(model_name, y_true, y_pred, meta, extra=None):
 
 
 def save_importance(model_name, model, X, y, n_rows=30_000):
+    """How much macro F1 drops when one feature's values are shuffled, on a sample of the test set."""
+    # a sample keeps it fast; the seed makes it the same sample every run
     X_s = X.sample(n=min(n_rows, len(X)), random_state=SEED)
     y_s = y.loc[X_s.index]
     pi = permutation_importance(model, X_s, y_s, scoring="f1_macro", n_repeats=5, random_state=SEED, n_jobs=1)

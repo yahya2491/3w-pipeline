@@ -1,3 +1,9 @@
+"""Shortcut check: how well can a model do knowing only which sensors are missing?
+
+If this scored close to the real models, they could be predicting events from which sensors are missing,
+instead of from the sensor values.
+"""
+
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import f1_score, recall_score
 
@@ -11,10 +17,12 @@ cols = [c for c in d.feature_cols if c.endswith("_mean_120s")]
 Xm_train = d.X_train[cols].isna().astype(int)
 Xm_test = d.X_test[cols].isna().astype(int)
 
+# a small forest trained on the missing/present columns alone
 model = RandomForestClassifier(n_estimators=100, min_samples_leaf=50, n_jobs=4, random_state=SEED)
 model.fit(Xm_train, d.y_train, sample_weight=d.w_train)
 pred = model.predict(Xm_test)
 
+# scored the same way as the real models, overall and per source type
 print("missingness only, macro F1:", round(f1_score(d.y_test, pred, average="macro"), 3))
 print("fault recall:", round(recall_score(d.y_test != 0, pred != 0), 3))
 for src in sorted(d.meta_test["source_type"].unique()):

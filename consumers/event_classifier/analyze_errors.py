@@ -1,3 +1,9 @@
+"""Break one model's test errors down by source, recording and well, and look at false alarms before a fault.
+
+Usage:
+    python analyze_errors.py random_forest      (or xgboost)
+"""
+
 import os
 import sys
 
@@ -8,7 +14,7 @@ from config import RESULTS_DIR
 name = sys.argv[1] if len(sys.argv) > 1 else "random_forest"
 out = os.path.join(RESULTS_DIR, name)
 p = pd.read_parquet(os.path.join(out, "predictions.parquet"))
-p["correct"] = p["y_true"] == p["y_pred"]
+p["correct"] = p["y_true"] == p["y_pred"]  # one row per test window
 
 # 1. recall per source and class
 by_src = p.groupby(["source_type", "y_true"]).agg(rows=("correct", "size"), recall=("correct", "mean")).round(3)
@@ -22,6 +28,7 @@ rec = (
     .reset_index()
 )
 rec.to_csv(os.path.join(out, "errors_by_recording.csv"), index=False)
+# how many recordings are mostly right and how many mostly wrong, per source type
 bands = pd.cut(rec["accuracy"], [0, 0.5, 0.8, 0.95, 1.0], include_lowest=True)
 print("\ntest recordings per accuracy band:\n", rec.groupby(["source_type", bands], observed=True).size().to_string())
 print("\n10 worst recordings:\n", rec.sort_values("accuracy").head(10).to_string(index=False))

@@ -1,3 +1,5 @@
+"""Compare the two models on the same test windows: a recording-level bootstrap and a side-by-side summary."""
+
 import json
 import os
 
@@ -7,8 +9,8 @@ import pandas as pd
 from config import LABEL_NAMES, RESULTS_DIR, SEED
 
 MODELS = ["random_forest", "xgboost"]
-N_BOOT = 2000
-K = 10
+N_BOOT = 2000  # bootstrap resamples
+K = 10  # classes: events 0-9
 
 preds, metrics = {}, {}
 for name in MODELS:
@@ -22,12 +24,14 @@ assert len(a) == len(b)
 assert (a["recording_id"].to_numpy() == b["recording_id"].to_numpy()).all()
 assert (a["y_true"].to_numpy() == b["y_true"].to_numpy()).all()
 
+# each test window's recording as a number 0..n-1; recordings, not windows, are what the bootstrap resamples
 rec_ids, rec_idx = np.unique(a["recording_id"].to_numpy(), return_inverse=True)
 rec_info = a.groupby("recording_id")[["source_type", "recording_event"]].first().loc[rec_ids].reset_index(drop=True)
 is_real = (rec_info["source_type"] == "REAL").to_numpy()
 
 
 def confusion_per_recording(p):
+    """One 10 x 10 confusion matrix per test recording, so a resample is just a weighted sum of them."""
     cm = np.zeros((len(rec_ids), K, K))
     np.add.at(cm, (rec_idx, p["y_true"].to_numpy(), p["y_pred"].to_numpy()), 1)
     return cm
@@ -52,6 +56,7 @@ for idx in rec_info.groupby(["source_type", "recording_event"]).indices.values()
     rows = np.repeat(np.arange(N_BOOT), len(idx))
     np.add.at(W, (rows, draws.ravel()), 1)
 
+# "all" draws every recording; "real" keeps the same draws but counts only the real recordings
 boot = {}
 for scope, weights in [("all", W), ("real", W * is_real)]:
     scores = {name: macro_f1(np.tensordot(weights, cm_rec[name], axes=(1, 0))) for name in MODELS}
@@ -81,6 +86,7 @@ with open(os.path.join(RESULTS_DIR, "bootstrap.json"), "w") as f:
 
 # side-by-side summary for the report
 def prefault_real(name):
+    """Share of normal windows flagged as an event before a real fault, from analyze_errors.py's output."""
     pf = pd.read_csv(os.path.join(RESULTS_DIR, name, "errors_prefault.csv"))
     row = pf[(pf["source_type"] == "REAL") & (pf["kind"] == "pre-fault")]
     return float(row["false_alarm"].iloc[0])
