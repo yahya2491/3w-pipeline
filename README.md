@@ -110,6 +110,34 @@ python -c "from threew.config import load_config; print(load_config('prod'))"
 
 `HF_TOKEN` is never in a config file; it comes from the environment.
 
+## Run the pipeline end to end
+
+### Development
+
+From the repository root, activate the Python environment described in [Setup](#setup). Run the commands in order, continuing after each succeeds:
+
+```bash
+python -m threew.bronze.run --env dev
+python -m threew.silver.run --env dev
+python gold/build_gold.py --env dev
+python gold/query.py --env dev
+```
+
+The development pipeline uses 30 recordings and writes under `data/dev/`. The last command prints the two Gold summary views.
+
+### Production
+
+On the UiS OpenStack VM, Bronze runs weekly or can be started from **GitHub Actions → Bronze → Run workflow** with `env: prod`. Silver follows a successful Bronze or CI run on `main`.
+
+After Silver publishes successfully, activate the project environment on the VM, confirm `/mnt/silver-data` is mounted, and build and query Gold manually:
+
+```bash
+python gold/build_gold.py --env prod
+python gold/query.py --env prod
+```
+
+See the [Silver run guide](docs/silver/SILVER_RUN_GUIDE.md) for VM storage and manual runs, and the [Gold run guide](docs/gold/GOLD_HANDOVER.md) for output paths and CSV exports.
+
 ## Running the Bronze layer
 
 ```bash
@@ -153,6 +181,7 @@ Every run writes a report, whatever happens, to `<storage root>/bronze/_runs/<ru
 plan, download speed, schema checks, conversion, pruning, reconciliation, the marker, failures, orphaned files in
 landing and leftover staging folders. `scripts/plan_preview.py` and `scripts/inspect_landing.py` show the plan and
 the landed files without changing anything; `scripts/reconcile_bronze.py` runs the checks on their own.
+
 
 ## Publishing the mirror
 
